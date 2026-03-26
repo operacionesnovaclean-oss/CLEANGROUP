@@ -507,10 +507,38 @@ function buildPanels(){
   <div class="ph"><h2>1. Requisición Mensual por Cliente</h2><p>Selecciona empresa → cliente → ingresa cantidades. Al final revisa el consolidado por empresa.</p><span class="iso-code">FOR COM 01 · VER 01 (09 12 2024)</span></div>
 
   <!-- Encabezado -->
-  <div class="card"><div class="card-title">📅 Encabezado</div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📅 Encabezado</div>
+      <div id="rm-edit-banner" style="display:none;align-items:center;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.4);border-radius:8px;padding:6px 14px;font-size:12px;color:var(--amber);font-weight:600">
+        ✏️ Modo edición — guardará sobre la requisición existente
+        <button onclick="rmCancelarEdicion()" style="margin-left:10px;background:transparent;border:1px solid var(--amber);border-radius:5px;color:var(--amber);padding:2px 8px;cursor:pointer;font-size:11px;font-family:inherit">✕ Cancelar</button>
+      </div>
+    </div>
     <div class="fg">
-      <div class="fi"><label>N° Requisición</label><input id="rm-num" readonly></div>
-      <div class="fi"><label>Período / Mes</label><input id="rm-periodo" placeholder="Ej: MARZO 2026"></div>
+      <div class="fi">
+        <label>N° Requisición <span style="font-size:10px;color:var(--muted)">(editable)</span></label>
+        <input id="rm-num" placeholder="Ej: 4" style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--teal)">
+      </div>
+      <div class="fi">
+        <label>Mes rápido</label>
+        <select id="rm-mes-sel" onchange="rmAplicarMes()" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          <option value="">-- Seleccionar mes --</option>
+          <option value="1|ENERO">1 — Enero</option>
+          <option value="2|FEBRERO">2 — Febrero</option>
+          <option value="3|MARZO">3 — Marzo</option>
+          <option value="4|ABRIL">4 — Abril</option>
+          <option value="5|MAYO">5 — Mayo</option>
+          <option value="6|JUNIO">6 — Junio</option>
+          <option value="7|JULIO">7 — Julio</option>
+          <option value="8|AGOSTO">8 — Agosto</option>
+          <option value="9|SEPTIEMBRE">9 — Septiembre</option>
+          <option value="10|OCTUBRE">10 — Octubre</option>
+          <option value="11|NOVIEMBRE">11 — Noviembre</option>
+          <option value="12|DICIEMBRE">12 — Diciembre</option>
+        </select>
+      </div>
+      <div class="fi"><label>Período / Mes</label><input id="rm-periodo" placeholder="Ej: ABRIL 2026"></div>
       <div class="fi"><label>Fecha</label><input id="rm-fecha" type="date"></div>
       <div class="fi"><label>Elaborado por</label><input id="rm-elaborado"></div>
     </div>
@@ -869,7 +897,9 @@ function setNums(){
   const m=String(new Date().getMonth()+1).padStart(2,'0');
   const n=(arr)=>String((arr||[]).length+1).padStart(3,'0');
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
-  s('rm-num',`REQM-${m}-${n(db.reqMensuales)}`);
+  // Only auto-set rm-num if not in edit mode and field is empty
+  const rmNumEl=document.getElementById('rm-num');
+  if(rmNumEl && rm_editIdx===null && !rmNumEl.value) rmNumEl.value=String(db.counters.rm+1);
   s('nec-num',`NEC-${m}-${n(db.necesidades)}`);
   s('oc-num',`OC-${m}-${n(db.ordenesCompra)}`);
   s('ai-num',`ACT-ING-${m}-${n(db.actasIngreso)}`);
@@ -913,7 +943,7 @@ function renderDash(){
 // ═══════════════════════════════
 // 1. REQUISICIÓN MENSUAL
 // ═══════════════════════════════
-let rm_empresa='', rm_cliente='', rm_data={};
+let rm_empresa='', rm_cliente='', rm_data={}, rm_editIdx=null;
 
 function initRM(){
   if(!Object.keys(rm_data).length) rmResetData();
@@ -1161,6 +1191,18 @@ function rmPreview(){
   openPrint(html);
 }
 
+function rmAplicarMes(){
+  const sel=document.getElementById('rm-mes-sel');
+  if(!sel||!sel.value) return;
+  const [num,mes]=sel.value.split('|');
+  const year=new Date().getFullYear();
+  document.getElementById('rm-num').value=num;
+  document.getElementById('rm-periodo').value=mes+' '+year;
+  // Set today as date if empty
+  const fd=document.getElementById('rm-fecha');
+  if(fd&&!fd.value){const t=new Date();fd.value=t.toISOString().split('T')[0];}
+}
+
 function rmGuardar(){
   const per=document.getElementById('rm-periodo').value;
   const fecha=document.getElementById('rm-fecha').value;
@@ -1168,15 +1210,32 @@ function rmGuardar(){
   if(!per||!fecha){toast('Completa período y fecha',true);return;}
   const act=rmGetActivos();
   if(!act.length){toast('Ingresa al menos una cantidad',true);return;}
-  const num=document.getElementById('rm-num').value;
-  db.reqMensuales.push({numero:num,periodo:per,fecha,elaborado:elab,data:JSON.parse(JSON.stringify(rm_data)),activos:act.length});
-  db.counters.rm++;
-  saveDB();rmRenderList();setNums();
-  toast(`✅ Requisición ${num} guardada — ahora ve a "Necesidad de Compra"`);
+  const num=document.getElementById('rm-num').value||String(db.counters.rm+1);
+
+  if(rm_editIdx!==null){
+    // UPDATE existing
+    db.reqMensuales[rm_editIdx]={
+      ...db.reqMensuales[rm_editIdx],
+      numero:num,periodo:per,fecha,elaborado:elab,
+      data:JSON.parse(JSON.stringify(rm_data)),
+      activos:act.length
+    };
+    saveDB();rmRenderList();
+    toast(`✅ Requisición ${num} actualizada`);
+    rm_editIdx=null;
+    document.getElementById('rm-edit-banner').style.display='none';
+  } else {
+    // NEW entry
+    db.reqMensuales.push({numero:num,periodo:per,fecha,elaborado:elab,data:JSON.parse(JSON.stringify(rm_data)),activos:act.length});
+    db.counters.rm++;
+    saveDB();rmRenderList();setNums();
+    toast(`✅ Requisición ${num} guardada — ahora ve a "Necesidad de Compra"`);
+  }
   rmResetData();rm_empresa='';rm_cliente='';
   document.getElementById('rm-step2').style.display='none';
   document.getElementById('rm-step3').style.display='none';
   document.getElementById('rm-consolidado-card').style.display='none';
+  document.getElementById('rm-mes-sel').value='';
   rmUpdateEmpresaBtns();
   rmRenderConsolidado();
   necRefreshSelects();aeRefreshSelects();
@@ -1197,12 +1256,48 @@ function rmRenderList(){
       <td>${act} clientes</td>
       <td style="font-size:11px">${necs?`<span class="tag tok">✓ ${necs} Nec.</span>`:'<span class="tag twn">⏳ Sin Nec.</span>'} ${ocs?`<span class="tag tok" style="margin-left:3px">✓ ${ocs} OC</span>`:''} ${aes?`<span class="tag tok" style="margin-left:3px">✓ ${aes} Actas</span>`:''}</td>
       <td>
-        <button class="btn btn-s btn-sm" onclick="rmCargar(${idx})">📂 Cargar</button>
-        <button class="btn btn-a btn-sm" onclick="nav('necesidad')">→ Necesidad</button>
+        <button class="btn btn-s btn-sm" onclick="rmEditar(${idx})">✏️ Editar</button>
+        <button class="btn btn-s btn-sm" onclick="rmCargar(${idx})">📂 Ver/Cargar</button>
+        <button class="btn btn-a btn-sm" onclick="nav('necesidad')">→ Nec.</button>
         <button class="btn btn-d btn-sm" onclick="rmEliminar(${idx})">✕</button>
       </td>
     </tr>`;
   }).join(''):'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:18px">Sin registros</td></tr>';
+}
+
+function rmEditar(idx){
+  const r=db.reqMensuales[idx];
+  rm_editIdx=idx;
+  rm_data=JSON.parse(JSON.stringify(r.data));
+  document.getElementById('rm-periodo').value=r.periodo;
+  document.getElementById('rm-fecha').value=r.fecha;
+  document.getElementById('rm-elaborado').value=r.elaborado||'';
+  document.getElementById('rm-num').value=r.numero;
+  // Show edit banner
+  document.getElementById('rm-edit-banner').style.display='flex';
+  rm_empresa=''; rm_cliente='';
+  rmUpdateEmpresaBtns();
+  document.getElementById('rm-step2').style.display='none';
+  document.getElementById('rm-step3').style.display='none';
+  rmRenderConsolidado();
+  nav('req-mensual');
+  toast(`✏️ Editando requisición ${r.numero} — modifica y guarda`);
+}
+
+function rmCancelarEdicion(){
+  rm_editIdx=null;
+  document.getElementById('rm-edit-banner').style.display='none';
+  rmResetData();rm_empresa='';rm_cliente='';
+  document.getElementById('rm-num').value='';
+  document.getElementById('rm-periodo').value='';
+  document.getElementById('rm-fecha').value='';
+  document.getElementById('rm-elaborado').value='';
+  document.getElementById('rm-mes-sel').value='';
+  document.getElementById('rm-step2').style.display='none';
+  document.getElementById('rm-step3').style.display='none';
+  document.getElementById('rm-consolidado-card').style.display='none';
+  rmUpdateEmpresaBtns();rmRenderConsolidado();setNums();
+  toast('Edición cancelada');
 }
 
 function rmCargar(idx){
@@ -2181,6 +2276,10 @@ function meiGuardar(){
   rmRenderItems();
   toast('✅ Cambios guardados — '+updated.length+' ítems');
 }
+
+</script>
+</body>
+</html>
 
 </script>
 </body>
