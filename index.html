@@ -645,9 +645,14 @@ function buildPanels(){
 <!-- 3. ORDEN DE COMPRA -->
 <div class="panel" id="panel-orden-compra">
   <div class="ph"><h2>3. Orden de Compra</h2><p>Se genera desde la Necesidad de Compra o manualmente. Se envía al proveedor.</p><span class="iso-code">FOR COM 02 · VER 01 (09 12 2024)</span></div>
-  <div class="card"><div class="fg">
+  <div class="card">
+    <div id="oc-edit-banner" style="display:none;align-items:center;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.4);border-radius:8px;padding:6px 14px;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:14px">
+      ✏️ Modo edición OC — modifica y guarda para actualizar
+      <button onclick="ocCancelarEdicion()" style="margin-left:10px;background:transparent;border:1px solid var(--amber);border-radius:5px;color:var(--amber);padding:2px 8px;cursor:pointer;font-size:11px;font-family:inherit">✕ Cancelar</button>
+    </div>
+    <div class="fg">
       <div class="fi"><label>Cargar desde Necesidad</label><select id="oc-nec-sel" onchange="ocCargarNec()"><option value="">-- Manual / Nueva --</option></select></div>
-      <div class="fi"><label>N° Orden de Compra</label><input id="oc-num" readonly></div>
+      <div class="fi"><label>N° Orden de Compra</label><input id="oc-num" placeholder="Ej: OC-001"></div>
       <div class="fi"><label>Fecha</label><input id="oc-fecha" type="date"></div>
       <div class="fi"><label>Condición de Pago</label><select id="oc-condpago"><option>30 días</option><option>60 días</option><option>Contado</option><option>15 días</option><option>90 días</option></select></div>
       <div class="fi"><label>Tipo de Compra</label><select id="oc-tipo"><option>Bien</option><option>Servicio</option></select></div>
@@ -696,7 +701,11 @@ function buildPanels(){
 <div class="panel" id="panel-acta-ingreso">
   <div class="ph"><h2>4. Acta de Ingreso / Recepción de Bienes</h2><p>Se carga desde la OC. Los ítems recibidos actualizan el inventario automáticamente.</p><span class="iso-code">FOR ALM 02 · VER 01 (09 12 2024)</span></div>
   <div class="card"><div class="fg">
-      <div class="fi"><label>N° Acta</label><input id="ai-num" readonly></div>
+      <div id="ai-edit-banner" style="display:none;align-items:center;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.4);border-radius:8px;padding:6px 14px;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:12px;grid-column:1/-1">
+        ✏️ Modo edición Acta de Ingreso — modifica y guarda para actualizar
+        <button onclick="aiCancelarEdicion()" style="margin-left:10px;background:transparent;border:1px solid var(--amber);border-radius:5px;color:var(--amber);padding:2px 8px;cursor:pointer;font-size:11px;font-family:inherit">✕ Cancelar</button>
+      </div>
+      <div class="fi"><label>N° Acta</label><input id="ai-num" placeholder="Ej: AI-001"></div>
       <div class="fi"><label>Ciudad</label><input id="ai-ciudad" value="GUAYAQUIL"></div>
       <div class="fi"><label>Fecha</label><input id="ai-fecha" type="date"></div>
       <div class="fi"><label>Elaborado por</label><input id="ai-elaborado"></div>
@@ -780,8 +789,12 @@ function buildPanels(){
     </div>
   </div>
   <div class="card"><div class="card-title">📝 Datos del Acta</div>
+    <div id="ae-edit-banner" style="display:none;align-items:center;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.4);border-radius:8px;padding:6px 14px;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:14px">
+      ✏️ Modo edición Acta de Entrega — modifica y guarda para actualizar
+      <button onclick="aeCancelarEdicion()" style="margin-left:10px;background:transparent;border:1px solid var(--amber);border-radius:5px;color:var(--amber);padding:2px 8px;cursor:pointer;font-size:11px;font-family:inherit">✕ Cancelar</button>
+    </div>
     <div class="fg">
-      <div class="fi"><label>N° Acta</label><input id="ae-num" readonly></div>
+      <div class="fi"><label>N° Acta</label><input id="ae-num" placeholder="Ej: ENT-001"></div>
       <div class="fi"><label>Ciudad</label><input id="ae-ciudad" value="GUAYAQUIL"></div>
       <div class="fi"><label>Fecha</label><input id="ae-fecha" type="date"></div>
       <div class="fi"><label>Elaborado por</label><input id="ae-elaborado"></div>
@@ -1498,7 +1511,7 @@ function necEliminar(idx){if(!confirm('¿Eliminar?'))return;db.necesidades.splic
 // ═══════════════════════════════
 // 3. ORDEN DE COMPRA
 // ═══════════════════════════════
-let ocItems=[];
+let ocItems=[], oc_editIdx=null;
 
 function initOC(){
   const sel=document.getElementById('oc-nec-sel');if(!sel)return;
@@ -1561,27 +1574,54 @@ function ocGuardar(){
   if(!ocItems.length){toast('Agrega al menos un ítem',true);return;}
   const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
-  db.ordenesCompra.push({
+  const ocData={
     numero:num,fecha,necId:necNum||null,proveedor:prov,
     provRuc:g('oc-prov-ruc'),provDir:g('oc-prov-dir'),provCont:g('oc-prov-contacto'),provTel:g('oc-prov-tel'),provEmail:g('oc-prov-email'),
     condPago:g('oc-condpago'),tipo:g('oc-tipo'),detalle:g('oc-detalle'),proforma:g('oc-proforma'),fProforma:g('oc-fproforma'),
     contactoCG:g('oc-contacto'),obs:g('oc-obs'),items:JSON.parse(JSON.stringify(ocItems)),
-    subtotal:sub,iva:sub*0.15,total:sub*1.15,aiId:null
-  });
-  db.counters.oc++;
-  if(necNum){const nec=db.necesidades.find(n=>n.numero===necNum);if(nec)nec.ocId=num;}
-  saveDB();ocRenderList();ocLimpiar();
-  toast(`✅ OC ${num} guardada → ve a "Acta de Ingreso" cuando llegue la factura`);
-  // refresh AI OC select
-  aiPopulateOCSelect();
+    subtotal:sub,iva:sub*0.15,total:sub*1.15,aiId:oc_editIdx!==null?db.ordenesCompra[oc_editIdx].aiId:null
+  };
+  if(oc_editIdx!==null){
+    db.ordenesCompra[oc_editIdx]={...db.ordenesCompra[oc_editIdx],...ocData};
+    oc_editIdx=null;
+    document.getElementById('oc-edit-banner').style.display='none';
+    saveDB();ocRenderList();ocLimpiar();
+    toast(`✅ OC ${num} actualizada`);
+  } else {
+    db.ordenesCompra.push(ocData);
+    db.counters.oc++;
+    if(necNum){const nec=db.necesidades.find(n=>n.numero===necNum);if(nec)nec.ocId=num;}
+    saveDB();ocRenderList();ocLimpiar();
+    toast(`✅ OC ${num} guardada → ve a "Acta de Ingreso" cuando llegue la factura`);
+    aiPopulateOCSelect();
+  }
+}
+
+function ocEditar(idx){
+  const o=db.ordenesCompra[idx];
+  oc_editIdx=idx;
+  ocItems=JSON.parse(JSON.stringify(o.items));
+  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  s('oc-num',o.numero);s('oc-fecha',o.fecha);s('oc-condpago',o.condPago);s('oc-tipo',o.tipo);
+  s('oc-detalle',o.detalle);s('oc-proforma',o.proforma);s('oc-fproforma',o.fProforma);
+  s('oc-contacto',o.contactoCG);s('oc-obs',o.obs);
+  s('oc-prov-nombre',o.proveedor);s('oc-prov-ruc',o.provRuc);s('oc-prov-dir',o.provDir);
+  s('oc-prov-contacto',o.provCont);s('oc-prov-tel',o.provTel);s('oc-prov-email',o.provEmail);
+  const necSel=document.getElementById('oc-nec-sel');if(necSel)necSel.value=o.necId||'';
+  ocRenderItems();
+  document.getElementById('oc-edit-banner').style.display='flex';
+  nav('orden-compra');
+  toast(`✏️ Editando OC ${o.numero}`);
 }
 
 function ocLimpiar(){
-  ocItems=[];ocRenderItems();
+  ocItems=[];oc_editIdx=null;ocRenderItems();
+  document.getElementById('oc-edit-banner').style.display='none';
   ['oc-prov-sel','oc-prov-nombre','oc-prov-ruc','oc-prov-dir','oc-prov-contacto','oc-prov-tel','oc-prov-email','oc-proforma','oc-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const s=document.getElementById('oc-nec-sel');if(s)s.value='';
   setNums();
 }
+function ocCancelarEdicion(){oc_editIdx=null;ocLimpiar();setNums();toast('Edición cancelada');}
 
 function ocPreview(){
   const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
@@ -1633,6 +1673,7 @@ function ocRenderList(){
       <td>${o.aiId?`<span class="tag tok">✓ ${o.aiId}</span>`:'<span class="tag twn">⏳ Sin Acta</span>'}</td>
       <td>
         <button class="btn btn-a btn-sm" onclick="ocPreviewId(${idx})">🖨️</button>
+        <button class="btn btn-s btn-sm" onclick="ocEditar(${idx})">✏️ Editar</button>
         <button class="btn btn-s btn-sm" onclick="nav('acta-ingreso')">→ Ingreso</button>
         <button class="btn btn-d btn-sm" onclick="ocEliminar(${idx})">✕</button>
       </td>
@@ -1661,7 +1702,7 @@ function ocEliminar(idx){if(!confirm('¿Eliminar OC?'))return;db.ordenesCompra.s
 // ═══════════════════════════════
 // 4. ACTA DE INGRESO
 // ═══════════════════════════════
-let aiItems=[], aiOCRef=null;
+let aiItems=[], aiOCRef=null, ai_editIdx=null;
 
 function initAI(){aiPopulateOCSelect();aiRenderList();setNums();}
 
@@ -1754,9 +1795,22 @@ function aiGuardar(){
   const acta={numero:num,fecha,ciudad:g('ai-ciudad'),elaborado:elab,tipo,ocId:ocNum||null,proveedor:g('ai-proveedor'),
     devPersona:g('ai-dev-persona'),devCargo:g('ai-dev-cargo'),devDepto:g('ai-dev-depto'),
     items:JSON.parse(JSON.stringify(aiItems)),entNombre:g('ai-ent-nombre'),entCedula:g('ai-ent-cedula'),recNombre:g('ai-rec-nombre'),recCedula:g('ai-rec-cedula')};
-  db.actasIngreso.push(acta);db.counters.ai++;
-  if(ocNum){const oc=db.ordenesCompra.find(o=>o.numero===ocNum);if(oc)oc.aiId=num;}
-  // Update inventory
+  if(ai_editIdx!==null){
+    // Revertir entradas al inventario del acta anterior
+    const prev=db.actasIngreso[ai_editIdx];
+    prev.items.forEach(it=>{
+      const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
+      if(inv){inv.entradas-=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
+    });
+    db.actasIngreso[ai_editIdx]=acta;
+    ai_editIdx=null;
+    document.getElementById('ai-edit-banner').style.display='none';
+  } else {
+    db.actasIngreso.push(acta);
+    db.counters.ai++;
+    if(ocNum){const oc=db.ordenesCompra.find(o=>o.numero===ocNum);if(oc)oc.aiId=num;}
+  }
+  // Aplicar entradas al inventario
   aiItems.forEach(it=>{
     if(!it.cod&&!it.desc)return;
     const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
@@ -1765,6 +1819,37 @@ function aiGuardar(){
   saveDB();aiRenderList();aiLimpiar();
   toast(`✅ Acta de Ingreso ${num} guardada — inventario actualizado`);
 }
+
+function aiEditar(idx){
+  const a=db.actasIngreso[idx];
+  ai_editIdx=idx;
+  aiItems=JSON.parse(JSON.stringify(a.items));
+  aiOCRef=a.ocId?db.ordenesCompra.find(o=>o.numero===a.ocId)||null:null;
+  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  s('ai-num',a.numero);s('ai-fecha',a.fecha);s('ai-ciudad',a.ciudad||'GUAYAQUIL');
+  s('ai-elaborado',a.elaborado);s('ai-proveedor',a.proveedor);
+  s('ai-dev-persona',a.devPersona);s('ai-dev-cargo',a.devCargo);s('ai-dev-depto',a.devDepto);
+  s('ai-ent-nombre',a.entNombre);s('ai-ent-cedula',a.entCedula);
+  s('ai-rec-nombre',a.recNombre);s('ai-rec-cedula',a.recCedula);
+  const ocSel=document.getElementById('ai-oc-ref');if(ocSel)ocSel.value=a.ocId||'';
+  const tipoEl=document.getElementById('ai-'+a.tipo);if(tipoEl)tipoEl.checked=true;
+  // Toggle dev fields
+  document.getElementById('ai-devol-fields').style.display=a.tipo==='devolucion'?'block':'none';
+  document.getElementById('ai-compra-fields').style.display=a.tipo!=='devolucion'?'block':'none';
+  if(aiOCRef){
+    const box=document.getElementById('ai-oc-box');box.style.display='block';
+    document.getElementById('ai-oc-n').textContent=aiOCRef.numero;
+    document.getElementById('ai-oc-p').textContent=aiOCRef.proveedor;
+    document.getElementById('ai-oc-t').textContent='$'+aiOCRef.total.toFixed(2);
+    document.getElementById('ai-oc-i').textContent=aiOCRef.items.length+' ítems';
+  }
+  aiRenderItems();aiUpdateBadge();
+  document.getElementById('ai-edit-banner').style.display='flex';
+  nav('acta-ingreso');
+  toast(`✏️ Editando Acta de Ingreso ${a.numero}`);
+}
+
+function aiCancelarEdicion(){ai_editIdx=null;aiLimpiar();setNums();toast('Edición cancelada');}
 
 function aiPreview(){
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
@@ -1794,8 +1879,9 @@ function aiPreviewData(a){
 }
 
 function aiLimpiar(){
-  aiItems=[];aiOCRef=null;aiRenderItems();
+  aiItems=[];aiOCRef=null;ai_editIdx=null;aiRenderItems();
   document.getElementById('ai-oc-box').style.display='none';
+  document.getElementById('ai-edit-banner').style.display='none';
   ['ai-elaborado','ai-ent-nombre','ai-ent-cedula','ai-rec-nombre','ai-rec-cedula','ai-dev-persona','ai-dev-cargo','ai-dev-depto','ai-proveedor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const s=document.getElementById('ai-oc-ref');if(s)s.value='';
   const l=document.getElementById('ai-items-lbl');if(l)l.textContent='';
@@ -1816,6 +1902,7 @@ function aiRenderList(){
       <td>${a.ocId?`<span class="tag tbl" style="font-size:10px">${a.ocId}</span>`:'<span style="color:var(--muted);font-size:11px">Manual</span>'}</td>
       <td>${a.items.length} ítems</td>
       <td><button class="btn btn-a btn-sm" onclick="aiPreviewId(${idx})">🖨️</button>
+          <button class="btn btn-s btn-sm" onclick="aiEditar(${idx})">✏️ Editar</button>
           <button class="btn btn-d btn-sm" onclick="aiEliminar(${idx})">✕</button></td>
     </tr>`;
   }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
@@ -1825,7 +1912,7 @@ function aiEliminar(idx){if(!confirm('¿Eliminar?'))return;db.actasIngreso.splic
 // ═══════════════════════════════
 // 5. ACTA DE ENTREGA
 // ═══════════════════════════════
-let aeItems=[], aeRMRef=null;
+let aeItems=[], aeRMRef=null, ae_editIdx=null;
 
 function aeRefreshSelects(){
   const sel=document.getElementById('ae-rm-sel');if(!sel)return;
@@ -1903,8 +1990,21 @@ function aeGuardar(){
     depto:g('ae-depto'),solicitante:g('ae-solicitante'),entregadoA:g('ae-entregado-a'),deptoRecibe:g('ae-depto-recibe'),
     items:JSON.parse(JSON.stringify(aeItems)),verifNombre:g('ae-verif-nombre'),verifCedula:g('ae-verif-cedula'),
     recNombre:g('ae-rec-nombre'),recCedula:g('ae-rec-cedula'),rmId:aeRMRef?.numero||null};
-  db.actasEntrega.push(acta);db.counters.ae++;
-  // Update inventory salidas
+  if(ae_editIdx!==null){
+    // Revertir salidas del acta anterior
+    const prev=db.actasEntrega[ae_editIdx];
+    prev.items.forEach(it=>{
+      if(!it.cod&&!it.desc)return;
+      const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
+      if(inv){inv.salidas-=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
+    });
+    db.actasEntrega[ae_editIdx]=acta;
+    ae_editIdx=null;
+    document.getElementById('ae-edit-banner').style.display='none';
+  } else {
+    db.actasEntrega.push(acta);db.counters.ae++;
+  }
+  // Aplicar salidas al inventario
   aeItems.forEach(it=>{
     if(!it.cod&&!it.desc)return;
     const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
@@ -1915,8 +2015,30 @@ function aeGuardar(){
   if(aeRMRef)aeCargarRM();
 }
 
+function aeEditar(idx){
+  const a=db.actasEntrega[idx];
+  ae_editIdx=idx;
+  aeItems=JSON.parse(JSON.stringify(a.items));
+  aeRMRef=a.rmId?db.reqMensuales.find(r=>r.numero===a.rmId)||null:null;
+  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  s('ae-num',a.numero);s('ae-fecha',a.fecha);s('ae-ciudad',a.ciudad||'GUAYAQUIL');
+  s('ae-elaborado',a.elaborado);s('ae-tipo',a.tipoDesp);s('ae-cliente',a.cliente);
+  s('ae-depto',a.depto);s('ae-solicitante',a.solicitante);s('ae-entregado-a',a.entregadoA);
+  s('ae-depto-recibe',a.deptoRecibe);s('ae-verif-nombre',a.verifNombre);s('ae-verif-cedula',a.verifCedula);
+  s('ae-rec-nombre',a.recNombre);s('ae-rec-cedula',a.recCedula);
+  const badge=document.getElementById('ae-badge');
+  if(badge){badge.style.display='inline';badge.textContent=`${a.items.length} ítems${a.rmId?' — Req. '+a.rmId:''}`;}
+  aeRenderItems();
+  document.getElementById('ae-edit-banner').style.display='flex';
+  nav('acta-entrega');
+  toast(`✏️ Editando Acta de Entrega ${a.numero}`);
+}
+
+function aeCancelarEdicion(){ae_editIdx=null;aeLimpiar();setNums();toast('Edición cancelada');}
+
 function aeLimpiar(){
-  aeItems=[];aeRenderItems();
+  aeItems=[];ae_editIdx=null;aeRenderItems();
+  document.getElementById('ae-edit-banner').style.display='none';
   ['ae-solicitante','ae-depto-recibe','ae-verif-nombre','ae-verif-cedula','ae-rec-nombre','ae-rec-cedula'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const c=document.getElementById('ae-cliente');if(c)c.value='';
   const e=document.getElementById('ae-entregado-a');if(e)e.value='';
@@ -1992,6 +2114,7 @@ function aeRenderList(){
       <td>${a.rmId?`<span class="tag tbl" style="font-size:10px">${a.rmId}</span>`:'<span style="color:var(--muted);font-size:11px">Manual</span>'}</td>
       <td>${a.items.length} ítems</td>
       <td><button class="btn btn-a btn-sm" onclick="aePreviewId(${idx})">🖨️</button>
+          <button class="btn btn-s btn-sm" onclick="aeEditar(${idx})">✏️ Editar</button>
           <button class="btn btn-d btn-sm" onclick="aeEliminar(${idx})">✕</button></td>
     </tr>`;
   }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
@@ -2276,10 +2399,6 @@ function meiGuardar(){
   rmRenderItems();
   toast('✅ Cambios guardados — '+updated.length+' ítems');
 }
-
-</script>
-</body>
-</html>
 
 </script>
 </body>
