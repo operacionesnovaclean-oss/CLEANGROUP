@@ -292,7 +292,16 @@ function doLogin(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('udisp').textContent=u.toUpperCase();
-    loadDB();
+    // Esperar a que Firebase Auth esté listo antes de cargar la DB
+    if(typeof firebase !== 'undefined' && firebase.auth().currentUser){
+      loadDB();
+    } else if(typeof firebase !== 'undefined'){
+      firebase.auth().signInAnonymously()
+        .then(() => loadDB())
+        .catch(() => loadDB());
+    } else {
+      loadDB();
+    }
   } else {
     document.getElementById('lerr').textContent='Usuario o contraseña incorrectos.';
     setTimeout(()=>document.getElementById('lerr').textContent='',3000);
