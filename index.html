@@ -29,35 +29,41 @@
   window._saving        = false;
   window._lastSavedJson = null;
 
-  // Sync en vivo: cuando Firestore cambia en OTRO dispositivo, actualizar pantalla
+  // Sync en vivo: cuando Firestore cambia (desde cualquier dispositivo), actualizar pantalla
   onSnapshot(DB_DOC, (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
     if (!data || !data.db) return;
-    // Si nosotros acabamos de guardar ese JSON exacto, ignorar para no hacer loop
-    if (window._saving || data.db === window._lastSavedJson) return;
+
+    // Siempre marcar como "en línea" — el snapshot confirma que Firebase responde
+    if (typeof setCloudStatus === 'function') setCloudStatus('☁️ En línea','var(--teal)');
+
+    // Si es el mismo JSON que guardamos nosotros, no re-renderizar (evitar loop)
+    if (data.db === window._lastSavedJson) return;
+
+    // Es un cambio de otro dispositivo — aplicar y re-renderizar
     try {
       const remote = JSON.parse(data.db);
-      // *** CORRECCIÓN CRÍTICA: mutar el objeto db existente, NO reasignar ***
-      // Si se hace window.db = remote, el código JS que usa la variable local "db" 
-      // no ve el cambio. Object.assign actualiza la misma referencia.
       const keys = ['reqMensuales','necesidades','ordenesCompra','actasIngreso','actasEntrega','inventario','counters'];
       keys.forEach(k => { if (remote[k] !== undefined) window.db[k] = remote[k]; });
       window._lastSavedJson = data.db;
-      // Re-renderizar vistas
-      if (typeof renderDash      === 'function') renderDash();
-      if (typeof rmRenderList    === 'function') rmRenderList();
-      if (typeof necRenderList   === 'function') necRenderList();
-      if (typeof ocRenderList    === 'function') ocRenderList();
-      if (typeof aiRenderList    === 'function') aiRenderList();
-      if (typeof aeRenderList    === 'function') aeRenderList();
-      if (typeof invRender       === 'function') invRender();
-      if (typeof setNums         === 'function') setNums();
+      if (typeof renderDash        === 'function') renderDash();
+      if (typeof rmRenderList      === 'function') rmRenderList();
+      if (typeof necRenderList     === 'function') necRenderList();
+      if (typeof ocRenderList      === 'function') ocRenderList();
+      if (typeof aiRenderList      === 'function') aiRenderList();
+      if (typeof aeRenderList      === 'function') aeRenderList();
+      if (typeof invRender         === 'function') invRender();
+      if (typeof setNums           === 'function') setNums();
       if (typeof necRefreshSelects === 'function') necRefreshSelects();
       if (typeof aeRefreshSelects  === 'function') aeRefreshSelects();
       if (typeof aiPopulateOCSelect=== 'function') aiPopulateOCSelect();
-      console.log('🔄 Sincronizado desde la nube');
+      console.log('🔄 Datos actualizados desde otro dispositivo');
     } catch(e) { console.warn('Sync parse error', e); }
+  }, (err) => {
+    // Error en la escucha en tiempo real
+    console.warn('onSnapshot error:', err);
+    if (typeof setCloudStatus === 'function') setCloudStatus('⚠️ Sin conexión','var(--amber)');
   });
 
   console.log("🔥 Firebase conectado");
@@ -422,7 +428,6 @@ function loadDB(){
           if(!wasBuilt){
             buildPanels(); initApp();
           } else {
-            // Solo re-renderizar listas, no reconstruir toda la UI
             if(typeof renderDash        ==='function') renderDash();
             if(typeof rmRenderList      ==='function') rmRenderList();
             if(typeof necRenderList     ==='function') necRenderList();
@@ -436,12 +441,12 @@ function loadDB(){
             if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
           }
         }
-        setCloudStatus('☁️ En línea','var(--teal)');
       } else {
         // Firebase vacío — si no había datos locales, construir UI vacía
         if(!localJson){ ensureFields(); buildPanels(); initApp(); }
-        setCloudStatus('☁️ En línea','var(--teal)');
       }
+      // Firebase respondió correctamente → siempre mostrar En línea
+      setCloudStatus('☁️ En línea','var(--teal)');
     }).catch(err=>{
       console.warn('Firestore sync error:', err);
       if(!localJson){ ensureFields(); buildPanels(); initApp(); }
