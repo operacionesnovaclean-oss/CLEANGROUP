@@ -2471,62 +2471,54 @@ function meiGuardar(){
 
 </script>
 
-<!-- Firebase init — reescrito para garantizar auth antes de Firestore -->
+<!-- Firebase init -->
 <script>
-  window.addEventListener('load', function() {
-    function tryInit() {
-      if (typeof firebase === 'undefined') { setTimeout(tryInit, 100); return; }
+  (function waitForFirebase() {
+    if (typeof firebase === 'undefined') { setTimeout(waitForFirebase, 100); return; }
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyBUGetLiQEvtcqqyk77hstHNfnUFnn2amw",
-        authDomain: "cleangroup-v2.firebaseapp.com",
-        projectId: "cleangroup-v2",
-        storageBucket: "cleangroup-v2.firebasestorage.app",
-        messagingSenderId: "1071876064242",
-        appId: "1:1071876064242:web:ea12a28c3f3b01d050e16b"
-      };
+    firebase.initializeApp({
+      apiKey: "AIzaSyBUGetLiQEvtcqqyk77hstHNfnUFnn2amw",
+      authDomain: "cleangroup-v2.firebaseapp.com",
+      projectId: "cleangroup-v2",
+      storageBucket: "cleangroup-v2.firebasestorage.app",
+      messagingSenderId: "1071876064242",
+      appId: "1:1071876064242:web:ea12a28c3f3b01d050e16b"
+    });
 
-      firebase.initializeApp(firebaseConfig);
-      const fireDb = firebase.firestore();
-      fireDb.settings({ experimentalForceLongPolling: true, merge: true });
-      const DB_DOC = fireDb.collection("cleangroup").doc("maindb");
+    const DB_DOC = firebase.firestore().collection("cleangroup").doc("maindb");
+    window._dbDoc         = DB_DOC;
+    window._saving        = false;
+    window._lastSavedJson = null;
+    window._fsGet         = (r) => r.get();
+    window._fsSet         = (r, d, o) => o ? r.set(d, o) : r.set(d);
 
-      window._fireDb = fireDb;
-      window._dbDoc = DB_DOC;
-      window._saving = false;
-      window._lastSavedJson = null;
-      window._fsGet = (ref) => ref.get();
-      window._fsSet = (ref, data, opts) => opts ? ref.set(data, opts) : ref.set(data);
-
-      function startSync() {
-        DB_DOC.onSnapshot((snap) => {
-          if (typeof setCloudStatus === 'function') setCloudStatus('☁️ En línea', 'var(--teal)');
-          if (!snap.exists) return;
-          const data = snap.data();
-          if (!data || !data.db || data.db === window._lastSavedJson) return;
-          try {
-            const remote = JSON.parse(data.db);
-            ['reqMensuales','necesidades','ordenesCompra','actasIngreso','actasEntrega','inventario','counters']
-              .forEach(k => { if (remote[k] !== undefined) window.db[k] = remote[k]; });
-            window._lastSavedJson = data.db;
-            ['renderDash','rmRenderList','necRenderList','ocRenderList','aiRenderList','aeRenderList',
-             'invRender','setNums','necRefreshSelects','aeRefreshSelects','aiPopulateOCSelect']
-              .forEach(fn => { if (typeof window[fn]==='function') window[fn](); });
-          } catch(e) { console.warn('Sync error', e); }
-        }, (err) => {
-          console.warn('onSnapshot error:', err);
-          if (typeof setCloudStatus === 'function') setCloudStatus('⚠️ Sin conexión', 'var(--amber)');
-        });
-        console.log('🔥 Firebase + Firestore activos');
-      }
-
-      // Autenticar primero, luego activar Firestore
-      firebase.auth().signInAnonymously()
-        .then(() => { console.log('🔐 Auth OK'); startSync(); })
-        .catch(err => { console.warn('Auth error:', err); startSync(); });
+    function startSync() {
+      DB_DOC.onSnapshot((snap) => {
+        if (typeof setCloudStatus === 'function') setCloudStatus('☁️ En línea', 'var(--teal)');
+        if (!snap.exists) return;
+        const data = snap.data();
+        if (!data || !data.db || data.db === window._lastSavedJson) return;
+        try {
+          const remote = JSON.parse(data.db);
+          ['reqMensuales','necesidades','ordenesCompra','actasIngreso','actasEntrega','inventario','counters']
+            .forEach(k => { if (remote[k] !== undefined) window.db[k] = remote[k]; });
+          window._lastSavedJson = data.db;
+          ['renderDash','rmRenderList','necRenderList','ocRenderList','aiRenderList','aeRenderList',
+           'invRender','setNums','necRefreshSelects','aeRefreshSelects','aiPopulateOCSelect']
+            .forEach(fn => { if (typeof window[fn]==='function') window[fn](); });
+          console.log('🔄 Sincronizado desde otro dispositivo');
+        } catch(e) { console.warn('Sync error', e); }
+      }, (err) => {
+        console.warn('Firestore error:', err.code);
+        if (typeof setCloudStatus === 'function') setCloudStatus('⚠️ Sin conexión', 'var(--amber)');
+      });
+      console.log('🔥 Firebase listo');
     }
-    tryInit();
-  });
+
+    firebase.auth().signInAnonymously()
+      .then(() => { console.log('🔐 Auth OK'); startSync(); })
+      .catch(err => { console.warn('Auth error:', err.code); startSync(); });
+  })();
 </script>
 </body>
 </html>
