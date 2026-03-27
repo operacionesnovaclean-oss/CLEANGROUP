@@ -386,11 +386,8 @@ function applyDBData(json){
 
 function loadDB(){
   const mc = document.getElementById('main-content');
-  if(mc) mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-size:36px">🔥</div><div style="color:var(--teal);font-size:16px;font-weight:600">Conectando con Firebase...</div><div style="color:var(--muted);font-size:12px;margin-top:4px" id="load-status">Iniciando...</div></div>';
 
-  function finishLoad(source){
-    const st = document.getElementById('load-status');
-    if(st) st.textContent = 'Cargado desde: '+source;
+  function ensureFields(){
     if(!db.inventario||!db.inventario.length) initInv();
     if(!db.reqMensuales)  db.reqMensuales=[];
     if(!db.necesidades)   db.necesidades=[];
@@ -398,75 +395,127 @@ function loadDB(){
     if(!db.actasIngreso)  db.actasIngreso=[];
     if(!db.actasEntrega)  db.actasEntrega=[];
     if(!db.counters)      db.counters={rm:0,nec:0,oc:0,ai:0,ae:0};
-    buildPanels();
-    initApp();
-    setCloudStatus('☁️ En línea','var(--teal)');
   }
 
-  function loadFromFirestore(){
-    const st = document.getElementById('load-status');
-    if(st) st.textContent = 'Leyendo nube...';
+  // ① Cargar localStorage INMEDIATAMENTE — sin esperar red
+  const localJson = localStorage.getItem('cg_iso_v3');
+  if(localJson){
+    applyDBData(localJson);
+    ensureFields();
+    buildPanels();
+    initApp();
+    setCloudStatus('☁️ Sincronizando...','var(--muted)');
+  } else {
+    // Sin datos locales: mostrar pantalla de carga
+    if(mc) mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-size:36px">🔥</div><div style="color:var(--teal);font-size:16px;font-weight:600">Cargando sistema...</div><div style="color:var(--muted);font-size:12px;margin-top:4px" id="load-status">Conectando con Firebase...</div></div>';
+  }
+
+  // ② En segundo plano, traer datos de Firebase y actualizar si son más recientes
+  function syncFromFirestore(){
     window._fsGet(window._dbDoc).then(snap=>{
       if(snap.exists()){
         const data = snap.data();
-        if(data && data.db){ applyDBData(data.db); finishLoad('Firebase ☁️'); return; }
+        if(data && data.db && data.db !== window._lastSavedJson){
+          const wasBuilt = !!document.getElementById('panel-dashboard');
+          applyDBData(data.db);
+          ensureFields();
+          if(!wasBuilt){
+            buildPanels(); initApp();
+          } else {
+            // Solo re-renderizar listas, no reconstruir toda la UI
+            if(typeof renderDash        ==='function') renderDash();
+            if(typeof rmRenderList      ==='function') rmRenderList();
+            if(typeof necRenderList     ==='function') necRenderList();
+            if(typeof ocRenderList      ==='function') ocRenderList();
+            if(typeof aiRenderList      ==='function') aiRenderList();
+            if(typeof aeRenderList      ==='function') aeRenderList();
+            if(typeof invRender         ==='function') invRender();
+            if(typeof setNums           ==='function') setNums();
+            if(typeof necRefreshSelects ==='function') necRefreshSelects();
+            if(typeof aeRefreshSelects  ==='function') aeRefreshSelects();
+            if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+          }
+        }
+        setCloudStatus('☁️ En línea','var(--teal)');
+      } else {
+        // Firebase vacío — si no había datos locales, construir UI vacía
+        if(!localJson){ ensureFields(); buildPanels(); initApp(); }
+        setCloudStatus('☁️ En línea','var(--teal)');
       }
-      // Documento vacío — usar localStorage si existe
-      const s = localStorage.getItem('cg_iso_v3');
-      if(s) applyDBData(s);
-      finishLoad('Local (sin datos en nube)');
     }).catch(err=>{
-      console.warn('Firestore load error:', err);
+      console.warn('Firestore sync error:', err);
+      if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('⚠️ Sin conexión','var(--amber)');
-      const s = localStorage.getItem('cg_iso_v3');
-      if(s) applyDBData(s);
-      finishLoad('Local (error de red)');
     });
   }
 
-  // Esperar a que el módulo Firebase esté listo (máx 8 seg)
+  // Esperar a que Firebase esté listo, con reintentos
   let attempts = 0;
-  function waitForFirebase(){
+  function waitAndSync(){
     if(window._dbDoc && window._fsGet){
-      loadFromFirestore();
+      syncFromFirestore();
     } else if(attempts < 16){
       attempts++;
-      const st = document.getElementById('load-status');
-      if(st) st.textContent = 'Esperando Firebase... ('+attempts+'/16)';
-      setTimeout(waitForFirebase, 500);
+      setTimeout(waitAndSync, 500);
     } else {
-      console.warn('Firebase no disponible, cargando localStorage');
+      if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('⚠️ Sin conexión','var(--amber)');
-      const s = localStorage.getItem('cg_iso_v3');
-      if(s) applyDBData(s);
-      finishLoad('Local (Firebase no disponible)');
     }
   }
-  waitForFirebase();
+  waitAndSync();
 }
+// ── Sistema de guardado optimizado ──────────────────────────────────────────
+// 1) Guarda en localStorage INMEDIATAMENTE (sin esperar red)
+// 2) Envía a Firebase con debounce de 800ms (agrupa cambios rápidos)
+// 3) Si hay una escritura en progreso, encola la siguiente
+window._saveTimer   = null;   // timer del debounce
+window._saveQueue   = false;  // hay un guardado pendiente mientras se escribe
+window._saving      = false;  // escritura Firebase en curso
+
 function saveDB(){
   const json = JSON.stringify(db);
-  // Guardar siempre en localStorage como respaldo offline
+  // ① Guardar local INMEDIATAMENTE — la UI siempre responde rápido
   localStorage.setItem('cg_iso_v3', json);
-  if(window._dbDoc && window._fsSet){
-    window._saving = true;
-    window._lastSavedJson = json;
-    setCloudStatus('⏳ Guardando...','var(--muted)');
-    window._fsSet(window._dbDoc, { db: json, updated: new Date().toISOString() })
-      .then(()=>{
-        window._saving = false;
-        setCloudStatus('☁️ Guardado ✓','var(--teal)');
-        clearTimeout(window._cloudTimer);
-        window._cloudTimer = setTimeout(()=> setCloudStatus('☁️ En línea','var(--teal)'), 2500);
-      })
-      .catch(err=>{
-        window._saving = false;
-        console.warn('Firestore save error', err);
-        setCloudStatus('⚠️ Error al guardar','var(--red)');
-      });
-  } else {
-    setCloudStatus('⚠️ Sin conexión (guardado local)','var(--amber)');
+  setCloudStatus('💾 Local ✓  ☁️ pendiente...','var(--muted)');
+
+  if(!window._dbDoc || !window._fsSet){
+    setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)');
+    return;
   }
+
+  // ② Debounce: cancela el timer anterior y programa uno nuevo a 800ms
+  clearTimeout(window._saveTimer);
+  window._saveTimer = setTimeout(()=> _flushToFirebase(), 800);
+}
+
+function _flushToFirebase(){
+  // Si ya hay una escritura en curso, marcar como pendiente y salir
+  if(window._saving){ window._saveQueue = true; return; }
+
+  const json = localStorage.getItem('cg_iso_v3'); // usar la versión más reciente
+  if(!json) return;
+
+  window._saving        = true;
+  window._saveQueue     = false;
+  window._lastSavedJson = json;
+  setCloudStatus('☁️ Sincronizando...','var(--muted)');
+
+  window._fsSet(window._dbDoc, { db: json, updated: new Date().toISOString() })
+    .then(()=>{
+      window._saving = false;
+      setCloudStatus('☁️ Guardado ✓','var(--teal)');
+      clearTimeout(window._cloudTimer);
+      window._cloudTimer = setTimeout(()=> setCloudStatus('☁️ En línea','var(--teal)'), 2000);
+      // Si hubo cambios mientras se guardaba, enviar de nuevo
+      if(window._saveQueue) _flushToFirebase();
+    })
+    .catch(err=>{
+      window._saving = false;
+      console.warn('Firestore save error', err);
+      setCloudStatus('⚠️ Error — reintentando...','var(--amber)');
+      // Reintentar en 3 segundos
+      setTimeout(()=> _flushToFirebase(), 3000);
+    });
 }
 function resetAll(){
   if(!confirm('¿Borrar TODOS los datos registrados? Esta acción no se puede deshacer.'))return;
