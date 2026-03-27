@@ -2463,16 +2463,18 @@ function meiGuardar(){
       return;
     }
     const firebaseConfig = {
-      apiKey: "AIzaSyDx94VADnHE3aLh0y8we0ck13HmJDW1Dis",
-      authDomain: "cleangroup-5a6d7.firebaseapp.com",
-      projectId: "cleangroup-5a6d7",
-      storageBucket: "cleangroup-5a6d7.firebasestorage.app",
-      messagingSenderId: "7136503563",
-      appId: "1:7136503563:web:f34bda90b43b25aec4640e"
+      apiKey: "AIzaSyBUGetLiQEvtcqqyk77hstHNfnUFnn2amw",
+      authDomain: "cleangroup-v2.firebaseapp.com",
+      projectId: "cleangroup-v2",
+      storageBucket: "cleangroup-v2.firebasestorage.app",
+      messagingSenderId: "1071876064242",
+      appId: "1:1071876064242:web:ea12a28c3f3b01d050e16b"
     };
 
     const fireApp = firebase.initializeApp(firebaseConfig);
     const fireDb  = firebase.firestore();
+    // Forzar long polling — evita bloqueos de WebSocket en redes restrictivas
+    fireDb.settings({ experimentalForceLongPolling: true, merge: true });
     const DB_DOC  = fireDb.collection("cleangroup").doc("maindb");
 
     window._fireDb        = fireDb;
