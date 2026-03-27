@@ -2403,3 +2403,51 @@ function meiFilterCatalog(){
   const el=document.getElementById('mei-catalog-list');if(!el)return;
   if(!filtered.length){el.innerHTML='<div style="color:var(--muted);font-size:11px;padding:4px">Sin resultados</div>';return;}
   el.innerHTML=filtered.slice(0,30).map(c=>`
+    <div class="cat-item-row" onclick="meiAddItem('${c.desc.replace(/'/g,"\'")}','${c.u}')">
+      <span style="font-size:12px;color:var(--text)">${c.desc}</span>
+      <span class="cat-unit">${c.u}</span>
+      <button class="btn btn-p btn-sm" style="padding:2px 8px;font-size:10px">+</button>
+    </div>`).join('');
+}
+
+function meiAddItem(desc,u){
+  if(!RM_CAT[rm_empresa][rm_cliente])RM_CAT[rm_empresa][rm_cliente]=[];
+  const key=desc+'|'+u;
+  if(RM_CAT[rm_empresa][rm_cliente].some(it=>it.p===desc)){toast('Ya existe en la lista',true);return;}
+  RM_CAT[rm_empresa][rm_cliente].push({g:'INSUMOS',p:desc,u:u,r:0});
+  if(!rm_data[rm_empresa][rm_cliente])rm_data[rm_empresa][rm_cliente]={};
+  rm_data[rm_empresa][rm_cliente][key]={prod:desc,grupo:'INSUMOS',unidad:u,qty:0};
+  meiRenderList();
+  meiFilterCatalog();
+  toast('"'+desc+'" agregado');
+}
+
+function meiGuardar(){
+  const items=RM_CAT[rm_empresa]?.[rm_cliente]||[];
+  const updated=[];
+  items.forEach((it,i)=>{
+    const edit=meiEdits[i]||{};
+    if(edit.deleted)return; // skip deleted
+    const newP=edit.p!==undefined?edit.p.trim().toUpperCase():it.p;
+    const newKey=newP+'|'+it.u;
+    updated.push({...it,p:newP});
+    // Update rm_data key if name changed
+    if(newP!==it.p){
+      const oldKey=it.p+'|'+it.u;
+      const val=rm_data[rm_empresa]?.[rm_cliente]?.[oldKey];
+      if(val&&rm_data[rm_empresa]?.[rm_cliente]){
+        delete rm_data[rm_empresa][rm_cliente][oldKey];
+        rm_data[rm_empresa][rm_cliente][newKey]={...val,prod:newP};
+      }
+    }
+  });
+  RM_CAT[rm_empresa][rm_cliente]=updated;
+  meiEdits={};
+  modalClose('modal-editar-items');
+  rmRenderItems();
+  toast('✅ Cambios guardados — '+updated.length+' ítems');
+}
+
+</script>
+</body>
+</html>
