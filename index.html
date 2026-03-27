@@ -368,6 +368,13 @@ function loadDB(){
 
   // ② En segundo plano, traer datos de Firebase y actualizar si son más recientes
   function syncFromFirestore(){
+    // Esperar autenticación antes de intentar Firestore
+    const user = typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
+    if (!user) {
+      // Reintentar en 500ms hasta que el auth esté listo
+      setTimeout(syncFromFirestore, 500);
+      return;
+    }
     window._fsGet(window._dbDoc).then(snap=>{
       if(snap.exists()){
         const data = snap.data();
