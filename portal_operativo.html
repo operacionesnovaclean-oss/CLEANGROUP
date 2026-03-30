@@ -340,7 +340,8 @@ async function poGuardar(){
     // Si es edición: borrar el registro anterior primero
     if(isEdit){
       const{error:delErr}=await _sb.from('campo_reqs').delete()
-        .eq('id',window._editingId).eq('usuario',currentUser.usuario);
+        .eq('id',String(window._editingId).replace(/[^0-9]/g,''))
+        .eq('usuario',currentUser.usuario).select();
       if(delErr)throw delErr;
       window._editingId=null;
     }
@@ -372,6 +373,7 @@ async function loadHistorial(){
     const action=btn.dataset.action;
     const id=btn.dataset.id;
     const cliente=btn.dataset.cliente||'';
+    console.log('click action='+action+' id='+id+' type='+typeof id);
     if(action==='editar')   histEditar(id);
     if(action==='eliminar') histEliminar(id,cliente);
   };
@@ -432,10 +434,12 @@ async function loadHistorial(){
 async function histEliminar(id,cliente){
   if(!confirm('¿Eliminar la requisición de "'+cliente+'"?')) return;
   if(!_sb) return;
-  const numId=parseInt(id,10);
-  if(isNaN(numId)){toast('ID inválido',true);return;}
+  // Limpiar el id — quitar 'n' si es bigint string, espacios, etc.
+  const cleanId=String(id).replace(/[^0-9]/g,'');
+  console.log('Eliminando id original='+id+' cleanId='+cleanId);
+  if(!cleanId){toast('ID inválido: '+id,true);return;}
   try{
-    let q=_sb.from('campo_reqs').delete().eq('id',numId);
+    let q=_sb.from('campo_reqs').delete().eq('id',cleanId);
     if(!isMaster) q=q.eq('usuario',currentUser.usuario);
     const {error}=await q.select();
     if(error){
@@ -453,14 +457,16 @@ async function histEliminar(id,cliente){
 
 async function histEditar(id){
   if(!_sb)return;
-  const numId=parseInt(id,10);
+  const cleanId=String(id).replace(/[^0-9]/g,'');
+  console.log('Editando id original='+id+' cleanId='+cleanId);
+  if(!cleanId){toast('ID inválido',true);return;}
   try{
-    const{data,error}=await _sb.from('campo_reqs').select('*').eq('id',numId).single();
+    const{data,error}=await _sb.from('campo_reqs').select('*').eq('id',cleanId).single();
     if(error||!data){toast('No se pudo cargar',true);return;}
     po_cliente=data.cliente;
     po_data={};
     (data.items||[]).forEach(it=>{if(it.qty>0)po_data[it.prod+'|'+it.unidad]=it.qty;});
-    window._editingId=numId;
+    window._editingId=cleanId;
     renderClientesBtns();
     document.getElementById('po-cliente-lbl').textContent=data.cliente;
     poRenderItems();
