@@ -4,10 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clean Group – Sistema ISO 9001</title>
-<!-- Firebase SDK (compat — funciona con file:// y sin servidor) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -182,36 +180,24 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .cat-item-row label{font-size:12px;color:var(--text);cursor:pointer;flex:1}
 .cat-item-row .cat-unit{font-size:10px;color:var(--muted);white-space:nowrap}
 @media print{body *{visibility:hidden!important}.pmbody,.pmbody *{visibility:visible!important}.pmbody{position:fixed;inset:0;padding:18px}.pmact{display:none!important}}
-/* ── GESTIÓN OPERATIVOS ── */
-.op-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.op-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
-.op-card:hover{border-color:rgba(0,201,167,.3)}
+/* ── OPERATIVOS ── */
+.op-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.op-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px}
 .op-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
 .op-name{font-size:13px;font-weight:700;color:#fff}
 .op-meta{font-size:11px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace}
 .op-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .op-tag{font-size:10px;background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.2);color:var(--teal);border-radius:20px;padding:2px 7px}
-/* ── CAMPO REQS ── */
-.campo-periodo-badge{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--teal)}
-.campo-cli-block{background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
-.campo-cli-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none}
-.campo-cli-head:hover{background:rgba(255,255,255,.03)}
-.campo-cli-body{display:none;border-top:1px solid var(--border);padding:12px 14px}
-.campo-cli-body.open{display:block}
-.campo-op-row{font-size:11px;color:var(--muted);margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed rgba(255,255,255,.07)}
-.campo-op-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
-/* ── MODAL USUARIO ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;display:flex;align-items:center;justify-content:center;animation:fadeUp .2s ease}
-.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:520px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.5)}
-.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-.modal-head h3{font-size:15px;font-weight:700;color:#fff;margin:0}
-.modal-body{padding:18px 20px;overflow-y:auto;flex:1}
-.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
-.modal-close{background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:0 4px}
-.modal-close:hover{color:var(--red)}
-.cli-checkbox-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow-y:auto;padding:4px 0}
+.cli-check-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding:4px 0}
 .cli-check-btn{padding:5px 10px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s}
 .cli-check-btn.sel{border-color:var(--teal);background:rgba(0,201,167,.12);color:var(--teal);font-weight:700}
+/* ── CAMPO REQS ── */
+.campo-period-tag{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--teal)}
+.campo-block{background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.campo-block-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none}
+.campo-block-head:hover{background:rgba(255,255,255,.03)}
+.campo-block-body{display:none;border-top:1px solid var(--border);padding:12px 14px}
+.campo-block-body.open{display:block}
 </style>
 </head>
 <body>
@@ -312,6 +298,13 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <script>
 // ═══════════════════════════════
+// SUPABASE CONFIG
+// ═══════════════════════════════
+const SB_URL  = 'https://qrdfxksbaoosguxdtolk.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZGZ4a3NiYW9vc2d1eGR0b2xrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODE0MzcsImV4cCI6MjA5MDQ1NzQzN30.LlnuNX4VMQR7EZ00zSGRzJ8PzUHR8bq0yGVoXOvxKg0';
+let _sb = null;  // Supabase client — se inicializa al cargar el SDK
+
+// ═══════════════════════════════
 // AUTH
 // ═══════════════════════════════
 const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'1234'};
@@ -339,19 +332,18 @@ function doLogout(){
 }
 
 // ═══════════════════════════════
-// DB
+// DB (estructura local igual que antes)
 // ═══════════════════════════════
 var db={reqMensuales:[],necesidades:[],ordenesCompra:[],actasIngreso:[],actasEntrega:[],inventario:[],counters:{rm:0,nec:0,oc:0,ai:0,ae:0}};
 
-function setCloudStatus(msg, color){
-  const el = document.getElementById('cloud-indicator');
-  if(el){ el.textContent = msg; el.style.color = color; el.style.background = color==='var(--teal)'?'rgba(0,201,167,.12)':color==='var(--amber)'?'rgba(245,166,35,.12)':'rgba(224,82,99,.12)'; }
+function setCloudStatus(msg,color){
+  const el=document.getElementById('cloud-indicator');
+  if(el){el.textContent=msg;el.style.color=color;el.style.background=color==='var(--teal)'?'rgba(0,201,167,.12)':color==='var(--amber)'?'rgba(245,166,35,.12)':'rgba(224,82,99,.12)';}
 }
 
 function applyDBData(json){
   try{
-    const p = JSON.parse(json);
-    // *** CRÍTICO: nunca reasignar db = {...}, siempre mutar el mismo objeto ***
+    const p=JSON.parse(json);
     db.reqMensuales  = p.reqMensuales  || [];
     db.necesidades   = p.necesidades   || [];
     db.ordenesCompra = p.ordenesCompra || [];
@@ -361,11 +353,12 @@ function applyDBData(json){
     db.counters      = p.counters      || {rm:0,nec:0,oc:0,ai:0,ae:0};
     window._lastSavedJson = json;
     return true;
-  }catch(e){ console.warn('applyDBData error',e); return false; }
+  }catch(e){console.warn('applyDBData error',e);return false;}
 }
 
+// ─── loadDB: carga local primero, luego sincroniza con Supabase ───
 function loadDB(){
-  const mc = document.getElementById('main-content');
+  const mc=document.getElementById('main-content');
 
   function ensureFields(){
     if(!db.inventario||!db.inventario.length) initInv();
@@ -377,8 +370,8 @@ function loadDB(){
     if(!db.counters)      db.counters={rm:0,nec:0,oc:0,ai:0,ae:0};
   }
 
-  // ① Cargar localStorage INMEDIATAMENTE — sin esperar red
-  const localJson = localStorage.getItem('cg_iso_v3');
+  // ① Local inmediato
+  const localJson=localStorage.getItem('cg_iso_v3');
   if(localJson){
     applyDBData(localJson);
     ensureFields();
@@ -386,126 +379,113 @@ function loadDB(){
     initApp();
     setCloudStatus('☁️ Sincronizando...','var(--muted)');
   } else {
-    // Sin datos locales: mostrar pantalla de carga
-    if(mc) mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-size:36px">🔥</div><div style="color:var(--teal);font-size:16px;font-weight:600">Cargando sistema...</div><div style="color:var(--muted);font-size:12px;margin-top:4px" id="load-status">Conectando con Firebase...</div></div>';
+    if(mc) mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-size:36px">🟢</div><div style="color:var(--teal);font-size:16px;font-weight:600">Cargando sistema...</div><div style="color:var(--muted);font-size:12px;margin-top:4px">Conectando con Supabase...</div></div>';
   }
 
-  // ② En segundo plano, traer datos de Firebase y actualizar si son más recientes
-  function syncFromFirestore(){
-    window._fsGet(window._dbDoc).then(snap=>{
-      if(snap.exists()){
-        const data = snap.data();
-        if(data && data.db && data.db !== window._lastSavedJson){
-          const wasBuilt = !!document.getElementById('panel-dashboard');
-          applyDBData(data.db);
-          ensureFields();
-          if(!wasBuilt){
-            buildPanels(); initApp();
-          } else {
-            if(typeof renderDash        ==='function') renderDash();
-            if(typeof rmRenderList      ==='function') rmRenderList();
-            if(typeof necRenderList     ==='function') necRenderList();
-            if(typeof ocRenderList      ==='function') ocRenderList();
-            if(typeof aiRenderList      ==='function') aiRenderList();
-            if(typeof aeRenderList      ==='function') aeRenderList();
-            if(typeof invRender         ==='function') invRender();
-            if(typeof setNums           ==='function') setNums();
-            if(typeof necRefreshSelects ==='function') necRefreshSelects();
-            if(typeof aeRefreshSelects  ==='function') aeRefreshSelects();
-            if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
-          }
-        }
-      } else {
-        // Firebase vacío — si no había datos locales, construir UI vacía
+  // ② Sincronizar con Supabase
+  async function syncFromSupabase(){
+    if(!_sb){ setTimeout(syncFromSupabase,300); return; }
+    try{
+      const {data,error}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
+      if(error && error.code==='PGRST116'){
+        // Fila no existe → crear
         if(!localJson){ ensureFields(); buildPanels(); initApp(); }
+        setCloudStatus('☁️ En línea','var(--teal)');
+        return;
       }
-      // Firebase respondió correctamente → siempre mostrar En línea
+      if(error) throw error;
+      if(data && data.db && data.db !== window._lastSavedJson){
+        const wasBuilt=!!document.getElementById('panel-dashboard');
+        applyDBData(data.db);
+        ensureFields();
+        if(!wasBuilt){ buildPanels(); initApp(); }
+        else{
+          if(typeof renderDash==='function') renderDash();
+          if(typeof rmRenderList==='function') rmRenderList();
+          if(typeof necRenderList==='function') necRenderList();
+          if(typeof ocRenderList==='function') ocRenderList();
+          if(typeof aiRenderList==='function') aiRenderList();
+          if(typeof aeRenderList==='function') aeRenderList();
+          if(typeof invRender==='function') invRender();
+          if(typeof setNums==='function') setNums();
+          if(typeof necRefreshSelects==='function') necRefreshSelects();
+          if(typeof aeRefreshSelects==='function') aeRefreshSelects();
+          if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+        }
+      } else if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('☁️ En línea','var(--teal)');
-    }).catch(err=>{
-      console.warn('Firestore sync error:', err);
-      if(!localJson){ ensureFields(); buildPanels(); initApp(); }
-      setCloudStatus('⚠️ Sin conexión','var(--amber)');
-    });
-  }
-
-  // Esperar a que Firebase esté listo, con reintentos
-  let attempts = 0;
-  function waitAndSync(){
-    if(window._dbDoc && window._fsGet){
-      syncFromFirestore();
-    } else if(attempts < 16){
-      attempts++;
-      setTimeout(waitAndSync, 500);
-    } else {
+      // Suscripción en tiempo real
+      _sb.channel('maindb-changes')
+        .on('postgres_changes',{event:'UPDATE',schema:'public',table:'maindb',filter:'id=eq.1'},payload=>{
+          const remote=payload.new;
+          if(remote && remote.db && remote.db !== window._lastSavedJson){
+            applyDBData(remote.db);
+            if(typeof renderDash==='function') renderDash();
+            if(typeof rmRenderList==='function') rmRenderList();
+            if(typeof necRenderList==='function') necRenderList();
+            if(typeof ocRenderList==='function') ocRenderList();
+            if(typeof aiRenderList==='function') aiRenderList();
+            if(typeof aeRenderList==='function') aeRenderList();
+            if(typeof invRender==='function') invRender();
+            if(typeof setNums==='function') setNums();
+            if(typeof necRefreshSelects==='function') necRefreshSelects();
+            if(typeof aeRefreshSelects==='function') aeRefreshSelects();
+            if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+            setCloudStatus('☁️ En línea','var(--teal)');
+          }
+        })
+        .subscribe();
+    }catch(err){
+      console.warn('Supabase sync error:',err);
       if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('⚠️ Sin conexión','var(--amber)');
     }
   }
-  waitAndSync();
+  syncFromSupabase();
 }
-// ── Sistema de guardado optimizado ──────────────────────────────────────────
-// 1) Guarda en localStorage INMEDIATAMENTE (sin esperar red)
-// 2) Envía a Firebase con debounce de 800ms (agrupa cambios rápidos)
-// 3) Si hay una escritura en progreso, encola la siguiente
-window._saveTimer   = null;   // timer del debounce
-window._saveQueue   = false;  // hay un guardado pendiente mientras se escribe
-window._saving      = false;  // escritura Firebase en curso
+
+// ── Guardado optimizado con debounce ──
+window._saveTimer=null; window._saveQueue=false; window._saving=false;
 
 function saveDB(){
-  const json = JSON.stringify(db);
-  // ① Guardar local INMEDIATAMENTE — la UI siempre responde rápido
-  localStorage.setItem('cg_iso_v3', json);
+  const json=JSON.stringify(db);
+  localStorage.setItem('cg_iso_v3',json);
   setCloudStatus('💾 Local ✓  ☁️ pendiente...','var(--muted)');
-
-  if(!window._dbDoc || !window._fsSet){
-    setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)');
-    return;
-  }
-
-  // ② Debounce: cancela el timer anterior y programa uno nuevo a 800ms
+  if(!_sb){ setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)'); return; }
   clearTimeout(window._saveTimer);
-  window._saveTimer = setTimeout(()=> _flushToFirebase(), 800);
+  window._saveTimer=setTimeout(()=>_flushToSupabase(),800);
 }
 
-function _flushToFirebase(){
-  // Si ya hay una escritura en curso, marcar como pendiente y salir
-  if(window._saving){ window._saveQueue = true; return; }
-
-  const json = localStorage.getItem('cg_iso_v3'); // usar la versión más reciente
+async function _flushToSupabase(){
+  if(window._saving){ window._saveQueue=true; return; }
+  const json=localStorage.getItem('cg_iso_v3');
   if(!json) return;
-
-  window._saving        = true;
-  window._saveQueue     = false;
-  window._lastSavedJson = json;
+  window._saving=true; window._saveQueue=false;
+  window._lastSavedJson=json;
   setCloudStatus('☁️ Sincronizando...','var(--muted)');
-
-  window._fsSet(window._dbDoc, { db: json, updated: new Date().toISOString() })
-    .then(()=>{
-      window._saving = false;
-      setCloudStatus('☁️ Guardado ✓','var(--teal)');
-      clearTimeout(window._cloudTimer);
-      window._cloudTimer = setTimeout(()=> setCloudStatus('☁️ En línea','var(--teal)'), 2000);
-      // Si hubo cambios mientras se guardaba, enviar de nuevo
-      if(window._saveQueue) _flushToFirebase();
-    })
-    .catch(err=>{
-      window._saving = false;
-      console.warn('Firestore save error', err);
-      setCloudStatus('⚠️ Error — reintentando...','var(--amber)');
-      // Reintentar en 3 segundos
-      setTimeout(()=> _flushToFirebase(), 3000);
-    });
+  try{
+    const {error}=await _sb.from('maindb').upsert({id:1,db:json,updated:new Date().toISOString()},{onConflict:'id'});
+    if(error) throw error;
+    window._saving=false;
+    setCloudStatus('☁️ Guardado ✓','var(--teal)');
+    clearTimeout(window._cloudTimer);
+    window._cloudTimer=setTimeout(()=>setCloudStatus('☁️ En línea','var(--teal)'),2000);
+    if(window._saveQueue) _flushToSupabase();
+  }catch(err){
+    window._saving=false;
+    console.warn('Supabase save error',err);
+    setCloudStatus('⚠️ Error — reintentando...','var(--amber)');
+    setTimeout(()=>_flushToSupabase(),3000);
+  }
 }
+
 function resetAll(){
   if(!confirm('¿Borrar TODOS los datos registrados? Esta acción no se puede deshacer.'))return;
   localStorage.removeItem('cg_iso_v3');
   db.reqMensuales=[];db.necesidades=[];db.ordenesCompra=[];
   db.actasIngreso=[];db.actasEntrega=[];db.inventario=[];
   db.counters={rm:0,nec:0,oc:0,ai:0,ae:0};
-  initInv();
-  saveDB();
-  setNums();
-  renderDash();
+  initInv(); saveDB(); setNums(); renderDash();
   toast('✅ Datos borrados. La app está lista para empezar de cero.');
 }
 
@@ -953,12 +933,12 @@ function buildPanels(){
 <div class="panel" id="panel-operativos">
   <div class="ph">
     <h2>👥 Usuarios de Campo</h2>
-    <p>Crea las credenciales de los operativos para acceder al portal de campo.</p>
-    <span class="iso-code">Portal: portal_operativo.html</span>
+    <p>Crea las credenciales de los operativos para el portal de campo.</p>
+    <span class="iso-code">Archivo: portal_operativo.html</span>
   </div>
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin:0">➕ Nuevo usuario operativo</div>
+      <div class="card-title" style="margin:0">➕ Nuevo usuario</div>
       <button class="btn btn-s btn-sm" onclick="opPublishCatalog()">🔄 Publicar catálogo al portal</button>
     </div>
     <div class="fg">
@@ -975,7 +955,7 @@ function buildPanels(){
     </div>
     <div style="margin-top:4px">
       <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:8px">Clientes asignados</label>
-      <div id="nop-cli-grid" class="cli-checkbox-grid">
+      <div id="nop-cli-grid" class="cli-check-grid">
         <span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>
       </div>
     </div>
@@ -994,27 +974,19 @@ function buildPanels(){
 <div class="panel" id="panel-campo">
   <div class="ph">
     <h2>📥 Requisiciones de Campo</h2>
-    <p>Consolidado de lo que los operativos cargaron desde sus puntos.</p>
+    <p>Todo lo que los operativos cargaron desde sus puntos, consolidado y listo para generar la requisición mensual.</p>
   </div>
-  <!-- Filtros -->
   <div class="card">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <select id="campo-periodo-sel" onchange="campoRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
-        <option value="">Todos los períodos</option>
-      </select>
+      <select id="campo-periodo-sel" onchange="campoRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"><option value="">Todos los períodos</option></select>
       <select id="campo-empresa-sel" onchange="campoRender()" style="padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
-        <option value="">Todas las empresas</option>
-        <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+        <option value="">Todas las empresas</option><option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
       </select>
-      <select id="campo-op-sel" onchange="campoRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
-        <option value="">Todos los operativos</option>
-      </select>
+      <select id="campo-op-sel" onchange="campoRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"><option value="">Todos los operativos</option></select>
       <button class="btn btn-s btn-sm" onclick="campoReload()">🔄 Actualizar</button>
     </div>
   </div>
-  <!-- Stats -->
   <div class="sg" id="campo-stats"></div>
-  <!-- Consolidado por cliente -->
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin:0">📊 Consolidado por cliente <span class="badge" id="campo-count">0</span></div>
@@ -1022,15 +994,9 @@ function buildPanels(){
     </div>
     <div id="campo-consolidado"></div>
   </div>
-  <!-- Envíos individuales -->
   <div class="card">
     <div class="card-title">📋 Envíos individuales</div>
-    <div class="tw">
-      <table>
-        <thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha / Hora</th><th>Ítems</th><th></th></tr></thead>
-        <tbody id="campo-list"></tbody>
-      </table>
-    </div>
+    <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha / Hora</th><th>Ítems</th><th></th></tr></thead><tbody id="campo-list"></tbody></table></div>
   </div>
 </div>
   `;
@@ -2573,423 +2539,253 @@ function meiGuardar(){
 
 </script>
 
-// ════════════════════════════════════════════════════
+<!-- Supabase init -->
+<script>
+(function initSupabase(){
+  if(typeof supabase==='undefined'){ setTimeout(initSupabase,100); return; }
+  _sb = supabase.createClient(SB_URL, SB_KEY);
+  window._sb = _sb;
+  console.log('✅ Supabase conectado');
+  setCloudStatus('☁️ En línea','var(--teal)');
+})();
+</script>
+
+<!-- Gestión operativos + campo JS -->
+<script>
+// ════════════════════════════════════════════
 // GESTIÓN OPERATIVOS — ADMIN
-// ════════════════════════════════════════════════════
-let nop_selClis = [];
-let _operativosCache = null; // null = not loaded yet
+// ════════════════════════════════════════════
+let nop_selClis=[];
 
-async function _getOpDoc() {
-  if (!window._opUsersDoc) return null;
-  return window._opUsersDoc;
-}
-
-async function loadOpUsers(forceReload) {
-  if (_operativosCache && !forceReload) return _operativosCache;
-  const doc = await _getOpDoc();
-  if (!doc) return [];
-  try {
-    const snap = await doc.get();
-    if (snap.exists()) {
-      _operativosCache = JSON.parse(snap.data().usuarios || '[]');
-    } else {
-      _operativosCache = [];
-    }
-  } catch (e) { console.warn('loadOpUsers', e); _operativosCache = []; }
-  return _operativosCache;
-}
-
-async function saveOpUsers(arr) {
-  _operativosCache = arr;
-  const doc = await _getOpDoc();
-  if (!doc) { toast('Sin conexión con Firebase', true); return false; }
-  try {
-    await doc.set({ usuarios: JSON.stringify(arr), updated: new Date().toISOString() });
-    return true;
-  } catch (e) { console.warn('saveOpUsers', e); toast('Error al guardar', true); return false; }
-}
-
-function nopRenderCliCheckboxes() {
-  const emp = document.getElementById('nop-empresa').value;
-  const el = document.getElementById('nop-cli-grid');
-  if (!emp) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>'; return; }
-  const clientes = Object.keys(RM_CAT[emp] || {});
-  el.innerHTML = clientes.map(c => {
-    const sel = nop_selClis.includes(c);
-    return `<button class="cli-check-btn${sel ? ' sel' : ''}" onclick="nopTogCli('${c.replace(/'/g, "\\'")}')">${c}</button>`;
+function nopRenderCliCheckboxes(){
+  const emp=document.getElementById('nop-empresa').value;
+  const el=document.getElementById('nop-cli-grid');
+  if(!emp){el.innerHTML='<span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>';return;}
+  const clientes=Object.keys(RM_CAT[emp]||{});
+  el.innerHTML=clientes.map(c=>{
+    const sel=nop_selClis.includes(c);
+    return `<button class="cli-check-btn${sel?' sel':''}" onclick="nopTogCli('${c.replace(/'/g,"\\'")}')">${c}</button>`;
   }).join('');
 }
-
-function nopTogCli(c) {
-  const i = nop_selClis.indexOf(c);
-  if (i >= 0) nop_selClis.splice(i, 1); else nop_selClis.push(c);
+function nopTogCli(c){
+  const i=nop_selClis.indexOf(c);
+  if(i>=0) nop_selClis.splice(i,1); else nop_selClis.push(c);
   nopRenderCliCheckboxes();
 }
-
-async function nopGuardar() {
-  const nombre = document.getElementById('nop-nombre').value.trim();
-  const usuario = document.getElementById('nop-usuario').value.trim().toLowerCase();
-  const pass = document.getElementById('nop-pass').value.trim();
-  const empresa = document.getElementById('nop-empresa').value;
-  if (!nombre || !usuario || !pass) { toast('Completa nombre, usuario y contraseña', true); return; }
-  if (pass.length < 4) { toast('La contraseña debe tener al menos 4 caracteres', true); return; }
-  if (!empresa) { toast('Selecciona una empresa', true); return; }
-  if (!nop_selClis.length) { toast('Asigna al menos un cliente', true); return; }
-
-  const users = await loadOpUsers();
-  const existing = users.findIndex(u => u.usuario === usuario);
-  const record = { nombre, usuario, password: pass, empresa, clientes: [...nop_selClis], creado: new Date().toISOString() };
-  if (existing >= 0) users[existing] = record; else users.push(record);
-  const ok = await saveOpUsers(users);
-  if (ok) { toast(`✅ Usuario "${usuario}" guardado`); nopLimpiar(); initOperativosPanel(); }
+async function nopGuardar(){
+  const nombre=document.getElementById('nop-nombre').value.trim();
+  const usuario=document.getElementById('nop-usuario').value.trim().toLowerCase();
+  const pass=document.getElementById('nop-pass').value.trim();
+  const empresa=document.getElementById('nop-empresa').value;
+  if(!nombre||!usuario||!pass){toast('Completa nombre, usuario y contraseña',true);return;}
+  if(pass.length<4){toast('La contraseña debe tener al menos 4 caracteres',true);return;}
+  if(!empresa){toast('Selecciona una empresa',true);return;}
+  if(!nop_selClis.length){toast('Asigna al menos un cliente',true);return;}
+  if(!_sb){toast('Sin conexión Supabase',true);return;}
+  try{
+    const {error}=await _sb.from('operativos_usuarios').upsert(
+      {nombre,usuario,password:pass,empresa,clientes:nop_selClis,creado:new Date().toISOString()},
+      {onConflict:'usuario'}
+    );
+    if(error) throw error;
+    toast('✅ Usuario "'+usuario+'" guardado');
+    nopLimpiar(); initOperativosPanel();
+  }catch(e){toast('Error: '+e.message,true);}
 }
-
-function nopLimpiar() {
-  document.getElementById('nop-nombre').value = '';
-  document.getElementById('nop-usuario').value = '';
-  document.getElementById('nop-pass').value = '';
-  document.getElementById('nop-empresa').value = '';
-  nop_selClis = [];
+function nopLimpiar(){
+  ['nop-nombre','nop-usuario','nop-pass'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('nop-empresa').value='';
+  nop_selClis=[]; nopRenderCliCheckboxes();
+}
+async function nopEliminar(usuario){
+  if(!confirm('¿Eliminar usuario "'+usuario+'"?')) return;
+  const {error}=await _sb.from('operativos_usuarios').delete().eq('usuario',usuario);
+  if(error){toast('Error: '+error.message,true);return;}
+  toast('Usuario eliminado'); initOperativosPanel();
+}
+async function nopEditar(usuario){
+  const {data}=await _sb.from('operativos_usuarios').select('*').eq('usuario',usuario).single();
+  if(!data) return;
+  document.getElementById('nop-nombre').value=data.nombre;
+  document.getElementById('nop-usuario').value=data.usuario;
+  document.getElementById('nop-pass').value=data.password;
+  document.getElementById('nop-empresa').value=data.empresa;
+  nop_selClis=[...(data.clientes||[])];
   nopRenderCliCheckboxes();
+  document.getElementById('nop-nombre').scrollIntoView({behavior:'smooth'});
 }
-
-async function nopEliminar(idx) {
-  if (!confirm('¿Eliminar este usuario? No podrá ingresar al portal.')) return;
-  const users = await loadOpUsers();
-  users.splice(idx, 1);
-  await saveOpUsers(users);
-  toast('Usuario eliminado');
-  initOperativosPanel();
-}
-
-async function nopEditar(idx) {
-  const users = await loadOpUsers();
-  const u = users[idx];
-  document.getElementById('nop-nombre').value = u.nombre;
-  document.getElementById('nop-usuario').value = u.usuario;
-  document.getElementById('nop-pass').value = u.password;
-  document.getElementById('nop-empresa').value = u.empresa;
-  nop_selClis = [...(u.clientes || [])];
-  nopRenderCliCheckboxes();
-  document.getElementById('nop-nombre').scrollIntoView({ behavior: 'smooth' });
-}
-
-async function initOperativosPanel() {
-  const users = await loadOpUsers(true);
-  const countEl = document.getElementById('op-count');
-  if (countEl) countEl.textContent = users.length;
-  const el = document.getElementById('op-list');
-  if (!el) return;
-  if (!users.length) {
-    el.innerHTML = '<p style="color:var(--muted);font-size:13px">No hay usuarios registrados aún.</p>';
-    return;
-  }
-  el.innerHTML = `<div class="op-grid">${users.map((u, i) => `
+async function initOperativosPanel(){
+  const el=document.getElementById('op-list');
+  if(!_sb||!el) return;
+  const {data,error}=await _sb.from('operativos_usuarios').select('*').order('creado',{ascending:false});
+  if(error){el.innerHTML='<p style="color:var(--red);font-size:13px">Error: '+error.message+'</p>';return;}
+  const countEl=document.getElementById('op-count');
+  if(countEl) countEl.textContent=data.length;
+  if(!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No hay usuarios registrados aún.</p>';return;}
+  el.innerHTML='<div class="op-grid">'+data.map(u=>`
     <div class="op-card">
       <div class="op-card-head">
-        <div>
-          <div class="op-name">👤 ${u.nombre}</div>
-          <div class="op-meta">@${u.usuario} · ${u.empresa}</div>
-        </div>
+        <div><div class="op-name">👤 ${u.nombre}</div><div class="op-meta">@${u.usuario} · ${u.empresa}</div></div>
         <div style="display:flex;gap:5px">
-          <button class="btn btn-s btn-sm" onclick="nopEditar(${i})">✏️</button>
-          <button class="btn btn-d btn-sm" onclick="nopEliminar(${i})">🗑️</button>
+          <button class="btn btn-s btn-sm" onclick="nopEditar('${u.usuario}')">✏️</button>
+          <button class="btn btn-d btn-sm" onclick="nopEliminar('${u.usuario}')">🗑️</button>
         </div>
       </div>
-      <div class="op-tags">${(u.clientes || []).map(c => `<span class="op-tag">${c}</span>`).join('')}</div>
-    </div>`).join('')}</div>`;
+      <div class="op-tags">${(u.clientes||[]).map(c=>`<span class="op-tag">${c}</span>`).join('')}</div>
+    </div>`).join('')+'</div>';
+  const opSel=document.getElementById('campo-op-sel');
+  if(opSel){
+    const cur=opSel.value;
+    opSel.innerHTML='<option value="">Todos los operativos</option>'+data.map(u=>`<option${u.nombre===cur?' selected':''}>${u.nombre}</option>`).join('');
+  }
+}
+async function opPublishCatalog(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  const {error}=await _sb.from('campo_catalog').upsert({id:1,catalog:RM_CAT,updated:new Date().toISOString()},{onConflict:'id'});
+  if(error){toast('Error: '+error.message,true);return;}
+  toast('✅ Catálogo publicado al portal de campo');
 }
 
-// Publica el RM_CAT al Firestore para que el portal lo consuma
-async function opPublishCatalog() {
-  if (!window._catalogDoc) { toast('Sin conexión', true); return; }
-  try {
-    await window._catalogDoc.set({ catalog: JSON.stringify(RM_CAT), updated: new Date().toISOString() });
-    toast('✅ Catálogo publicado al portal de campo');
-  } catch (e) { toast('Error al publicar catálogo', true); }
-}
-
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════
 // REQUISICIONES DE CAMPO — ADMIN
-// ════════════════════════════════════════════════════
-let _campoReqs = [];
-
-async function campoReload() {
-  if (!window._campoCol) { toast('Sin conexión Firebase', true); return; }
-  try {
-    const snap = await window._campoCol.orderBy('fechaISO', 'desc').limit(500).get();
-    _campoReqs = [];
-    snap.forEach(d => _campoReqs.push({ id: d.id, ...d.data() }));
-  } catch (e) {
-    // orderBy may fail without index; fallback
-    try {
-      const snap = await window._campoCol.get();
-      _campoReqs = [];
-      snap.forEach(d => _campoReqs.push({ id: d.id, ...d.data() }));
-      _campoReqs.sort((a, b) => (b.fechaISO || '') > (a.fechaISO || '') ? 1 : -1);
-    } catch (e2) { console.warn('campoReload error', e2); }
-  }
-  campoRender();
+// ════════════════════════════════════════════
+let _campoReqs=[];
+async function campoReload(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  const {data,error}=await _sb.from('campo_reqs').select('*').order('fecha_iso',{ascending:false}).limit(500);
+  if(error){toast('Error: '+error.message,true);return;}
+  _campoReqs=data||[]; campoRender();
 }
-
-async function initCampoPanel() {
-  // Populate operativo filter from saved users
-  const users = await loadOpUsers();
-  const sel = document.getElementById('campo-op-sel');
-  if (sel) {
-    sel.innerHTML = '<option value="">Todos los operativos</option>' + users.map(u => `<option>${u.nombre}</option>`).join('');
-  }
-  await campoReload();
+async function initCampoPanel(){
+  await initOperativosPanel(); await campoReload();
 }
-
-function campoRender() {
-  const periodo = (document.getElementById('campo-periodo-sel') || {}).value || '';
-  const empresa = (document.getElementById('campo-empresa-sel') || {}).value || '';
-  const opF = (document.getElementById('campo-op-sel') || {}).value || '';
-
-  let reqs = _campoReqs;
-  if (periodo) reqs = reqs.filter(r => r.periodo === periodo);
-  if (empresa) reqs = reqs.filter(r => r.empresa === empresa);
-  if (opF) reqs = reqs.filter(r => r.operativo === opF);
-
-  // Update periodo select
-  const periodos = [...new Set(_campoReqs.map(r => r.periodo).filter(Boolean))].sort();
-  const pSel = document.getElementById('campo-periodo-sel');
-  if (pSel) {
-    const cur = pSel.value;
-    pSel.innerHTML = '<option value="">Todos los períodos</option>' + periodos.map(p => `<option${p === cur ? ' selected' : ''}>${p}</option>`).join('');
-  }
-
-  // Stats
-  const totalOps = [...new Set(reqs.map(r => r.operativo))].length;
-  const totalClis = [...new Set(reqs.map(r => r.cliente))].length;
-  const statsEl = document.getElementById('campo-stats');
-  if (statsEl) statsEl.innerHTML = `
+function campoRender(){
+  const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
+  const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
+  const opF=(document.getElementById('campo-op-sel')||{}).value||'';
+  let reqs=_campoReqs;
+  if(periodo) reqs=reqs.filter(r=>r.periodo===periodo);
+  if(empresa) reqs=reqs.filter(r=>r.empresa===empresa);
+  if(opF) reqs=reqs.filter(r=>r.operativo===opF);
+  const periodos=[...new Set(_campoReqs.map(r=>r.periodo).filter(Boolean))].sort().reverse();
+  const pSel=document.getElementById('campo-periodo-sel');
+  if(pSel){const cur=pSel.value;pSel.innerHTML='<option value="">Todos los períodos</option>'+periodos.map(p=>`<option${p===cur?' selected':''}>${p}</option>`).join('');}
+  const totalOps=[...new Set(reqs.map(r=>r.operativo))].length;
+  const totalClis=[...new Set(reqs.map(r=>r.cliente))].length;
+  const statsEl=document.getElementById('campo-stats');
+  if(statsEl) statsEl.innerHTML=`
     <div class="sc st"><div class="l">Envíos recibidos</div><div class="v">${reqs.length}</div><div class="s">Total</div></div>
     <div class="sc st"><div class="l">Operativos</div><div class="v">${totalOps}</div><div class="s">Han enviado</div></div>
-    <div class="sc sa"><div class="l">Clientes</div><div class="v">${totalClis}</div><div class="s">Cubiertos</div></div>
-  `;
-  document.getElementById('campo-count').textContent = reqs.length;
-
-  // Build consolidated map: empresa → cliente → { items, ops, periodos }
-  const consolidado = {};
-  reqs.forEach(r => {
-    const emp = r.empresa || '—';
-    const cli = r.cliente || '—';
-    if (!consolidado[emp]) consolidado[emp] = {};
-    if (!consolidado[emp][cli]) consolidado[emp][cli] = { items: {}, ops: new Set(), periodos: new Set() };
-    const block = consolidado[emp][cli];
-    block.ops.add(r.operativo || '?');
-    block.periodos.add(r.periodo || '?');
-    (r.items || []).forEach(it => {
-      if (!it.qty || +it.qty === 0) return;
-      const key = it.prod + '|' + it.unidad;
-      if (!block.items[key]) block.items[key] = { prod: it.prod, unidad: it.unidad, grupo: it.grupo || 'INSUMOS', qty: 0 };
-      block.items[key].qty += +it.qty;
+    <div class="sc sa"><div class="l">Clientes</div><div class="v">${totalClis}</div><div class="s">Cubiertos</div></div>`;
+  document.getElementById('campo-count').textContent=reqs.length;
+  const consolMap={};
+  reqs.forEach(r=>{
+    const emp=r.empresa||'—';const cli=r.cliente||'—';
+    if(!consolMap[emp]) consolMap[emp]={};
+    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set()};
+    const block=consolMap[emp][cli];
+    block.ops.add(r.operativo||'?');block.periodos.add(r.periodo||'?');
+    (r.items||[]).forEach(it=>{
+      if(!it.qty||+it.qty===0) return;
+      const key=it.prod+'|'+it.unidad;
+      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0};
+      block.items[key].qty+=+it.qty;
     });
   });
-
-  const consEl = document.getElementById('campo-consolidado');
-  if (consEl) {
-    if (!reqs.length) {
-      consEl.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay requisiciones de campo para el filtro seleccionado.</p>';
-    } else {
-      consEl.innerHTML = Object.entries(consolidado).map(([emp, clis]) =>
-        Object.entries(clis).map(([cli, data]) => {
-          const itemsArr = Object.values(data.items).filter(i => i.qty > 0);
-          const grupos = {};
-          itemsArr.forEach(it => { if (!grupos[it.grupo]) grupos[it.grupo] = []; grupos[it.grupo].push(it); });
-          const bodyId = 'campo-body-' + emp.replace(/\s/g, '') + '-' + cli.replace(/\s/g, '').replace(/\./g, '');
-          return `<div class="campo-cli-block">
-            <div class="campo-cli-head" onclick="campoToggle('${bodyId}')">
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <strong style="font-size:13px">${emp} · ${cli}</strong>
-                <span class="campo-periodo-badge">${[...data.periodos].join(', ')}</span>
-                <span style="font-size:11px;color:var(--muted)">${[...data.ops].join(', ')}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <span class="tag tok">${itemsArr.length} ítems</span>
-                <span style="color:var(--muted);font-size:13px">▼</span>
-              </div>
-            </div>
-            <div class="campo-cli-body" id="${bodyId}">
-              ${Object.entries(grupos).map(([g, its]) => `
-                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">${g}</div>
-                ${its.map(it => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:12px">
-                  <span>${it.prod}</span>
-                  <span style="display:flex;gap:8px;align-items:center">
-                    <span style="color:var(--muted);font-size:10px">${it.unidad}</span>
-                    <span style="color:var(--teal);font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.qty}</span>
-                  </span>
-                </div>`).join('')}
-              `).join('')}
-            </div>
-          </div>`;
-        }).join('')
-      ).join('');
+  const consEl=document.getElementById('campo-consolidado');
+  if(consEl){
+    if(!reqs.length){consEl.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay requisiciones para el filtro seleccionado.</p>';}
+    else{consEl.innerHTML=Object.entries(consolMap).map(([emp,clis])=>Object.entries(clis).map(([cli,data])=>{
+      const itemsArr=Object.values(data.items).filter(i=>i.qty>0);
+      const grupos={};itemsArr.forEach(it=>{if(!grupos[it.grupo]) grupos[it.grupo]=[];grupos[it.grupo].push(it);});
+      const bid='cb-'+emp.replace(/\W/g,'')+'-'+cli.replace(/\W/g,'');
+      return `<div class="campo-block">
+        <div class="campo-block-head" onclick="document.getElementById('${bid}').classList.toggle('open')">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <strong style="font-size:13px">${emp} · ${cli}</strong>
+            <span class="campo-period-tag">${[...data.periodos].join(', ')}</span>
+            <span style="font-size:11px;color:var(--muted)">${[...data.ops].join(', ')}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="tag tok">${itemsArr.length} ítems</span><span style="color:var(--muted)">▼</span></div>
+        </div>
+        <div class="campo-block-body" id="${bid}">
+          ${Object.entries(grupos).map(([g,its])=>`
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">${g}</div>
+            ${its.map(it=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:12px">
+              <span>${it.prod}</span>
+              <span style="display:flex;gap:8px;align-items:center">
+                <span style="color:var(--muted);font-size:10px">${it.unidad}</span>
+                <span style="color:var(--teal);font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.qty}</span>
+              </span>
+            </div>`).join('')}`).join('')}
+        </div>
+      </div>`;
+    }).join('')).join('');}
+  }
+  const listEl=document.getElementById('campo-list');
+  if(listEl){listEl.innerHTML=reqs.map(r=>{
+    const cnt=(r.items||[]).filter(i=>i.qty>0).length;
+    const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
+    return `<tr>
+      <td><strong>${r.operativo||'—'}</strong></td><td>${r.empresa||'—'}</td><td>${r.cliente||'—'}</td>
+      <td><span class="campo-period-tag">${r.periodo||'—'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${fecha}</td>
+      <td><span class="tag tok">${cnt} ítems</span></td>
+      <td><button class="btn btn-d btn-sm" onclick="campoEliminar(this,${r.id})">🗑️</button></td>
+    </tr>`;
+  }).join('');}
+}
+async function campoEliminar(btn,id){
+  if(!confirm('¿Eliminar este envío?')) return;
+  if(!_sb){toast('Sin conexión',true);return;}
+  const numId=parseInt(id,10);
+  btn.disabled=true;btn.textContent='...';
+  try{
+    const{error,data}=await _sb.from('campo_reqs').delete().eq('id',numId).select();
+    if(error){
+      console.error('Delete error:',error);
+      toast('Error: '+error.message,true);
+      btn.disabled=false;btn.textContent='🗑️';
+      return;
     }
-  }
-
-  // Individual list
-  const listEl = document.getElementById('campo-list');
-  if (listEl) {
-    listEl.innerHTML = reqs.map(r => {
-      const cnt = (r.items || []).filter(i => i.qty > 0).length;
-      const fecha = (r.fechaISO || '').substring(0, 16).replace('T', ' ');
-      return `<tr>
-        <td><strong>${r.operativo || '—'}</strong></td>
-        <td>${r.empresa || '—'}</td>
-        <td>${r.cliente || '—'}</td>
-        <td><span class="campo-periodo-badge">${r.periodo || '—'}</span></td>
-        <td style="font-size:11px;color:var(--muted)">${fecha}</td>
-        <td><span class="tag tok">${cnt} ítems</span></td>
-        <td><button class="btn btn-d btn-sm" onclick="campoEliminar('${r.id}')">🗑️</button></td>
-      </tr>`;
-    }).join('');
-  }
-}
-
-function campoToggle(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.toggle('open');
-}
-
-async function campoEliminar(id) {
-  if (!confirm('¿Eliminar este envío?')) return;
-  if (!window._campoCol) return;
-  try {
-    await window._campoCol.doc(id).delete();
-    toast('Eliminado');
-    _campoReqs = _campoReqs.filter(r => r.id !== id);
+    // Quitar de la lista local (comparar como número)
+    _campoReqs=_campoReqs.filter(r=>Number(r.id)!==numId);
+    toast('✅ Eliminado correctamente');
     campoRender();
-  } catch (e) { toast('Error al eliminar', true); }
+  }catch(e){
+    console.error('campoEliminar exception:',e);
+    toast('Error inesperado: '+e.message,true);
+    btn.disabled=false;btn.textContent='🗑️';
+  }
 }
-
-function campoGenerarRM() {
-  const periodo = (document.getElementById('campo-periodo-sel') || {}).value || '';
-  const empresa = (document.getElementById('campo-empresa-sel') || {}).value || '';
-  let reqs = _campoReqs;
-  if (periodo) reqs = reqs.filter(r => r.periodo === periodo);
-  if (empresa) reqs = reqs.filter(r => r.empresa === empresa);
-  if (!reqs.length) { toast('No hay datos para el filtro actual', true); return; }
-
-  // Reset rm_data y reconstruir desde las requisiciones de campo
+function campoGenerarRM(){
+  const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
+  const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
+  let reqs=_campoReqs;
+  if(periodo) reqs=reqs.filter(r=>r.periodo===periodo);
+  if(empresa) reqs=reqs.filter(r=>r.empresa===empresa);
+  if(!reqs.length){toast('No hay datos para el filtro actual',true);return;}
   rmResetData();
-  reqs.forEach(req => {
-    const emp = req.empresa;
-    const cli = req.cliente;
-    if (!emp || !cli) return;
-    // Asegurarse de que existen las estructuras
-    if (!RM_CAT[emp]) RM_CAT[emp] = {};
-    if (!RM_CAT[emp][cli]) RM_CAT[emp][cli] = [];
-    if (!rm_data[emp]) rm_data[emp] = {};
-    if (!rm_data[emp][cli]) rm_data[emp][cli] = {};
-    (req.items || []).forEach(it => {
-      if (!it.qty || +it.qty === 0) return;
-      const key = it.prod + '|' + it.unidad;
-      // Add to RM_CAT if not exists
-      if (!RM_CAT[emp][cli].find(x => x.p === it.prod && x.u === it.unidad)) {
-        RM_CAT[emp][cli].push({ g: it.grupo || 'INSUMOS', p: it.prod, u: it.unidad, r: 0 });
-      }
-      // Accumulate qty
-      if (!rm_data[emp][cli][key]) rm_data[emp][cli][key] = { prod: it.prod, grupo: it.grupo || 'INSUMOS', unidad: it.unidad, qty: 0 };
-      rm_data[emp][cli][key].qty += +it.qty;
+  reqs.forEach(req=>{
+    const emp=req.empresa;const cli=req.cliente;if(!emp||!cli) return;
+    if(!RM_CAT[emp]) RM_CAT[emp]={};if(!RM_CAT[emp][cli]) RM_CAT[emp][cli]=[];
+    if(!rm_data[emp]) rm_data[emp]={};if(!rm_data[emp][cli]) rm_data[emp][cli]={};
+    (req.items||[]).forEach(it=>{
+      if(!it.qty||+it.qty===0) return;
+      const key=it.prod+'|'+it.unidad;
+      if(!RM_CAT[emp][cli].find(x=>x.p===it.prod&&x.u===it.unidad))
+        RM_CAT[emp][cli].push({g:it.grupo||'INSUMOS',p:it.prod,u:it.unidad,r:0});
+      if(!rm_data[emp][cli][key]) rm_data[emp][cli][key]={prod:it.prod,grupo:it.grupo||'INSUMOS',unidad:it.unidad,qty:0};
+      rm_data[emp][cli][key].qty+=+it.qty;
     });
   });
-
-  // Set periodo and fecha en el form de req mensual
-  const p = periodo || (reqs[0] && reqs[0].periodo) || '';
-  if (p) document.getElementById('rm-periodo').value = p;
-  document.getElementById('rm-fecha').value = new Date().toISOString().split('T')[0];
-
-  // Seleccionar la empresa si hay filtro
-  if (empresa) { rm_empresa = empresa; }
-
+  const p=periodo||(reqs[0]&&reqs[0].periodo)||'';
+  if(p) document.getElementById('rm-periodo').value=p;
+  document.getElementById('rm-fecha').value=new Date().toISOString().split('T')[0];
+  if(empresa) rm_empresa=empresa;
   toast('✅ Datos cargados en Requisición Mensual → revisa y guarda');
   nav('req-mensual');
 }
-
-
-<script>
-  function _initFirebase() {
-    if (typeof firebase === 'undefined') {
-      setTimeout(_initFirebase, 100);
-      return;
-    }
-    const firebaseConfig = {
-      apiKey: "AIzaSyDx94VADnHE3aLh0y8we0ck13HmJDW1Dis",
-      authDomain: "cleangroup-5a6d7.firebaseapp.com",
-      projectId: "cleangroup-5a6d7",
-      storageBucket: "cleangroup-5a6d7.firebasestorage.app",
-      messagingSenderId: "7136503563",
-      appId: "1:7136503563:web:f34bda90b43b25aec4640e"
-    };
-
-    const fireApp = firebase.initializeApp(firebaseConfig);
-    const fireDb  = firebase.firestore();
-    // Forzar long polling — evita bloqueos de WebSocket en redes restrictivas
-    fireDb.settings({ experimentalForceLongPolling: true, merge: true });
-    const DB_DOC  = fireDb.collection("cleangroup").doc("maindb");
-    // Nuevas colecciones para operativos
-    const OP_USERS_DOC  = fireDb.collection("cleangroup").doc("operativos_usuarios");
-    const CATALOG_DOC   = fireDb.collection("cleangroup").doc("campo_catalog");
-    const CAMPO_COL     = fireDb.collection("campo_reqs");
-
-    window._fireDb         = fireDb;
-    window._dbDoc          = DB_DOC;
-    window._opUsersDoc     = OP_USERS_DOC;
-    window._catalogDoc     = CATALOG_DOC;
-    window._campoCol       = CAMPO_COL;
-    window._saving        = false;
-    window._lastSavedJson = null;
-    window._fsGet = (docRef) => docRef.get();
-    window._fsSet = (docRef, data, opts) => opts ? docRef.set(data, opts) : docRef.set(data);
-
-    function startFirestoreSync() {
-      DB_DOC.onSnapshot((snap) => {
-        if (!snap.exists) return;
-        const data = snap.data();
-        if (!data || !data.db) return;
-        if (typeof setCloudStatus === 'function') setCloudStatus('☁️ En línea','var(--teal)');
-        if (data.db === window._lastSavedJson) return;
-        try {
-          const remote = JSON.parse(data.db);
-          const keys = ['reqMensuales','necesidades','ordenesCompra','actasIngreso','actasEntrega','inventario','counters'];
-          keys.forEach(k => { if (remote[k] !== undefined) window.db[k] = remote[k]; });
-          window._lastSavedJson = data.db;
-          if (typeof renderDash        === 'function') renderDash();
-          if (typeof rmRenderList      === 'function') rmRenderList();
-          if (typeof necRenderList     === 'function') necRenderList();
-          if (typeof ocRenderList      === 'function') ocRenderList();
-          if (typeof aiRenderList      === 'function') aiRenderList();
-          if (typeof aeRenderList      === 'function') aeRenderList();
-          if (typeof invRender         === 'function') invRender();
-          if (typeof setNums           === 'function') setNums();
-          if (typeof necRefreshSelects === 'function') necRefreshSelects();
-          if (typeof aeRefreshSelects  === 'function') aeRefreshSelects();
-          if (typeof aiPopulateOCSelect=== 'function') aiPopulateOCSelect();
-          console.log('🔄 Datos actualizados desde otro dispositivo');
-        } catch(e) { console.warn('Sync parse error', e); }
-      }, (err) => {
-        console.warn('onSnapshot error:', err);
-        if (typeof setCloudStatus === 'function') setCloudStatus('⚠️ Sin conexión','var(--amber)');
-      });
-      console.log("🔥 Firebase conectado y autenticado");
-    }
-
-    // Autenticación anónima — Firebase solo permite acceso a usuarios autenticados
-    firebase.auth().signInAnonymously()
-      .then(() => {
-        console.log("🔐 Autenticado anónimamente");
-        startFirestoreSync();
-      })
-      .catch(err => {
-        console.warn("Auth error:", err);
-        // Si falla auth, intentar igual (fallback)
-        startFirestoreSync();
-      });
-  }
-  _initFirebase();
 </script>
 </body>
 </html>
