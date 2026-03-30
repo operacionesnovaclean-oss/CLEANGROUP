@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Clean Group · Portal de Campo</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{--navy:#0f1b2d;--navy2:#162236;--teal:#00c9a7;--teal2:#00a889;--amber:#f5a623;--red:#e05263;--surface:#1a2a40;--surface2:#1f3250;--border:rgba(0,201,167,.18);--text:#e2eaf4;--muted:#7a92b0;--shadow:0 8px 32px rgba(0,0,0,.4);--radius:12px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-height:100vh;overflow-x:hidden}
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 30% 40%,#0a2a4a 0%,var(--navy) 70%)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:350px;max-width:92vw;box-shadow:var(--shadow),0 0 80px rgba(0,201,167,.07);animation:fadeUp .5s ease}
+.login-logo{text-align:center;margin-bottom:26px}
+.login-logo h1{font-size:20px;font-weight:700;color:var(--teal)}
+.login-logo p{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:1px}
+.lf label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px}
+.lf input{width:100%;padding:11px 14px;border-radius:8px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:14px;margin-bottom:14px;outline:none;transition:border .2s}
+.lf input:focus{border-color:var(--teal)}
+.btn-primary{width:100%;padding:13px;border-radius:8px;background:var(--teal);border:none;color:var(--navy);font-family:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:background .2s}
+.btn-primary:hover{background:var(--teal2)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.lerr{color:var(--red);font-size:12px;margin-top:8px;text-align:center;min-height:16px}
+#app{display:none;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;flex-shrink:0}
+.topbar-brand{font-weight:700;font-size:14px;color:var(--teal)}
+.topbar-r{display:flex;align-items:center;gap:10px;font-size:12px}
+#cloud-status{font-size:11px;padding:2px 8px;border-radius:5px;background:rgba(0,201,167,.12);color:var(--teal)}
+.btn-out{padding:4px 10px;border-radius:6px;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-out:hover{border-color:var(--red);color:var(--red)}
+.main{flex:1;padding:16px;max-width:640px;margin:0 auto;width:100%;padding-bottom:90px}
+.step-tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.step-tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .2s;border-right:1px solid var(--border);user-select:none}
+.step-tab:last-child{border-right:none}
+.step-tab.active{background:rgba(0,201,167,.12);color:var(--teal)}
+.step-tab.done{color:var(--teal);opacity:.6}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;animation:fadeUp .3s ease}
+.card-title{font-size:13px;font-weight:700;color:#fff;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fi{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.fi label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+.fi input,.fi select{padding:9px 12px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;transition:border .2s}
+.fi input:focus,.fi select:focus{border-color:var(--teal)}
+.fi select option{background:var(--navy2)}
+.clientes-grid{display:flex;flex-wrap:wrap;gap:8px}
+.cli-btn{padding:9px 16px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;transition:all .15s;font-weight:500}
+.cli-btn.active{border-color:var(--teal);background:rgba(0,201,167,.12);color:var(--teal);font-weight:700}
+.grupo-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:10px 0 5px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.item-row{display:grid;grid-template-columns:1fr 76px;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.item-name{font-size:13px;color:var(--text);line-height:1.3}
+.item-unit{font-size:10px;color:var(--muted);margin-top:1px}
+.item-qty{width:100%;padding:6px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;outline:none;transition:border .15s}
+.item-qty.hv{border-color:rgba(0,201,167,.6);color:var(--teal);font-weight:700;background:rgba(0,201,167,.05)}
+.search-row{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.search-row input{flex:1;min-width:130px;padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none}
+.cb-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.save-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px 14px;background:linear-gradient(0deg,var(--navy) 55%,transparent);z-index:50;display:none}
+.save-bar-inner{max-width:640px;margin:0 auto}
+.btn-save{width:100%;padding:13px;border-radius:10px;background:var(--teal);border:none;color:var(--navy);font-family:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:background .2s;box-shadow:0 4px 20px rgba(0,201,167,.35)}
+.btn-save:disabled{opacity:.5;cursor:not-allowed}
+.hist-row{padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.hist-row:last-child{border-bottom:none}
+.hist-row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.hist-row-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tag-ok{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(0,201,167,.15);color:var(--teal)}
+.tag-lock{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(122,146,176,.12);color:var(--muted)}
+.btn-hist{padding:5px 12px;border-radius:6px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-edit{background:rgba(0,201,167,.12);color:var(--teal);border:1px solid rgba(0,201,167,.3)}
+.btn-edit:hover{background:rgba(0,201,167,.22)}
+.btn-del{background:rgba(224,82,99,.1);color:var(--red);border:1px solid rgba(224,82,99,.3)}
+.btn-del:hover{background:rgba(224,82,99,.2)}
+.btn-hist:disabled{opacity:.35;cursor:not-allowed}
+.toast{position:fixed;bottom:78px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--teal);color:var(--navy);padding:10px 20px;border-radius:9px;font-weight:700;font-size:13px;box-shadow:var(--shadow);z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:var(--red);color:#fff}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <h1>🧹 CLEAN GROUP</h1>
+      <p>Portal de Campo · Operativos</p>
+    </div>
+    <div class="lf">
+      <label>Usuario</label>
+      <input id="lu" type="text" placeholder="tu usuario" autocomplete="username" autocapitalize="none">
+      <label>Contraseña</label>
+      <input id="lp" type="password" placeholder="••••••••">
+      <button class="btn-primary" id="btn-login" onclick="doLogin()">Ingresar</button>
+      <div class="lerr" id="lerr"></div>
+    </div>
+    <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--muted)">
+      Contacta al administrador si olvidaste tu clave
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-brand">🧹 Portal de Campo</div>
+    <div class="topbar-r">
+      <span id="cloud-status">☁️ conectando...</span>
+      <span id="user-label" style="color:var(--text);font-weight:600;font-size:12px"></span>
+      <button class="btn-out" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="step-tabs">
+      <div class="step-tab active" id="tab-1" onclick="goStep(1)">📅 Período</div>
+      <div class="step-tab" id="tab-2" onclick="goStep(2)">👤 Cliente</div>
+      <div class="step-tab" id="tab-3" onclick="goStep(3)">📋 Materiales</div>
+      <div class="step-tab" id="tab-4" onclick="goStep(4)">📤 Historial</div>
+    </div>
+
+    <div id="step-1">
+      <div class="card">
+        <div class="card-title">📅 ¿Para qué período es esta requisición?</div>
+        <div class="fi">
+          <label>Mes</label>
+          <select id="po-mes" onchange="poAplicarMes()">
+            <option value="">-- Selecciona el mes --</option>
+            <option>ENERO</option><option>FEBRERO</option><option>MARZO</option><option>ABRIL</option>
+            <option>MAYO</option><option>JUNIO</option><option>JULIO</option><option>AGOSTO</option>
+            <option>SEPTIEMBRE</option><option>OCTUBRE</option><option>NOVIEMBRE</option><option>DICIEMBRE</option>
+          </select>
+        </div>
+        <div class="fi">
+          <label>Período completo</label>
+          <input id="po-periodo" placeholder="Ej: ABRIL 2026">
+        </div>
+        <button class="btn-primary" style="padding:11px;margin-top:4px" onclick="goStep(2)">Siguiente →</button>
+      </div>
+    </div>
+
+    <div id="step-2" style="display:none">
+      <div class="card">
+        <div class="card-title">👤 ¿Para cuál cliente?</div>
+        <div class="clientes-grid" id="po-clientes-btns"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+        <p style="font-size:11px;color:var(--muted);margin-top:12px">Puedes enviar una requisición por cada cliente.</p>
+      </div>
+    </div>
+
+    <div id="step-3" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <div class="card-title" style="margin:0">📋 <span id="po-cliente-lbl" style="color:var(--amber)"></span></div>
+          <button class="btn-out" onclick="goStep(2)">← Cambiar cliente</button>
+        </div>
+        <div class="search-row">
+          <input type="search" id="po-buscar" placeholder="🔍 Buscar ítem..." oninput="poRenderItems()">
+          <label class="cb-label">
+            <input type="checkbox" id="po-solo-qty" onchange="poRenderItems()" style="accent-color:var(--teal)">
+            Solo con cantidad
+          </label>
+        </div>
+        <div id="po-items-body"></div>
+        <p style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Deja en blanco o 0 los ítems que no necesites</p>
+      </div>
+    </div>
+
+    <div id="step-4" style="display:none">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div class="card-title" style="margin:0">📤 Mis requisiciones enviadas</div>
+          <button class="btn-out" style="font-size:11px" onclick="loadHistorial()">🔄 Actualizar</button>
+        </div>
+        <div id="hist-periodo-aviso" style="display:none;font-size:11px;background:rgba(0,201,167,.07);border:1px solid rgba(0,201,167,.2);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--teal)"></div>
+        <div id="po-historial"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="save-bar" id="save-bar">
+  <div class="save-bar-inner">
+    <button class="btn-save" id="btn-save" onclick="poGuardar()">💾 Enviar Requisición</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL='https://qrdfxksbaoosguxdtolk.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZGZ4a3NiYW9vc2d1eGR0b2xrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODE0MzcsImV4cCI6MjA5MDQ1NzQzN30.LlnuNX4VMQR7EZ00zSGRzJ8PzUHR8bq0yGVoXOvxKg0';
+let _sb=null,_ready=false,currentUser=null,po_cliente='',po_data={},po_catalog={};
+const MASTER_USER='admin',MASTER_PASS='cleangroup2025';
+let isMaster=false;
+
+function initSB(){if(typeof supabase==='undefined'){setTimeout(initSB,100);return;}_sb=supabase.createClient(SB_URL,SB_KEY);_ready=true;setCloud('☁️ En línea','var(--teal)');}
+initSB();
+
+document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+async function doLogin(){
+  const u=document.getElementById('lu').value.trim().toLowerCase();
+  const p=document.getElementById('lp').value.trim();
+  if(!u||!p){showErr('Ingresa tu usuario y contraseña');return;}
+
+  // Clave master — acceso total sin restricciones
+  if(u===MASTER_USER&&p===MASTER_PASS){
+    isMaster=true;
+    currentUser={nombre:'ADMINISTRADOR',usuario:'admin',empresa:'',clientes:[]};
+    await loadCatalog();
+    showApp();
+    return;
+  }
+
+  if(!_ready){showErr('Conectando... espera un segundo');return;}
+  const btn=document.getElementById('btn-login');
+  btn.disabled=true;btn.textContent='Verificando...';
+  try{
+    const{data,error}=await _sb.from('operativos_usuarios').select('*').eq('usuario',u).eq('password',p).single();
+    if(error||!data){showErr('Usuario o contraseña incorrectos');return;}
+    isMaster=false;
+    currentUser=data;
+    await loadCatalog();
+    showApp();
+  }catch(e){showErr('Error de conexión. Verifica tu internet.');}
+  finally{btn.disabled=false;btn.textContent='Ingresar';}
+}
+
+function showErr(msg){const el=document.getElementById('lerr');el.textContent=msg;setTimeout(()=>el.textContent='',3500);}
+
+function showApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('app').style.flexDirection='column';
+  const badge=isMaster?' <span style="font-size:10px;background:rgba(245,166,35,.2);color:var(--amber);border-radius:10px;padding:1px 7px;font-weight:700">MASTER</span>':'';
+  document.getElementById('user-label').innerHTML='👤 '+currentUser.nombre+badge;
+  const meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  document.getElementById('po-periodo').value=meses[new Date().getMonth()]+' '+new Date().getFullYear();
+  renderClientesBtns();goStep(1);
+}
+
+function doLogout(){
+  currentUser=null;isMaster=false;po_cliente='';po_data={};
+  document.getElementById('app').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('lu').value='';document.getElementById('lp').value='';
+}
+
+async function loadCatalog(){
+  if(!_sb)return;
+  try{const{data}=await _sb.from('campo_catalog').select('catalog').eq('id',1).single();
+  if(data&&data.catalog)po_catalog=data.catalog;}catch(e){console.warn('catalog',e);}
+}
+
+function goStep(n){
+  [1,2,3,4].forEach(i=>{
+    document.getElementById('step-'+i).style.display=i===n?'block':'none';
+    const t=document.getElementById('tab-'+i);
+    t.className='step-tab'+(i===n?' active':i<n?' done':'');
+  });
+  document.getElementById('save-bar').style.display=n===3?'block':'none';
+  if(n===4)loadHistorial();
+}
+
+function poAplicarMes(){const mes=document.getElementById('po-mes').value;if(!mes)return;document.getElementById('po-periodo').value=mes+' '+new Date().getFullYear();}
+
+function renderClientesBtns(){
+  const el=document.getElementById('po-clientes-btns');
+  if(!el||!currentUser)return;
+  let clientes=[];
+  if(isMaster){
+    // Master ve todos los clientes de todas las empresas del catálogo
+    Object.values(po_catalog).forEach(emp=>Object.keys(emp).forEach(c=>{if(!clientes.includes(c))clientes.push(c);}));
+    clientes.sort();
+    if(!clientes.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">Publica el catálogo primero desde el sistema master.</p>';return;}
+  }else{
+    clientes=currentUser.clientes||[];
+    if(!clientes.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No tienes clientes asignados.</p>';return;}
+  }
+  el.innerHTML=clientes.map(c=>`<button class="cli-btn${c===po_cliente?' active':''}" onclick="selCliente('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
+}
+
+function selCliente(c){
+  po_cliente=c;po_data={};
+  window._editingId=null;
+  // Resetear botón por si venía de edición
+  const btn=document.getElementById('btn-save');
+  if(btn){btn.style.background='var(--teal)';btn.textContent='💾 Enviar Requisición';}
+  renderClientesBtns();
+  document.getElementById('po-cliente-lbl').textContent=c;
+  poRenderItems();goStep(3);
+}
+
+function poRenderItems(){
+  const el=document.getElementById('po-items-body');
+  if(!el||!po_cliente||!currentUser)return;
+  // Master: buscar empresa que tenga este cliente en el catálogo
+  let emp=currentUser.empresa;
+  if(isMaster){
+    emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';
+  }
+  const items=(po_catalog[emp]||{})[po_cliente]||[];
+  if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay ítems. Pide al admin que publique el catálogo.</p>';return;}
+  const buscar=(document.getElementById('po-buscar').value||'').toLowerCase();
+  const soloQty=document.getElementById('po-solo-qty').checked;
+  let filtered=items;
+  if(buscar)filtered=filtered.filter(it=>it.p.toLowerCase().includes(buscar));
+  if(soloQty)filtered=filtered.filter(it=>+po_data[it.p+'|'+it.u]>0);
+  if(!filtered.length){el.innerHTML='<p style="color:var(--muted);font-size:12px;padding:8px 0">Sin resultados</p>';return;}
+  const grupos={};
+  filtered.forEach(it=>{if(!grupos[it.g])grupos[it.g]=[];grupos[it.g].push(it);});
+  el.innerHTML=Object.entries(grupos).map(([g,its])=>
+    `<div class="grupo-label">${g}</div>`+
+    its.map(it=>{
+      const key=it.p+'|'+it.u;const qty=po_data[key]||'';
+      return`<div class="item-row">
+        <div><div class="item-name">${it.p}</div><div class="item-unit">${it.u}</div></div>
+        <input class="item-qty${qty>0?' hv':''}" type="number" min="0" step="1" value="${qty}" placeholder="0"
+          data-key="${key.replace(/"/g,'&quot;')}" oninput="setQty(this)">
+      </div>`;
+    }).join('')
+  ).join('');
+}
+
+function setQty(el){const key=el.dataset.key;const val=parseFloat(el.value);if(val>0){po_data[key]=val;el.classList.add('hv');}else{delete po_data[key];el.classList.remove('hv');}}
+
+async function poGuardar(){
+  if(!currentUser)return;
+  const periodo=document.getElementById('po-periodo').value.trim();
+  if(!periodo){toast('Ingresa el período',true);return;}
+  if(!po_cliente){toast('Selecciona un cliente',true);return;}
+  let emp=currentUser.empresa;
+  if(isMaster){emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';}
+  const itemsArr=Object.entries(po_data).filter(([,qty])=>qty>0).map(([key,qty])=>{
+    const[prod,unidad]=key.split('|');
+    const cat=((po_catalog[emp]||{})[po_cliente]||[]).find(x=>x.p===prod&&x.u===unidad);
+    return{prod,unidad,grupo:cat?cat.g:'INSUMOS',qty};
+  });
+  if(!itemsArr.length){toast('Ingresa al menos una cantidad',true);return;}
+  if(!_sb){toast('Sin conexión',true);return;}
+  const btn=document.getElementById('btn-save');
+  const isEdit=!!window._editingId;
+  btn.disabled=true;btn.textContent='⏳ '+(isEdit?'Guardando cambios...':'Enviando...');
+  try{
+    // Si es edición: borrar el registro anterior primero
+    if(isEdit){
+      const{error:delErr}=await _sb.from('campo_reqs').delete()
+        .eq('id',window._editingId).eq('usuario',currentUser.usuario);
+      if(delErr)throw delErr;
+      window._editingId=null;
+    }
+    const{error}=await _sb.from('campo_reqs').insert({
+      operativo:isMaster?'ADMINISTRADOR':currentUser.nombre,
+      usuario:currentUser.usuario,
+      empresa:emp,cliente:po_cliente,periodo,items:itemsArr,
+      fecha_iso:new Date().toISOString()
+    });
+    if(error)throw error;
+    toast(isEdit?'✅ Cambios guardados — '+itemsArr.length+' ítems':'✅ Requisición enviada — '+itemsArr.length+' ítems');
+    po_data={};poRenderItems();
+    // Resetear botón a estado normal
+    btn.style.background='var(--teal)';
+    btn.textContent='💾 Enviar Requisición';
+    setTimeout(()=>goStep(2),900);
+  }catch(e){toast('Error: '+e.message,true);}
+  finally{btn.disabled=false;}
+}
+
+async function loadHistorial(){
+  const el=document.getElementById('po-historial');
+  if(!el||!currentUser||!_sb){el.innerHTML='<p style="color:var(--muted);font-size:13px">Sin conexión</p>';return;}
+
+  // Event delegation — un solo listener para todos los botones del historial
+  el.onclick=function(e){
+    const btn=e.target.closest('button[data-action]');
+    if(!btn||btn.disabled)return;
+    const action=btn.dataset.action;
+    const id=btn.dataset.id;
+    const cliente=btn.dataset.cliente||'';
+    if(action==='editar')   histEditar(id);
+    if(action==='eliminar') histEliminar(id,cliente);
+  };
+
+  el.innerHTML='<p style="color:var(--muted);font-size:13px">Cargando...</p>';
+  const aviso=document.getElementById('hist-periodo-aviso');
+  if(aviso){
+    if(isMaster){
+      aviso.style.display='block';
+      aviso.style.background='rgba(245,166,35,.08)';
+      aviso.style.borderColor='rgba(245,166,35,.3)';
+      aviso.style.color='var(--amber)';
+      aviso.innerHTML='👑 Modo MASTER — puedes editar y eliminar cualquier envío de cualquier período y operativo';
+    }else if(periodoActivo){
+      aviso.style.display='block';
+      aviso.innerHTML='✏️ Solo puedes editar o eliminar envíos del período activo: <strong>'+periodoActivo+'</strong>';
+    }
+  }
+
+  try{
+    // Master ve TODOS los envíos; operativo solo los suyos
+    let query=_sb.from('campo_reqs').select('*').order('fecha_iso',{ascending:false});
+    if(!isMaster)query=query.eq('usuario',currentUser.usuario);
+    query=query.limit(200);
+    const{data,error}=await query;
+    if(error)throw error;
+    if(!data||!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No has enviado requisiciones aún.</p>';return;}
+    console.log('isMaster='+isMaster+' registros='+data.length);
+    el.innerHTML=data.map(r=>{
+      const cnt=(r.items||[]).filter(i=>i.qty>0).length;
+      const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
+      const esActivo=isMaster===true||(periodoActivo&&r.periodo===periodoActivo);
+      const bloqueado=!esActivo;
+      // Usar data-attributes evita todos los problemas de escaping en onclick
+      const disEdit=bloqueado?'disabled':'';
+      const disDel=bloqueado?'disabled':'';
+      return`<div class="hist-row" data-id="${r.id}" data-cliente="${r.cliente.replace(/"/g,'&quot;')}">
+        <div class="hist-row-top">
+          <div>
+            <div style="font-weight:600;font-size:13px">${r.cliente}</div>
+            <div style="color:var(--muted);font-size:11px;margin-top:2px">${r.empresa} · ${r.periodo} · ${r.operativo||''}</div>
+            <div style="color:var(--muted);font-size:10px;margin-top:1px">${fecha}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            <span class="tag-ok">${cnt} ítems</span>
+            ${esActivo?'<span style="font-size:10px;color:var(--teal)">● activo</span>':'<span class="tag-lock">🔒 cerrado</span>'}
+          </div>
+        </div>
+        <div class="hist-row-actions">
+          <button class="btn-hist btn-edit" ${disEdit} data-action="editar" data-id="${r.id}">✏️ Editar</button>
+          <button class="btn-hist btn-del"  ${disDel}  data-action="eliminar" data-id="${r.id}" data-cliente="${r.cliente.replace(/"/g,'&quot;')}">🗑️ Eliminar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){el.innerHTML='<p style="color:var(--red);font-size:13px">Error al cargar.</p>';}
+}
+
+async function histEliminar(id,cliente){
+  if(!confirm('¿Eliminar la requisición de "'+cliente+'"?')) return;
+  if(!_sb) return;
+  const numId=parseInt(id,10);
+  if(isNaN(numId)){toast('ID inválido',true);return;}
+  try{
+    let q=_sb.from('campo_reqs').delete().eq('id',numId);
+    if(!isMaster) q=q.eq('usuario',currentUser.usuario);
+    const {error}=await q.select();
+    if(error){
+      console.error('Delete error:',JSON.stringify(error));
+      toast('Error: '+error.message,true);
+      return;
+    }
+    toast('🗑️ Eliminado correctamente');
+    loadHistorial();
+  }catch(e){
+    console.error('histEliminar:',e);
+    toast('Error: '+e.message,true);
+  }
+}
+
+async function histEditar(id){
+  if(!_sb)return;
+  const numId=parseInt(id,10);
+  try{
+    const{data,error}=await _sb.from('campo_reqs').select('*').eq('id',numId).single();
+    if(error||!data){toast('No se pudo cargar',true);return;}
+    po_cliente=data.cliente;
+    po_data={};
+    (data.items||[]).forEach(it=>{if(it.qty>0)po_data[it.prod+'|'+it.unidad]=it.qty;});
+    window._editingId=numId;
+    renderClientesBtns();
+    document.getElementById('po-cliente-lbl').textContent=data.cliente;
+    poRenderItems();
+    goStep(3);
+    const btn=document.getElementById('btn-save');
+    btn.textContent='💾 Guardar cambios';
+    btn.style.background='var(--amber)';
+    toast('✏️ Modifica las cantidades y vuelve a enviar');
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
+function toast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');clearTimeout(window._tt);window._tt=setTimeout(()=>el.className='toast',3200);}
+function setCloud(msg,color){const el=document.getElementById('cloud-status');if(el){el.textContent=msg;el.style.color=color;el.style.background=color==='var(--teal)'?'rgba(0,201,167,.12)':'rgba(245,166,35,.12)';}}
+</script>
+</body>
+</html>
