@@ -46,12 +46,27 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
 .clientes-grid{display:flex;flex-wrap:wrap;gap:8px}
 .cli-btn{padding:9px 16px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;transition:all .15s;font-weight:500}
 .cli-btn.active{border-color:var(--teal);background:rgba(0,201,167,.12);color:var(--teal);font-weight:700}
-.grupo-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:10px 0 5px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.grupo-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:10px 12px 10px 0;border-bottom:1px solid var(--border);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;transition:color .15s}
+.grupo-label:hover{color:var(--text)}
+.grupo-label .grupo-badge{font-size:10px;background:rgba(0,201,167,.12);color:var(--teal);border-radius:20px;padding:1px 7px;font-weight:600;margin-left:6px}
+.grupo-label .grupo-chevron{font-size:11px;color:var(--muted);transition:transform .2s;display:inline-block}
+.grupo-label.collapsed .grupo-chevron{transform:rotate(-90deg)}
+.grupo-body{overflow:hidden;transition:max-height .25s ease}
+.grupo-body.collapsed{display:none}
 .item-row{display:grid;grid-template-columns:1fr 76px;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
 .item-name{font-size:13px;color:var(--text);line-height:1.3}
 .item-unit{font-size:10px;color:var(--muted);margin-top:1px}
 .item-qty{width:100%;padding:6px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;outline:none;transition:border .15s}
 .item-qty.hv{border-color:rgba(0,201,167,.6);color:var(--teal);font-weight:700;background:rgba(0,201,167,.05)}
+.btn-add-item{width:100%;padding:7px;margin-top:6px;border-radius:7px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:12px;cursor:pointer;transition:all .15s;text-align:left}
+.btn-add-item:hover{border-color:var(--teal);color:var(--teal)}
+.add-item-form{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px;display:none}
+.add-item-form.open{display:block}
+.add-item-row{display:grid;grid-template-columns:1fr 80px 70px auto;gap:6px;align-items:center}
+.add-item-row input{padding:6px 8px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;width:100%}
+.add-item-row input:focus{border-color:var(--teal)}
+.btn-add-confirm{padding:6px 10px;border-radius:6px;background:var(--teal);border:none;color:var(--navy);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn-add-cancel{padding:6px 8px;border-radius:6px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:12px;cursor:pointer}
 .search-row{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
 .search-row input{flex:1;min-width:130px;padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none}
 .cb-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
@@ -184,7 +199,7 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
 <script>
 const SB_URL='https://qrdfxksbaoosguxdtolk.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZGZ4a3NiYW9vc2d1eGR0b2xrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODE0MzcsImV4cCI6MjA5MDQ1NzQzN30.LlnuNX4VMQR7EZ00zSGRzJ8PzUHR8bq0yGVoXOvxKg0';
-let _sb=null,_ready=false,currentUser=null,po_cliente='',po_data={},po_catalog={};
+let _sb=null,_ready=false,currentUser=null,po_cliente='',po_data={},po_catalog={},po_extras={};
 const MASTER_USER='admin',MASTER_PASS='cleangroup2025';
 let isMaster=false;
 
@@ -283,38 +298,100 @@ function selCliente(c){
   if(btn){btn.style.background='var(--teal)';btn.textContent='💾 Enviar Requisición';}
   renderClientesBtns();
   document.getElementById('po-cliente-lbl').textContent=c;
+  document.getElementById('po-buscar').value='';
+  document.getElementById('po-solo-qty').checked=false;
   poRenderItems();goStep(3);
 }
+
+// Estado de grupos colapsados
+const gruposColapsados={};
 
 function poRenderItems(){
   const el=document.getElementById('po-items-body');
   if(!el||!po_cliente||!currentUser)return;
-  // Master: buscar empresa que tenga este cliente en el catálogo
   let emp=currentUser.empresa;
-  if(isMaster){
-    emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';
-  }
-  const items=(po_catalog[emp]||{})[po_cliente]||[];
-  if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay ítems. Pide al admin que publique el catálogo.</p>';return;}
+  if(isMaster){emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';}
+  const catalogItems=(po_catalog[emp]||{})[po_cliente]||[];
+  const extraKey=emp+':'+po_cliente;
+  const todosItems=[...catalogItems,...(po_extras[extraKey]||[])];
+  if(!todosItems.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay ítems. Pide al admin que publique el catálogo.</p>';return;}
   const buscar=(document.getElementById('po-buscar').value||'').toLowerCase();
   const soloQty=document.getElementById('po-solo-qty').checked;
-  let filtered=items;
+  let filtered=todosItems;
   if(buscar)filtered=filtered.filter(it=>it.p.toLowerCase().includes(buscar));
   if(soloQty)filtered=filtered.filter(it=>+po_data[it.p+'|'+it.u]>0);
   if(!filtered.length){el.innerHTML='<p style="color:var(--muted);font-size:12px;padding:8px 0">Sin resultados</p>';return;}
   const grupos={};
   filtered.forEach(it=>{if(!grupos[it.g])grupos[it.g]=[];grupos[it.g].push(it);});
-  el.innerHTML=Object.entries(grupos).map(([g,its])=>
-    `<div class="grupo-label">${g}</div>`+
-    its.map(it=>{
+
+  el.innerHTML=Object.entries(grupos).map(([g,its])=>{
+    const colKey=(emp+':'+po_cliente+':'+g).replace(/[^a-zA-Z0-9]/g,'_');
+    const collapsed=gruposColapsados[colKey]||false;
+    const conQty=its.filter(it=>+po_data[it.p+'|'+it.u]>0).length;
+    const badge=conQty>0?`<span class="grupo-badge">${conQty} con cantidad</span>`:'';
+    const rows=its.map(it=>{
       const key=it.p+'|'+it.u;const qty=po_data[key]||'';
       return`<div class="item-row">
         <div><div class="item-name">${it.p}</div><div class="item-unit">${it.u}</div></div>
         <input class="item-qty${qty>0?' hv':''}" type="number" min="0" step="1" value="${qty}" placeholder="0"
           data-key="${key.replace(/"/g,'&quot;')}" oninput="setQty(this)">
       </div>`;
-    }).join('')
-  ).join('');
+    }).join('');
+    return`<div>
+      <div class="grupo-label${collapsed?' collapsed':''}" onclick="toggleGrupo('${colKey}','${g.replace(/'/g,"\\'")}')">
+        <span>${g}${badge}</span>
+        <span class="grupo-chevron">▼</span>
+      </div>
+      <div class="grupo-body${collapsed?' collapsed':''}" id="gb_${colKey}">
+        ${rows}
+        <button class="btn-add-item" onclick="toggleAddForm('af_${colKey}')">＋ Agregar ítem no listado en ${g}</button>
+        <div class="add-item-form" id="af_${colKey}">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Producto · Unidad · Cantidad</div>
+          <div class="add-item-row">
+            <input id="ni_prod_${colKey}" placeholder="Nombre del producto">
+            <input id="ni_unit_${colKey}" placeholder="Ej: GALÓN">
+            <input type="number" min="1" id="ni_qty_${colKey}" placeholder="Qty">
+            <div style="display:flex;gap:5px">
+              <button class="btn-add-confirm" onclick="confirmarItem('${emp.replace(/'/g,"\\'")}','${po_cliente.replace(/'/g,"\\'")}','${g.replace(/'/g,"\\'")}','${colKey}')">✓</button>
+              <button class="btn-add-cancel" onclick="toggleAddForm('af_${colKey}')">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleGrupo(colKey){
+  gruposColapsados[colKey]=!gruposColapsados[colKey];
+  const body=document.getElementById('gb_'+colKey);
+  if(body) body.classList.toggle('collapsed',gruposColapsados[colKey]);
+  // toggle header class
+  document.querySelectorAll('.grupo-label').forEach(lbl=>{
+    if(lbl.getAttribute('onclick')&&lbl.getAttribute('onclick').includes("'"+colKey+"'")){
+      lbl.classList.toggle('collapsed',gruposColapsados[colKey]);
+    }
+  });
+}
+
+function toggleAddForm(id){
+  const el=document.getElementById(id);
+  if(el) el.classList.toggle('open');
+}
+
+function confirmarItem(emp,cliente,grupo,colKey){
+  const prod=document.getElementById('ni_prod_'+colKey).value.trim();
+  const unit=document.getElementById('ni_unit_'+colKey).value.trim().toUpperCase();
+  const qty=parseFloat(document.getElementById('ni_qty_'+colKey).value)||0;
+  if(!prod){alert('Ingresa el nombre del producto');return;}
+  if(!unit){alert('Ingresa la unidad (ej: GALÓN, UNIDAD)');return;}
+  const extraKey=emp+':'+cliente;
+  if(!po_extras[extraKey])po_extras[extraKey]=[];
+  if(!po_extras[extraKey].find(x=>x.p===prod&&x.u===unit)){
+    po_extras[extraKey].push({g:grupo,p:prod,u:unit,r:0,custom:true});
+  }
+  if(qty>0) po_data[prod+'|'+unit]=qty;
+  poRenderItems();
 }
 
 function setQty(el){const key=el.dataset.key;const val=parseFloat(el.value);if(val>0){po_data[key]=val;el.classList.add('hv');}else{delete po_data[key];el.classList.remove('hv');}}
@@ -326,9 +403,11 @@ async function poGuardar(){
   if(!po_cliente){toast('Selecciona un cliente',true);return;}
   let emp=currentUser.empresa;
   if(isMaster){emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';}
+  const extraKey=emp+':'+po_cliente;
   const itemsArr=Object.entries(po_data).filter(([,qty])=>qty>0).map(([key,qty])=>{
     const[prod,unidad]=key.split('|');
-    const cat=((po_catalog[emp]||{})[po_cliente]||[]).find(x=>x.p===prod&&x.u===unidad);
+    const cat=((po_catalog[emp]||{})[po_cliente]||[]).find(x=>x.p===prod&&x.u===unidad)
+           ||(po_extras[extraKey]||[]).find(x=>x.p===prod&&x.u===unidad);
     return{prod,unidad,grupo:cat?cat.g:'INSUMOS',qty};
   });
   if(!itemsArr.length){toast('Ingresa al menos una cantidad',true);return;}
@@ -402,6 +481,7 @@ async function loadHistorial(){
     if(error)throw error;
     if(!data||!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No has enviado requisiciones aún.</p>';return;}
     console.log('isMaster='+isMaster+' registros='+data.length);
+    if(data.length>0) console.log('Primer registro keys:',Object.keys(data[0]),'id=',data[0].id,'id type=',typeof data[0].id);
     el.innerHTML=data.map(r=>{
       const cnt=(r.items||[]).filter(i=>i.qty>0).length;
       const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
