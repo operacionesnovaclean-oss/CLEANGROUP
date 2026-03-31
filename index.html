@@ -1015,9 +1015,6 @@ function nav(name){
   if(fns[name]) fns[name]();
 }
 
-// ═══════════════════════════════
-// INIT APP
-// ═══════════════════════════════
 function initApp(){
   const today=new Date().toISOString().split('T')[0];
   ['rm-fecha','nec-fecha','oc-fecha','ai-fecha','ae-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=today;});
