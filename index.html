@@ -427,6 +427,12 @@ function loadDB(){
         }
       } else if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('☁️ En línea','var(--teal)');
+      // Cargar catálogo desde Supabase (campo_catalog) para tenerlo disponible globalmente
+      _sb.from('campo_catalog').select('catalog').eq('id',1).single().then(({data})=>{
+        if(data && data.catalog && Object.keys(data.catalog).length){
+          window._catalogoOverride = data.catalog;
+        }
+      });
       // Suscripción en tiempo real
       _sb.channel('maindb-changes')
         .on('postgres_changes',{event:'UPDATE',schema:'public',table:'maindb',filter:'id=eq.1'},payload=>{
@@ -2660,7 +2666,10 @@ function nopRenderCliCheckboxes(){
   const emp=document.getElementById('nop-empresa').value;
   const el=document.getElementById('nop-cli-grid');
   if(!emp){el.innerHTML='<span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>';return;}
-  const clientes=Object.keys(RM_CAT[emp]||{});
+  // Usar catálogo actualizado de Supabase si está disponible, si no el RM_CAT embebido
+  const catActual=(window._catalogoOverride && Object.keys(window._catalogoOverride).length)
+    ? window._catalogoOverride : RM_CAT;
+  const clientes=Object.keys(catActual[emp]||{}).sort();
   el.innerHTML=clientes.map(c=>{
     const sel=nop_selClis.includes(c);
     return `<button class="cli-check-btn${sel?' sel':''}" onclick="nopTogCli('${c.replace(/'/g,"\\'")}')">${c}</button>`;
@@ -2686,7 +2695,9 @@ function nopAgregarManual(){
 
 function nopRenderExtras(){
   const emp=document.getElementById('nop-empresa').value;
-  const enCatalogo=Object.keys(RM_CAT[emp]||{});
+  const catActual=(window._catalogoOverride && Object.keys(window._catalogoOverride).length)
+    ? window._catalogoOverride : RM_CAT;
+  const enCatalogo=Object.keys(catActual[emp]||{});
   const extras=nop_selClis.filter(c=>!enCatalogo.includes(c));
   const el=document.getElementById('nop-cli-extras');
   if(!el)return;
@@ -2796,8 +2807,16 @@ async function campoReload(){
 // ════════════════════════════════════════════
 let cat_working = null; // copia de trabajo del catálogo
 
-function initCatalogoPanel(){
-  // Cargar catálogo de trabajo desde Supabase o RM_CAT
+async function initCatalogoPanel(){
+  // Siempre cargar la versión más reciente desde Supabase
+  if(_sb){
+    try{
+      const {data}=await _sb.from('campo_catalog').select('catalog').eq('id',1).single();
+      if(data && data.catalog && Object.keys(data.catalog).length){
+        window._catalogoOverride = data.catalog;
+      }
+    }catch(e){}
+  }
   cat_working = JSON.parse(JSON.stringify(
     (window._catalogoOverride && Object.keys(window._catalogoOverride).length)
       ? window._catalogoOverride : RM_CAT
