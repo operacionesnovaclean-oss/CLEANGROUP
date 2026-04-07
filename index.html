@@ -958,6 +958,14 @@ function buildPanels(){
       <div id="nop-cli-grid" class="cli-check-grid">
         <span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>
       </div>
+      <!-- Agregar cliente que no está en la lista -->
+      <div style="display:flex;gap:6px;margin-top:10px;align-items:center">
+        <input id="nop-cli-manual" placeholder="Agregar cliente no listado..." 
+          style="flex:1;padding:7px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none"
+          onkeydown="if(event.key==='Enter'){nopAgregarManual();event.preventDefault()}">
+        <button class="btn btn-s btn-sm" onclick="nopAgregarManual()" style="white-space:nowrap">＋ Agregar</button>
+      </div>
+      <div id="nop-cli-extras" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px"></div>
     </div>
     <div class="btn-row">
       <button class="btn btn-p" onclick="nopGuardar()">💾 Guardar usuario</button>
@@ -2563,11 +2571,45 @@ function nopRenderCliCheckboxes(){
     const sel=nop_selClis.includes(c);
     return `<button class="cli-check-btn${sel?' sel':''}" onclick="nopTogCli('${c.replace(/'/g,"\\'")}')">${c}</button>`;
   }).join('');
+  nopRenderExtras();
 }
 function nopTogCli(c){
   const i=nop_selClis.indexOf(c);
   if(i>=0) nop_selClis.splice(i,1); else nop_selClis.push(c);
   nopRenderCliCheckboxes();
+}
+
+function nopAgregarManual(){
+  const inp=document.getElementById('nop-cli-manual');
+  const val=inp.value.trim().toUpperCase();
+  if(!val)return;
+  if(nop_selClis.includes(val)){toast('Ese cliente ya está en la lista',true);inp.value='';return;}
+  nop_selClis.push(val);
+  inp.value='';
+  nopRenderExtras();
+  toast('✅ "'+val+'" agregado');
+}
+
+function nopRenderExtras(){
+  const emp=document.getElementById('nop-empresa').value;
+  const enCatalogo=Object.keys(RM_CAT[emp]||{});
+  const extras=nop_selClis.filter(c=>!enCatalogo.includes(c));
+  const el=document.getElementById('nop-cli-extras');
+  if(!el)return;
+  if(!extras.length){el.innerHTML='';return;}
+  el.innerHTML='<span style="font-size:10px;color:var(--muted);width:100%;display:block;margin-bottom:4px">Clientes agregados manualmente:</span>'+
+    extras.map((c,i)=>`
+      <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:20px;padding:3px 8px;font-size:11px;color:var(--amber)">
+        ${c}
+        <button data-extra="${c.replace(/"/g,'&quot;')}" onclick="nopQuitarExtra(this)" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 2px">×</button>
+      </span>`).join('');
+}
+
+function nopQuitarExtra(btn){
+  const c=btn.dataset.extra;
+  const i=nop_selClis.indexOf(c);
+  if(i>=0)nop_selClis.splice(i,1);
+  nopRenderExtras();
 }
 async function nopGuardar(){
   const nombre=document.getElementById('nop-nombre').value.trim();
@@ -2590,8 +2632,9 @@ async function nopGuardar(){
   }catch(e){toast('Error: '+e.message,true);}
 }
 function nopLimpiar(){
-  ['nop-nombre','nop-usuario','nop-pass'].forEach(id=>document.getElementById(id).value='');
+  ['nop-nombre','nop-usuario','nop-pass','nop-cli-manual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('nop-empresa').value='';
+  const ex=document.getElementById('nop-cli-extras');if(ex)ex.innerHTML='';
   nop_selClis=[]; nopRenderCliCheckboxes();
 }
 async function nopEliminar(usuario){
@@ -2609,6 +2652,7 @@ async function nopEditar(usuario){
   document.getElementById('nop-empresa').value=data.empresa;
   nop_selClis=[...(data.clientes||[])];
   nopRenderCliCheckboxes();
+  nopRenderExtras();
   document.getElementById('nop-nombre').scrollIntoView({behavior:'smooth'});
 }
 async function initOperativosPanel(){
