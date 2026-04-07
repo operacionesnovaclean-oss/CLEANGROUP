@@ -191,6 +191,18 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .cli-check-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding:4px 0}
 .cli-check-btn{padding:5px 10px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s}
 .cli-check-btn.sel{border-color:var(--teal);background:rgba(0,201,167,.12);color:var(--teal);font-weight:700}
+.cat-tab{padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-family:inherit;font-size:13px;cursor:pointer;transition:all .15s;margin-bottom:-1px}
+.cat-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600}
+.cat-tab:hover{color:var(--text)}
+.cat-grupo-hdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:10px 0 6px;border-bottom:1px solid var(--border);margin:8px 0 4px;display:flex;justify-content:space-between;align-items:center}
+.cat-item-row{display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px}
+.cat-item-row:hover{background:rgba(255,255,255,.03)}
+.cat-item-chk{width:15px;height:15px;accent-color:var(--teal);cursor:pointer;flex-shrink:0}
+.cat-item-name{flex:1;color:var(--text)}
+.cat-item-unit{font-size:11px;color:var(--muted);width:70px;text-align:right}
+.cat-buscar{width:100%;padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;margin-bottom:10px}
+.cat-buscar:focus{border-color:var(--teal)}
+.cat-stats{font-size:12px;color:var(--muted);margin-bottom:8px}
 /* ── CAMPO REQS ── */
 .campo-period-tag{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--teal)}
 .campo-block{background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
@@ -238,6 +250,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="sb-sec">Operativos</div>
       <button class="nav-item" onclick="nav('operativos')"><span class="nav-icon">👥</span>Usuarios de Campo</button>
       <button class="nav-item" onclick="nav('campo')"><span class="nav-icon">📥</span>Req. de Campo</button>
+      <button class="nav-item" onclick="nav('catalogo')"><span class="nav-icon">🗂️</span>Editor de Catálogo</button>
     </nav>
     <main class="content" id="main-content">
     <!-- panels injected by JS -->
@@ -1007,6 +1020,87 @@ function buildPanels(){
     <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha / Hora</th><th>Ítems</th><th></th></tr></thead><tbody id="campo-list"></tbody></table></div>
   </div>
 </div>
+<div class="panel" id="panel-catalogo">
+  <div class="panel-header"><h2>🗂️ Editor de Catálogo</h2></div>
+  <div class="panel-body">
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button id="cat-tab-editar"   class="cat-tab active" onclick="catTab('editar')">✏️ Editar cliente</button>
+      <button id="cat-tab-nuevo"    class="cat-tab"        onclick="catTab('nuevo')">➕ Nuevo cliente</button>
+      <button id="cat-tab-mover"    class="cat-tab"        onclick="catTab('mover')">🔀 Mover cliente</button>
+    </div>
+
+    <!-- TAB: EDITAR CLIENTE EXISTENTE -->
+    <div id="cat-pane-editar">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa</label>
+          <select id="cat-ed-empresa" onchange="catEdLoadClientes()">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <div class="fi" style="flex:0 0 220px">
+          <label>Cliente</label>
+          <select id="cat-ed-cliente" onchange="catEdLoadItems()">
+            <option value="">— Cliente —</option>
+          </select>
+        </div>
+        <div style="font-size:12px;color:var(--muted)" id="cat-ed-info"></div>
+      </div>
+      <div id="cat-ed-body"></div>
+    </div>
+
+    <!-- TAB: NUEVO CLIENTE -->
+    <div id="cat-pane-nuevo" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="fi" style="flex:0 0 220px">
+          <label>Nombre del cliente</label>
+          <input id="cat-nv-nombre" placeholder="Ej: NUEVO CLIENTE SA" style="text-transform:uppercase">
+        </div>
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa</label>
+          <select id="cat-nv-empresa">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <button class="btn btn-s" onclick="catNvRenderBase()">Ver ítems base →</button>
+      </div>
+      <div id="cat-nv-body"></div>
+    </div>
+
+    <!-- TAB: MOVER CLIENTE -->
+    <div id="cat-pane-mover" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa origen</label>
+          <select id="cat-mv-emp-origen" onchange="catMvLoadClientes()">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <div class="fi" style="flex:0 0 220px">
+          <label>Cliente a mover</label>
+          <select id="cat-mv-cliente">
+            <option value="">— Cliente —</option>
+          </select>
+        </div>
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa destino</label>
+          <select id="cat-mv-emp-destino">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <button class="btn btn-s" style="background:var(--amber);color:var(--navy)" onclick="catMoverCliente()">🔀 Mover</button>
+      </div>
+      <div id="cat-mv-info" style="font-size:12px;color:var(--muted)"></div>
+    </div>
+
+  </div>
+</div>
   `;
 }
 
@@ -1019,7 +1113,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:invRender,historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:invRender,historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel};
   if(fns[name]) fns[name]();
 }
 
@@ -2697,6 +2791,288 @@ async function campoReload(){
   if(error){toast('Error: '+error.message,true);return;}
   _campoReqs=data||[]; campoRender();
 }
+// ════════════════════════════════════════════
+// EDITOR DE CATÁLOGO
+// ════════════════════════════════════════════
+let cat_working = null; // copia de trabajo del catálogo
+
+function initCatalogoPanel(){
+  // Cargar catálogo de trabajo desde Supabase o RM_CAT
+  cat_working = JSON.parse(JSON.stringify(
+    (window._catalogoOverride && Object.keys(window._catalogoOverride).length)
+      ? window._catalogoOverride : RM_CAT
+  ));
+  catTab('editar');
+}
+
+function catTab(tab){
+  ['editar','nuevo','mover'].forEach(t=>{
+    document.getElementById('cat-tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('cat-pane-'+t).style.display = t===tab ? '' : 'none';
+  });
+  if(tab==='editar') catEdReset();
+  if(tab==='mover')  catMvReset();
+}
+
+// ── EDITAR CLIENTE ─────────────────────────
+function catEdReset(){
+  const se=document.getElementById('cat-ed-empresa');
+  const sc=document.getElementById('cat-ed-cliente');
+  if(se) se.value='';
+  if(sc){sc.innerHTML='<option value="">— Cliente —</option>';}
+  const b=document.getElementById('cat-ed-body');
+  if(b) b.innerHTML='';
+  const i=document.getElementById('cat-ed-info');
+  if(i) i.textContent='';
+}
+
+function catEdLoadClientes(){
+  const emp=document.getElementById('cat-ed-empresa').value;
+  const sc=document.getElementById('cat-ed-cliente');
+  sc.innerHTML='<option value="">— Cliente —</option>';
+  document.getElementById('cat-ed-body').innerHTML='';
+  if(!emp||!cat_working[emp]) return;
+  Object.keys(cat_working[emp]).sort().forEach(c=>{
+    const o=document.createElement('option');o.value=c;o.textContent=c;sc.appendChild(o);
+  });
+}
+
+function catEdLoadItems(){
+  const emp=document.getElementById('cat-ed-empresa').value;
+  const cli=document.getElementById('cat-ed-cliente').value;
+  const body=document.getElementById('cat-ed-body');
+  const info=document.getElementById('cat-ed-info');
+  if(!emp||!cli){body.innerHTML='';return;}
+  const items=((cat_working[emp]||{})[cli])||[];
+  info.textContent=items.length+' ítems en catálogo';
+  catEdRender(emp,cli);
+}
+
+function catEdRender(emp,cli){
+  const body=document.getElementById('cat-ed-body');
+  if(!body) return;
+  // Construir lista de todos los ítems base únicos
+  const base = catGetBase();
+  const asignados = ((cat_working[emp]||{})[cli])||[];
+  const asigSet = new Set(asignados.map(x=>x.p+'|'+x.u));
+
+  // Buscar texto
+  const busq=(document.getElementById('cat-ed-buscar')||{}).value||'';
+  const busqL=busq.toLowerCase();
+
+  // Agrupar base
+  const grupos={};
+  base.forEach(it=>{
+    if(busqL && !it.p.toLowerCase().includes(busqL)) return;
+    if(!grupos[it.g]) grupos[it.g]=[];
+    grupos[it.g].push(it);
+  });
+
+  const totalSel=asigSet.size;
+  body.innerHTML=`
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <input class="cat-buscar" id="cat-ed-buscar" placeholder="🔍 Buscar ítem..." oninput="catEdRender('${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}')">
+      <div class="cat-stats">${totalSel} ítems seleccionados</div>
+      <button class="btn btn-s" onclick="catEdGuardar('${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}')">💾 Guardar cambios</button>
+    </div>
+    <div style="max-height:520px;overflow-y:auto;padding-right:4px">
+    ${Object.entries(grupos).map(([g,its])=>{
+      const nSel=its.filter(it=>asigSet.has(it.p+'|'+it.u)).length;
+      return`<div class="cat-grupo-hdr">
+          <span>${g}</span>
+          <span style="font-size:11px;color:var(--teal)">${nSel}/${its.length}</span>
+        </div>`+
+        its.map(it=>{
+          const key=it.p+'|'+it.u;
+          const chk=asigSet.has(key)?'checked':'';
+          return`<div class="cat-item-row">
+            <input type="checkbox" class="cat-item-chk" ${chk}
+              data-emp="${emp}" data-cli="${cli}" data-p="${it.p.replace(/"/g,'&quot;')}" data-u="${it.u}" data-g="${it.g}"
+              onchange="catTogItem(this)">
+            <span class="cat-item-name">${it.p}</span>
+            <span class="cat-item-unit">${it.u}</span>
+          </div>`;
+        }).join('');
+    }).join('')}
+    </div>`;
+}
+
+function catTogItem(chk){
+  const emp=chk.dataset.emp, cli=chk.dataset.cli;
+  const p=chk.dataset.p, u=chk.dataset.u, g=chk.dataset.g;
+  if(!cat_working[emp]) cat_working[emp]={};
+  if(!cat_working[emp][cli]) cat_working[emp][cli]=[];
+  const arr=cat_working[emp][cli];
+  const idx=arr.findIndex(x=>x.p===p&&x.u===u);
+  if(chk.checked && idx<0) arr.push({g,p,u,r:0});
+  if(!chk.checked && idx>=0) arr.splice(idx,1);
+  // actualizar contador
+  const info=document.getElementById('cat-ed-info');
+  if(info) info.textContent=arr.length+' ítems en catálogo';
+}
+
+async function catEdGuardar(emp,cli){
+  const items=((cat_working[emp]||{})[cli])||[];
+  if(!items.length){toast('El cliente no tiene ítems. Selecciona al menos uno.',true);return;}
+  await catGuardarYPublicar(`Catálogo de ${cli} (${emp}) actualizado — ${items.length} ítems`);
+}
+
+// ── NUEVO CLIENTE ──────────────────────────
+function catNvRenderBase(){
+  const nombre=document.getElementById('cat-nv-nombre').value.trim().toUpperCase();
+  const emp=document.getElementById('cat-nv-empresa').value;
+  if(!nombre){toast('Escribe el nombre del cliente',true);return;}
+  if(!emp){toast('Selecciona la empresa',true);return;}
+  if(cat_working[emp] && cat_working[emp][nombre]){
+    toast('Ese cliente ya existe en '+emp,true);return;
+  }
+  // Inicializar con lista vacía
+  if(!cat_working[emp]) cat_working[emp]={};
+  if(!cat_working[emp][nombre]) cat_working[emp][nombre]=[];
+  catNvRender(emp,nombre);
+}
+
+function catNvRender(emp,nombre){
+  const body=document.getElementById('cat-nv-body');
+  const base=catGetBase();
+  const asignados=cat_working[emp][nombre]||[];
+  const asigSet=new Set(asignados.map(x=>x.p+'|'+x.u));
+  const busq=((document.getElementById('cat-nv-buscar')||{}).value||'').toLowerCase();
+  const grupos={};
+  base.forEach(it=>{
+    if(busq && !it.p.toLowerCase().includes(busq)) return;
+    if(!grupos[it.g]) grupos[it.g]=[];
+    grupos[it.g].push(it);
+  });
+  body.innerHTML=`
+    <div style="background:rgba(0,201,167,.07);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px">
+      Creando <strong>${nombre}</strong> en <strong>${emp}</strong> — selecciona los ítems de su catálogo
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <input class="cat-buscar" id="cat-nv-buscar" placeholder="🔍 Buscar ítem..." oninput="catNvRender('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}')">
+      <div class="cat-stats" id="cat-nv-count">${asigSet.size} seleccionados</div>
+      <button class="btn btn-s" onclick="catNvGuardar('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}')">✅ Crear cliente</button>
+    </div>
+    <div style="max-height:500px;overflow-y:auto;padding-right:4px">
+    ${Object.entries(grupos).map(([g,its])=>{
+      const nSel=its.filter(it=>asigSet.has(it.p+'|'+it.u)).length;
+      return`<div class="cat-grupo-hdr">
+          <span>${g}</span>
+          <span style="font-size:11px"><button style="border:none;background:transparent;color:var(--teal);cursor:pointer;font-size:11px" onclick="catSelGrupoNv('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}','${g}',true)">✓ todos</button> / <button style="border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:11px" onclick="catSelGrupoNv('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}','${g}',false)">ninguno</button> <span style="color:var(--teal)">${nSel}/${its.length}</span></span>
+        </div>`+
+        its.map(it=>{
+          const key=it.p+'|'+it.u;
+          return`<div class="cat-item-row">
+            <input type="checkbox" class="cat-item-chk" ${asigSet.has(key)?'checked':''}
+              data-emp="${emp}" data-cli="${nombre.replace(/"/g,'&quot;')}" data-p="${it.p.replace(/"/g,'&quot;')}" data-u="${it.u}" data-g="${it.g}"
+              onchange="catTogItemNv(this)">
+            <span class="cat-item-name">${it.p}</span>
+            <span class="cat-item-unit">${it.u}</span>
+          </div>`;
+        }).join('');
+    }).join('')}
+    </div>`;
+}
+
+function catTogItemNv(chk){
+  const emp=chk.dataset.emp,cli=chk.dataset.cli,p=chk.dataset.p,u=chk.dataset.u,g=chk.dataset.g;
+  if(!cat_working[emp][cli]) cat_working[emp][cli]=[];
+  const arr=cat_working[emp][cli];
+  const idx=arr.findIndex(x=>x.p===p&&x.u===u);
+  if(chk.checked && idx<0) arr.push({g,p,u,r:0});
+  if(!chk.checked && idx>=0) arr.splice(idx,1);
+  const c=document.getElementById('cat-nv-count');
+  if(c) c.textContent=arr.length+' seleccionados';
+}
+
+function catSelGrupoNv(emp,nombre,grupo,sel){
+  const base=catGetBase().filter(x=>x.g===grupo);
+  if(!cat_working[emp][nombre]) cat_working[emp][nombre]=[];
+  const arr=cat_working[emp][nombre];
+  base.forEach(it=>{
+    const idx=arr.findIndex(x=>x.p===it.p&&x.u===it.u);
+    if(sel && idx<0) arr.push({g:it.g,p:it.p,u:it.u,r:0});
+    if(!sel && idx>=0) arr.splice(idx,1);
+  });
+  catNvRender(emp,nombre);
+}
+
+async function catNvGuardar(emp,nombre){
+  const items=cat_working[emp][nombre]||[];
+  if(!items.length){toast('Selecciona al menos un ítem para el cliente',true);return;}
+  await catGuardarYPublicar(`Cliente "${nombre}" creado en ${emp} — ${items.length} ítems`);
+  // Actualizar selector de empresa/cliente
+  document.getElementById('cat-nv-nombre').value='';
+  document.getElementById('cat-nv-empresa').value='';
+  document.getElementById('cat-nv-body').innerHTML='';
+}
+
+// ── MOVER CLIENTE ──────────────────────────
+function catMvReset(){
+  ['cat-mv-emp-origen','cat-mv-cliente','cat-mv-emp-destino'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  const sc=document.getElementById('cat-mv-cliente');
+  if(sc) sc.innerHTML='<option value="">— Cliente —</option>';
+  const info=document.getElementById('cat-mv-info');
+  if(info) info.textContent='';
+}
+
+function catMvLoadClientes(){
+  const emp=document.getElementById('cat-mv-emp-origen').value;
+  const sc=document.getElementById('cat-mv-cliente');
+  sc.innerHTML='<option value="">— Cliente —</option>';
+  if(!emp||!cat_working[emp]) return;
+  Object.keys(cat_working[emp]).sort().forEach(c=>{
+    const o=document.createElement('option');o.value=c;o.textContent=c;sc.appendChild(o);
+  });
+}
+
+async function catMoverCliente(){
+  const empOrigen=document.getElementById('cat-mv-emp-origen').value;
+  const cli=document.getElementById('cat-mv-cliente').value;
+  const empDestino=document.getElementById('cat-mv-emp-destino').value;
+  const info=document.getElementById('cat-mv-info');
+  if(!empOrigen||!cli||!empDestino){toast('Completa todos los campos',true);return;}
+  if(empOrigen===empDestino){toast('La empresa destino debe ser diferente',true);return;}
+  if(!cat_working[empOrigen]||!cat_working[empOrigen][cli]){toast('Cliente no encontrado',true);return;}
+  if(cat_working[empDestino]&&cat_working[empDestino][cli]){
+    if(!confirm(`"${cli}" ya existe en ${empDestino}. ¿Sobreescribir?`)) return;
+  }
+  const items=cat_working[empOrigen][cli];
+  if(!cat_working[empDestino]) cat_working[empDestino]={};
+  cat_working[empDestino][cli]=items;
+  delete cat_working[empOrigen][cli];
+  info.innerHTML=`<span style="color:var(--teal)">✅ "${cli}" movido de ${empOrigen} → ${empDestino} con ${items.length} ítems</span>`;
+  await catGuardarYPublicar(`"${cli}" movido de ${empOrigen} a ${empDestino}`);
+  catMvReset();
+}
+
+// ── HELPERS ────────────────────────────────
+function catGetBase(){
+  // Extrae ítems únicos de todo el catálogo
+  const seen=new Set(), base=[];
+  const src = cat_working || RM_CAT;
+  Object.values(src).forEach(emp=>Object.values(emp).forEach(lista=>{
+    lista.forEach(it=>{
+      const k=it.p+'|'+it.u;
+      if(!seen.has(k)){seen.add(k);base.push({g:it.g,p:it.p,u:it.u});}
+    });
+  }));
+  // Ordenar por grupo luego nombre
+  return base.sort((a,b)=>a.g.localeCompare(b.g)||a.p.localeCompare(b.p));
+}
+
+async function catGuardarYPublicar(msg){
+  if(!_sb){toast('Sin conexión Supabase',true);return;}
+  try{
+    const {error}=await _sb.from('campo_catalog').upsert({id:1,catalog:cat_working,updated:new Date().toISOString()});
+    if(error) throw error;
+    window._catalogoOverride=cat_working;
+    toast('✅ '+msg+' — catálogo publicado al portal');
+  }catch(e){toast('Error guardando: '+e.message,true);}
+}
+
 async function initCampoPanel(){
   await initOperativosPanel(); await campoReload();
 }
