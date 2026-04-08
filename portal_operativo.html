@@ -290,16 +290,17 @@ function renderClientesBtns(){
   el.innerHTML=clientes.map(c=>`<button class="cli-btn${c===po_cliente?' active':''}" onclick="selCliente('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
 }
 
-function selCliente(c){
+async function selCliente(c){
   po_cliente=c;po_data={};
   window._editingId=null;
-  // Resetear botón por si venía de edición
   const btn=document.getElementById('btn-save');
   if(btn){btn.style.background='var(--teal)';btn.textContent='💾 Enviar Requisición';}
   renderClientesBtns();
   document.getElementById('po-cliente-lbl').textContent=c;
   document.getElementById('po-buscar').value='';
   document.getElementById('po-solo-qty').checked=false;
+  // Recargar catálogo desde Supabase para garantizar versión más reciente
+  await loadCatalog();
   poRenderItems();goStep(3);
 }
 
