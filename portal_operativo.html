@@ -418,24 +418,24 @@ async function poGuardar(){
   const isEdit=!!window._editingId;
   btn.disabled=true;btn.textContent='⏳ '+(isEdit?'Guardando cambios...':'Enviando...');
   try{
-    // Si es edición: borrar el registro anterior primero
     if(isEdit){
-      const{error:delErr}=await _sb.from('campo_reqs').delete()
-        .eq('id',String(window._editingId).replace(/[^0-9]/g,''))
-        .eq('usuario',currentUser.usuario).select();
+      const editId=String(window._editingId).trim();
+      let delQ=_sb.from('campo_reqs').delete().eq('id',editId);
+      if(!isMaster) delQ=delQ.eq('usuario',currentUser.usuario);
+      const{error:delErr}=await delQ.select();
       if(delErr)throw delErr;
       window._editingId=null;
     }
     const{error}=await _sb.from('campo_reqs').insert({
-      operativo:isMaster?'ADMINISTRADOR':currentUser.nombre,
-      usuario:currentUser.usuario,
+      operativo:isMaster?(window._editingOperativo||'ADMINISTRADOR'):currentUser.nombre,
+      usuario:isMaster?(window._editingUsuario||currentUser.usuario):currentUser.usuario,
       empresa:emp,cliente:po_cliente,periodo,items:itemsArr,
       fecha_iso:new Date().toISOString()
     });
     if(error)throw error;
+    window._editingOperativo=null;window._editingUsuario=null;
     toast(isEdit?'✅ Cambios guardados — '+itemsArr.length+' ítems':'✅ Requisición enviada — '+itemsArr.length+' ítems');
     po_data={};poRenderItems();
-    // Resetear botón a estado normal
     btn.style.background='var(--teal)';
     btn.textContent='💾 Enviar Requisición';
     setTimeout(()=>goStep(2),900);
@@ -516,9 +516,8 @@ async function loadHistorial(){
 async function histEliminar(id,cliente){
   if(!confirm('¿Eliminar la requisición de "'+cliente+'"?')) return;
   if(!_sb) return;
-  // Limpiar el id — quitar 'n' si es bigint string, espacios, etc.
-  const cleanId=String(id).replace(/[^0-9]/g,'');
-  console.log('Eliminando id original='+id+' cleanId='+cleanId);
+  // UUID — usar tal cual sin limpiar
+  const cleanId=String(id).trim();
   if(!cleanId){toast('ID inválido: '+id,true);return;}
   try{
     let q=_sb.from('campo_reqs').delete().eq('id',cleanId);
@@ -539,24 +538,32 @@ async function histEliminar(id,cliente){
 
 async function histEditar(id){
   if(!_sb)return;
-  const cleanId=String(id).replace(/[^0-9]/g,'');
-  console.log('Editando id original='+id+' cleanId='+cleanId);
+  // UUID — no limpiar con regex, usar el id tal cual
+  const cleanId=String(id).trim();
+  console.log('Editando id='+cleanId);
   if(!cleanId){toast('ID inválido',true);return;}
   try{
     const{data,error}=await _sb.from('campo_reqs').select('*').eq('id',cleanId).single();
-    if(error||!data){toast('No se pudo cargar',true);return;}
+    if(error||!data){toast('No se pudo cargar: '+(error?.message||'sin datos'),true);return;}
     po_cliente=data.cliente;
     po_data={};
     (data.items||[]).forEach(it=>{if(it.qty>0)po_data[it.prod+'|'+it.unidad]=it.qty;});
     window._editingId=cleanId;
+    window._editingOperativo=data.operativo||'';
+    window._editingUsuario=data.usuario||'';
     renderClientesBtns();
     document.getElementById('po-cliente-lbl').textContent=data.cliente;
+    // Si es master: pre-cargar el período original para que pueda corregirlo
+    if(isMaster){
+      const periodoInput=document.getElementById('po-periodo');
+      if(periodoInput) periodoInput.value=data.periodo||'';
+    }
     poRenderItems();
     goStep(3);
     const btn=document.getElementById('btn-save');
     btn.textContent='💾 Guardar cambios';
     btn.style.background='var(--amber)';
-    toast('✏️ Modifica las cantidades y vuelve a enviar');
+    toast('✏️ Modifica las cantidades y guarda');
   }catch(e){toast('Error: '+e.message,true);}
 }
 
