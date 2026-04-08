@@ -3135,12 +3135,25 @@ function campoRender(){
       const itemsArr=Object.values(data.items).filter(i=>i.qty>0);
       const grupos={};itemsArr.forEach(it=>{if(!grupos[it.grupo]) grupos[it.grupo]=[];grupos[it.grupo].push(it);});
       const bid='cb-'+emp.replace(/\W/g,'')+'-'+cli.replace(/\W/g,'');
+      // IDs de las requisiciones de este bloque (para poder editar empresa en lote)
+      const reqIds=reqs.filter(r=>(r.empresa||'—')===emp&&(r.cliente||'—')===cli).map(r=>r.id);
       return `<div class="campo-block">
-        <div class="campo-block-head" onclick="document.getElementById('${bid}').classList.toggle('open')">
+        <div class="campo-block-head" onclick="event.target.closest('.campo-block-head')&&!event.target.closest('.emp-edit-wrap')&&document.getElementById('${bid}').classList.toggle('open')">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <strong style="font-size:13px">${emp} · ${cli}</strong>
             <span class="campo-period-tag">${[...data.periodos].join(', ')}</span>
             <span style="font-size:11px;color:var(--muted)">${[...data.ops].join(', ')}</span>
+            <span class="emp-edit-wrap" style="display:inline-flex;align-items:center;gap:4px">
+              <select class="emp-edit-sel" id="empsel-${bid}"
+                style="padding:2px 6px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;outline:none"
+                onchange="event.stopPropagation()">
+                <option value="INMOCLEAN"${emp==='INMOCLEAN'?' selected':''}>INMOCLEAN</option>
+                <option value="NOVACLEAN"${emp==='NOVACLEAN'?' selected':''}>NOVACLEAN</option>
+                <option value="HOMECLEAN"${emp==='HOMECLEAN'?' selected':''}>HOMECLEAN</option>
+              </select>
+              <button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--amber);color:var(--navy);border:none"
+                onclick="event.stopPropagation();campoEditarEmpresa('empsel-${bid}',[${reqIds.map(id=>`'${id}'`).join(',')}])">✓</button>
+            </span>
           </div>
           <div style="display:flex;align-items:center;gap:8px"><span class="tag tok">${itemsArr.length} ítems</span><span style="color:var(--muted)">▼</span></div>
         </div>
@@ -3171,6 +3184,19 @@ function campoRender(){
     </tr>`;
   }).join('');}
 }
+async function campoEditarEmpresa(selId, ids){
+  const nuevaEmp=document.getElementById(selId).value;
+  if(!nuevaEmp||!ids.length){toast('Selecciona una empresa',true);return;}
+  if(!_sb){toast('Sin conexión',true);return;}
+  try{
+    // Actualizar todas las requisiciones de este bloque cliente
+    const{error}=await _sb.from('campo_reqs').update({empresa:nuevaEmp}).in('id',ids);
+    if(error) throw error;
+    toast(`✅ Empresa actualizada a ${nuevaEmp} (${ids.length} registros)`);
+    await campoReload();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
 async function campoEliminar(btn,id){
   if(!confirm('¿Eliminar este envío?')) return;
   if(!_sb){toast('Sin conexión',true);return;}
