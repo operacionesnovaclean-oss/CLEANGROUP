@@ -954,6 +954,7 @@ function buildPanels(){
     <h2>👥 Usuarios de Campo</h2>
     <p>Crea las credenciales de los operativos para el portal de campo.</p>
     <span class="iso-code">Archivo: portal_operativo.html</span>
+    <button class="btn btn-s" style="margin-top:8px;font-size:11px" onclick="nopRecargarCatalogo()">🔄 Recargar catálogo</button>
   </div>
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -2662,6 +2663,20 @@ function meiGuardar(){
 // ════════════════════════════════════════════
 let nop_selClis=[];
 
+async function nopRecargarCatalogo(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  try{
+    const {data}=await _sb.from('campo_catalog').select('catalog').eq('id',1).single();
+    if(data&&data.catalog&&Object.keys(data.catalog).length){
+      window._catalogoOverride=data.catalog;
+      toast('✅ Catálogo recargado desde Supabase');
+      nopRenderCliCheckboxes();
+    } else {
+      toast('No hay catálogo en Supabase, usando base embebida');
+    }
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
 function nopRenderCliCheckboxes(){
   const emp=document.getElementById('nop-empresa').value;
   const el=document.getElementById('nop-cli-grid');
@@ -2670,10 +2685,12 @@ function nopRenderCliCheckboxes(){
   const catActual=(window._catalogoOverride && Object.keys(window._catalogoOverride).length)
     ? window._catalogoOverride : RM_CAT;
   const clientes=Object.keys(catActual[emp]||{}).sort();
-  el.innerHTML=clientes.map(c=>{
-    const sel=nop_selClis.includes(c);
-    return `<button class="cli-check-btn${sel?' sel':''}" onclick="nopTogCli('${c.replace(/'/g,"\\'")}')">${c}</button>`;
-  }).join('');
+  el.innerHTML=clientes.length
+    ? clientes.map(c=>{
+        const sel=nop_selClis.includes(c);
+        return `<button class="cli-check-btn${sel?' sel':''}" onclick="nopTogCli('${c.replace(/'/g,"\\'")}')">${c}</button>`;
+      }).join('')
+    : '<span style="color:var(--muted);font-size:12px">Sin clientes en esta empresa</span>';
   nopRenderExtras();
 }
 function nopTogCli(c){
@@ -3089,6 +3106,8 @@ async function catGuardarYPublicar(msg){
     if(error) throw error;
     window._catalogoOverride=cat_working;
     toast('✅ '+msg+' — catálogo publicado al portal');
+    // Si el panel de Usuarios está activo, refrescar los checkboxes de clientes
+    if(typeof nopRenderCliCheckboxes==='function') nopRenderCliCheckboxes();
   }catch(e){toast('Error guardando: '+e.message,true);}
 }
 
