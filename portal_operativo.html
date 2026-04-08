@@ -309,8 +309,10 @@ const gruposColapsados={};
 function poRenderItems(){
   const el=document.getElementById('po-items-body');
   if(!el||!po_cliente||!currentUser)return;
-  let emp=currentUser.empresa;
-  if(isMaster){emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';}
+  // Buscar en qué empresa está el cliente dentro del catálogo (independiente de la empresa del usuario)
+  let emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente]);
+  // Si no está en el catálogo de Supabase, buscar en la empresa del usuario como fallback
+  if(!emp) emp=currentUser.empresa;
   const catalogItems=(po_catalog[emp]||{})[po_cliente]||[];
   const extraKey=emp+':'+po_cliente;
   const todosItems=[...catalogItems,...(po_extras[extraKey]||[])];
@@ -401,8 +403,8 @@ async function poGuardar(){
   const periodo=document.getElementById('po-periodo').value.trim();
   if(!periodo){toast('Ingresa el período',true);return;}
   if(!po_cliente){toast('Selecciona un cliente',true);return;}
-  let emp=currentUser.empresa;
-  if(isMaster){emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente])||'';}
+  let emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][po_cliente]);
+  if(!emp) emp=currentUser.empresa;
   const extraKey=emp+':'+po_cliente;
   const itemsArr=Object.entries(po_data).filter(([,qty])=>qty>0).map(([key,qty])=>{
     const[prod,unidad]=key.split('|');
