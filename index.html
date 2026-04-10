@@ -210,6 +210,9 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .campo-block-head:hover{background:rgba(255,255,255,.03)}
 .campo-block-body{display:none;border-top:1px solid var(--border);padding:12px 14px}
 .campo-block-body.open{display:block}
+.cons-item-edit{display:none}
+.cons-item-row.editing .cons-item-view{display:none!important}
+.cons-item-row.editing .cons-item-edit{display:flex!important}
 </style>
 </head>
 <body>
@@ -3181,7 +3184,6 @@ function campoRender(){
       const itemsArr=Object.values(data.items).filter(i=>i.qty>0);
       const grupos={};itemsArr.forEach(it=>{if(!grupos[it.grupo]) grupos[it.grupo]=[];grupos[it.grupo].push(it);});
       const bid='cb-'+emp.replace(/\W/g,'')+'-'+cli.replace(/\W/g,'');
-      // IDs de las requisiciones de este bloque (para poder editar empresa en lote)
       const reqIds=reqs.filter(r=>(r.empresa||'—')===emp&&(r.cliente||'—')===cli).map(r=>r.id);
       return `<div class="campo-block">
         <div class="campo-block-head" onclick="event.target.closest('.campo-block-head')&&!event.target.closest('.emp-edit-wrap')&&document.getElementById('${bid}').classList.toggle('open')">
@@ -3206,13 +3208,33 @@ function campoRender(){
         <div class="campo-block-body" id="${bid}">
           ${Object.entries(grupos).map(([g,its])=>`
             <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">${g}</div>
-            ${its.map(it=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:12px">
-              <span>${it.prod}</span>
-              <span style="display:flex;gap:8px;align-items:center">
-                <span style="color:var(--muted);font-size:10px">${it.unidad}</span>
-                <span style="color:var(--teal);font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.qty}</span>
-              </span>
-            </div>`).join('')}`).join('')}
+            ${its.map(it=>{
+              const ikey=btoa(unescape(encodeURIComponent(it.prod+'|'+it.unidad))).replace(/[^a-zA-Z0-9]/g,'').substring(0,12);
+              const rIds=JSON.stringify(reqIds);
+              return`<div class="cons-item-row" id="cir-${bid}-${ikey}">
+                <div class="cons-item-view" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:12px">
+                  <span>${it.prod}</span>
+                  <span style="display:flex;gap:8px;align-items:center">
+                    <span style="color:var(--muted);font-size:10px">${it.unidad}</span>
+                    <span style="color:var(--teal);font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.qty}</span>
+                    <button title="Editar ítem" onclick="consItemEditOpen('cir-${bid}-${ikey}','${it.prod.replace(/'/g,"\\'")}','${it.unidad}',${it.qty},'${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}',${rIds})"
+                      style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;transition:color .15s" onmouseover="this.style.color='var(--teal)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
+                  </span>
+                </div>
+                <div class="cons-item-edit" style="display:none;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:6px;align-items:center;flex-wrap:wrap">
+                  <input id="cin-prod-${bid}-${ikey}" value="${it.prod.replace(/"/g,'&quot;')}" placeholder="Nombre"
+                    style="flex:1;min-width:160px;padding:5px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--teal);color:var(--text);font-size:12px;font-family:inherit;outline:none">
+                  <input id="cin-qty-${bid}-${ikey}" type="number" min="0" value="${it.qty}"
+                    style="width:70px;padding:5px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--teal);color:var(--teal);font-size:12px;font-family:'JetBrains Mono',monospace;outline:none;text-align:center">
+                  <button onclick="consItemGuardar('cir-${bid}-${ikey}','${it.prod.replace(/'/g,"\\'")}','${it.unidad}','${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}',${rIds})"
+                    style="padding:4px 12px;border-radius:5px;background:var(--teal);border:none;color:var(--navy);font-size:12px;font-weight:700;cursor:pointer">✓ Guardar</button>
+                  <button onclick="consItemEditClose('cir-${bid}-${ikey}')"
+                    style="padding:4px 10px;border-radius:5px;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:12px;cursor:pointer">✕</button>
+                  <button onclick="consItemEliminar('cir-${bid}-${ikey}','${it.prod.replace(/'/g,"\\'")}','${it.unidad}','${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}',${rIds})"
+                    style="padding:4px 10px;border-radius:5px;background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;cursor:pointer">🗑️ Eliminar</button>
+                </div>
+              </div>`;
+            }).join('')}`).join('')}
         </div>
       </div>`;
     }).join('')).join('');}
@@ -3230,6 +3252,75 @@ function campoRender(){
     </tr>`;
   }).join('');}
 }
+// ── EDITAR ÍTEMS DEL CONSOLIDADO ───────────
+function consItemEditOpen(rowId,prod,unidad,qty,emp,cli,reqIds){
+  const row=document.getElementById(rowId);
+  if(!row)return;
+  row.classList.add('editing');
+}
+function consItemEditClose(rowId){
+  const row=document.getElementById(rowId);
+  if(!row)return;
+  row.classList.remove('editing');
+}
+
+async function consItemGuardar(rowId,prodOrig,unidad,emp,cli,reqIds){
+  const suffix=rowId.replace(/^cir-/,''); // remove 'cir-' prefix
+  const newProd=(document.getElementById('cin-prod-'+suffix).value||'').trim().toUpperCase();
+  const newQty=parseFloat(document.getElementById('cin-qty-'+suffix).value)||0;
+  if(!newProd){toast('El nombre no puede estar vacío',true);return;}
+  if(!_sb){toast('Sin conexión',true);return;}
+  try{
+    // Obtener los registros afectados
+    const{data:reqs,error}=await _sb.from('campo_reqs').select('id,items').in('id',reqIds);
+    if(error)throw error;
+    // Calcular cuánto aporta cada req a este ítem y redistribuir el nuevo qty proporcionalmente
+    const totOrig=reqs.reduce((s,r)=>{
+      const it=(r.items||[]).find(x=>x.prod===prodOrig&&x.unidad===unidad);
+      return s+(it?+it.qty:0);
+    },0);
+    for(const req of reqs){
+      const items=[...(req.items||[])];
+      const idx=items.findIndex(x=>x.prod===prodOrig&&x.unidad===unidad);
+      if(idx<0)continue;
+      const proporcion=totOrig>0?(+items[idx].qty/totOrig):1;
+      const nuevaCant=Math.round(newQty*proporcion);
+      if(newProd===prodOrig){
+        // Solo cambiar cantidad
+        items[idx]={...items[idx],qty:nuevaCant};
+      } else {
+        // Renombrar: buscar si ya existe con nuevo nombre
+        const existIdx=items.findIndex(x=>x.prod===newProd&&x.unidad===unidad);
+        if(existIdx>=0){
+          items[existIdx].qty=(+items[existIdx].qty||0)+nuevaCant;
+          items.splice(idx,1);
+        } else {
+          items[idx]={...items[idx],prod:newProd,qty:nuevaCant};
+        }
+      }
+      await _sb.from('campo_reqs').update({items}).eq('id',req.id);
+    }
+    toast('✅ Ítem actualizado en '+(reqs.length)+' registro(s)');
+    consItemEditClose(rowId);
+    await campoReload();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
+async function consItemEliminar(rowId,prod,unidad,emp,cli,reqIds){
+  if(!confirm(`¿Eliminar "${prod}" de todos los registros de ${cli}?`))return;
+  if(!_sb){toast('Sin conexión',true);return;}
+  try{
+    const{data:reqs,error}=await _sb.from('campo_reqs').select('id,items').in('id',reqIds);
+    if(error)throw error;
+    for(const req of reqs){
+      const items=(req.items||[]).filter(x=>!(x.prod===prod&&x.unidad===unidad));
+      await _sb.from('campo_reqs').update({items}).eq('id',req.id);
+    }
+    toast('🗑️ "'+prod+'" eliminado de '+reqs.length+' registro(s)');
+    await campoReload();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
 async function campoEditarEmpresa(selId, ids){
   const nuevaEmp=document.getElementById(selId).value;
   if(!nuevaEmp||!ids.length){toast('Selecciona una empresa',true);return;}
