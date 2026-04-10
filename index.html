@@ -2572,23 +2572,32 @@ function modalEditarItems(){
 
 function meiRenderList(){
   const el=document.getElementById('mei-list');if(!el)return;
-  const items=RM_CAT[rm_empresa]?.[rm_cliente]||[];
-  if(!items.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Sin ítems asignados.</div>';return;}
+  // Leer ítems desde rm_data (la requisición real), no desde el catálogo
+  const dataCliente=rm_data[rm_empresa]?.[rm_cliente]||{};
+  const items=Object.values(dataCliente);
+  if(!items.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Sin ítems con cantidad en esta requisición.</div>';return;}
+  // Ordenar por grupo luego nombre
+  items.sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||(a.prod||'').localeCompare(b.prod||''));
   el.innerHTML=items.map((it,i)=>{
     const edit=meiEdits[i]||{};
     const deleted=edit.deleted||false;
-    const nombre=edit.p!==undefined?edit.p:it.p;
+    const nombre=edit.p!==undefined?edit.p:(it.prod||'');
+    const qty=it.qty||0;
     return `<div class="item-row-edit" style="${deleted?'opacity:.35;text-decoration:line-through':''}">
-      <input value="${nombre}" ${deleted?'disabled':''} 
-        onchange="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].p=this.value"
-        style="flex:1;padding:4px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:12px;font-family:inherit;outline:none">
-      <span style="font-size:10px;color:var(--muted);white-space:nowrap;margin:0 6px">${it.u}</span>
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1">
+        <input value="${nombre.replace(/"/g,'&quot;')}" ${deleted?'disabled':''}
+          onchange="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].p=this.value;meiEdits[${i}]._orig_prod='${it.prod.replace(/'/g,"\\'")}';meiEdits[${i}]._orig_u='${(it.unidad||'').replace(/'/g,"\\'")}'"
+          style="flex:1;padding:4px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:12px;font-family:inherit;outline:none">
+        <span style="font-size:10px;color:var(--muted)">${it.unidad||''} · ${qty} uds</span>
+      </div>
       ${deleted
         ? `<button class="btn btn-s btn-sm" onclick="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].deleted=false;meiRenderList()">↩️</button>`
-        : `<button class="btn btn-d btn-sm" onclick="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].deleted=true;meiRenderList()">🗑️</button>`
+        : `<button class="btn btn-d btn-sm" onclick="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].deleted=true;meiEdits[${i}]._orig_prod='${it.prod.replace(/'/g,"\\'")}';meiEdits[${i}]._orig_u='${(it.unidad||'').replace(/'/g,"\\'")}';meiRenderList()">🗑️</button>`
       }
     </div>`;
   }).join('');
+  // Guardar referencia ordenada para meiGuardar
+  el._itemsRef=items;
 }
 
 function meiFilterCatalog(){
@@ -2618,29 +2627,47 @@ function meiAddItem(desc,u){
 }
 
 function meiGuardar(){
-  const items=RM_CAT[rm_empresa]?.[rm_cliente]||[];
-  const updated=[];
+  const dataCliente=rm_data[rm_empresa]?.[rm_cliente];
+  if(!dataCliente){toast('Sin datos para este cliente',true);return;}
+  // Items ordenados igual que meiRenderList
+  const items=Object.values(dataCliente)
+    .sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||(a.prod||'').localeCompare(b.prod||''));
+  let renombrados=0,eliminados=0,fusionados=0;
   items.forEach((it,i)=>{
     const edit=meiEdits[i]||{};
-    if(edit.deleted)return; // skip deleted
-    const newP=edit.p!==undefined?edit.p.trim().toUpperCase():it.p;
-    const newKey=newP+'|'+it.u;
-    updated.push({...it,p:newP});
-    // Update rm_data key if name changed
-    if(newP!==it.p){
-      const oldKey=it.p+'|'+it.u;
-      const val=rm_data[rm_empresa]?.[rm_cliente]?.[oldKey];
-      if(val&&rm_data[rm_empresa]?.[rm_cliente]){
-        delete rm_data[rm_empresa][rm_cliente][oldKey];
-        rm_data[rm_empresa][rm_cliente][newKey]={...val,prod:newP};
+    const oldKey=it.prod+'|'+it.unidad;
+    if(edit.deleted){
+      delete dataCliente[oldKey];
+      eliminados++;
+      return;
+    }
+    if(edit.p!==undefined){
+      const newNombre=edit.p.trim().toUpperCase();
+      if(newNombre && newNombre!==it.prod){
+        const newKey=newNombre+'|'+it.unidad;
+        if(dataCliente[newKey]){
+          // Fusionar: sumar cantidades
+          dataCliente[newKey].qty=(+dataCliente[newKey].qty||0)+(+it.qty||0);
+          delete dataCliente[oldKey];
+          fusionados++;
+        } else {
+          // Renombrar
+          dataCliente[newKey]={...it,prod:newNombre};
+          delete dataCliente[oldKey];
+          renombrados++;
+        }
       }
     }
   });
-  RM_CAT[rm_empresa][rm_cliente]=updated;
   meiEdits={};
   modalClose('modal-editar-items');
   rmRenderItems();
-  toast('✅ Cambios guardados — '+updated.length+' ítems');
+  if(rm_editIdx!==null) saveDB();
+  let msg='✅ Cambios aplicados';
+  if(renombrados) msg+=' · '+renombrados+' renombrados';
+  if(fusionados)  msg+=' · '+fusionados+' fusionados';
+  if(eliminados)  msg+=' · '+eliminados+' eliminados';
+  toast(msg);
 }
 
 </script>
