@@ -6,6 +6,7 @@
 <title>Clean Group – Sistema ISO 9001</title>
 <!-- Supabase SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -700,7 +701,7 @@ function buildPanels(){
 
 <!-- 2. NECESIDAD DE COMPRA -->
 <div class="panel" id="panel-necesidad">
-  <div class="ph"><h2>2. Necesidad de Compra — por Empresa</h2><p>Se genera <strong>una por empresa</strong> (INMOCLEAN / NOVACLEAN / HOMECLEAN) consolidando los ítems de todos sus clientes.</p><span class="iso-code">FOR COM 01 · VER 01 (09 12 2024)</span></div>
+  <div class="ph"><h2>2. Necesidad de Compra — por Empresa</h2><p>Consolida ítems por empresa, agrupa por proveedor y descarga en Excel.</p><span class="iso-code">FOR COM 01 · VER 01 (09 12 2024)</span></div>
   <div class="card"><div class="card-title">🔗 Origen: Requisición Mensual</div>
     <div class="fg">
       <div class="fi"><label>Seleccionar Requisición</label><select id="nec-rm-sel" onchange="necCargarRM()"><option value="">-- Seleccionar --</option></select></div>
@@ -715,15 +716,30 @@ function buildPanels(){
     </div>
   </div>
   <div class="card" id="nec-items-card" style="display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin:0">📦 Ítems consolidados — <span id="nec-empresa-lbl" style="color:var(--teal)"></span> <span class="badge" id="nec-items-count">0</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📦 Ítems — <span id="nec-empresa-lbl" style="color:var(--teal)"></span> <span class="badge" id="nec-items-count">0</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <!-- Gestión de grupos -->
+        <div style="display:flex;gap:5px;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 8px">
+          <span style="font-size:11px;color:var(--muted)">Nuevo grupo:</span>
+          <input id="nec-nuevo-grupo" placeholder="Ej: Químicos NOVA" style="width:130px;padding:3px 7px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;font-family:inherit;outline:none">
+          <button class="btn btn-s btn-sm" onclick="necAgregarGrupo()">＋</button>
+        </div>
+        <button class="btn btn-s" onclick="necExcelGlobal()">⬇️ Excel completo</button>
         <button class="btn btn-a" onclick="necPreview()">🖨️ Vista previa</button>
-        <button class="btn btn-p" onclick="necGuardar()">💾 Guardar → lista para OC</button>
+        <button class="btn btn-p" onclick="necGuardar()">💾 Guardar</button>
       </div>
     </div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:10px">El stock disponible se descuenta automáticamente. Ajusta cantidades antes de guardar.</p>
-    <div class="tw"><table class="it"><thead><tr><th>Producto</th><th>Unidad</th><th>Total Pedido</th><th>En Stock</th><th>Por Comprar</th><th>Obs.</th></tr></thead><tbody id="nec-body"></tbody></table></div>
+    <!-- Grupos activos -->
+    <div id="nec-grupos-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Asigna cada ítem a un grupo de proveedor. Usa <strong>Sel. todo</strong> para asignar en bloque. Puedes descargar cada grupo en Excel separado.</p>
+    <div class="tw"><table class="it"><thead><tr>
+      <th style="width:28px"><input type="checkbox" id="nec-chk-all" onchange="necToggleAll(this)" style="accent-color:var(--teal)"></th>
+      <th>Producto</th><th>Unidad</th><th style="text-align:center">Total</th><th style="text-align:center">Stock</th><th style="text-align:center">Comprar</th>
+      <th>Grupo proveedor</th><th>Obs.</th>
+    </tr></thead><tbody id="nec-body"></tbody></table></div>
+    <!-- Resumen por grupo -->
+    <div id="nec-grupos-resumen" style="margin-top:14px"></div>
   </div>
   <div class="card"><div class="card-title">📁 Necesidades Guardadas <span class="badge" id="nec-count">0</span></div>
     <div class="tw"><table><thead><tr><th>N°</th><th>Empresa</th><th>Período</th><th>Req. Origen</th><th>Ítems</th><th>OC Generada</th><th>Acciones</th></tr></thead><tbody id="nec-list"></tbody></table></div>
@@ -1615,6 +1631,7 @@ function rmAgregarItemAlCliente(){
 // 2. NECESIDAD DE COMPRA
 // ═══════════════════════════════
 let necItems=[];
+let necGrupos=['Sin asignar','Químicos','Fundas','Insumos','Efectivo'];
 
 function necRefreshSelects(){
   const sel=document.getElementById('nec-rm-sel');if(!sel)return;
@@ -1624,7 +1641,6 @@ function necRefreshSelects(){
 
 function initNec(){
   necRefreshSelects();
-  // Populate OC nec select
   const ocSel=document.getElementById('oc-nec-sel');
   if(ocSel){
     ocSel.innerHTML='<option value="">-- Manual / Nueva --</option>';
@@ -1638,12 +1654,11 @@ function necCargarRM(){
   const info=document.getElementById('nec-rm-info');
   if(!num){info.style.display='none';necItems=[];necRenderItems();document.getElementById('nec-items-card').style.display='none';return;}
   const rm=db.reqMensuales.find(r=>r.numero===num);
-  if(!rm) return;
+  if(!rm)return;
   info.style.display='block';
   document.getElementById('nec-rm-desc').textContent=`${rm.numero} — ${rm.periodo} — ${rm.activos} clientes con pedido`;
   document.getElementById('nec-periodo').value=rm.periodo;
   document.getElementById('nec-elaborado').value=rm.elaborado||'';
-  // Reset empresa selector
   document.getElementById('nec-empresa-sel').value='';
   necItems=[];necRenderItems();document.getElementById('nec-items-card').style.display='none';
 }
@@ -1654,17 +1669,15 @@ function necFiltrarEmpresa(){
   if(!empresa||!rmNum){necItems=[];necRenderItems();document.getElementById('nec-items-card').style.display='none';return;}
   const rm=db.reqMensuales.find(r=>r.numero===rmNum);
   if(!rm){toast('Selecciona primero la Requisición',true);return;}
-  // Check if already generated for this empresa
   const existe=db.necesidades.find(n=>n.rmId===rmNum&&n.empresa===empresa);
   if(existe){toast(`Ya existe la Necesidad ${existe.numero} para ${empresa} en esta requisición`,true);return;}
-  // Consolidate items for this empresa only
   const empData=rm.data[empresa]||{};
   const consolidated={};
   Object.values(empData).forEach(cli=>{
     Object.values(cli).forEach(it=>{
-      if((+it.qty||0)===0) return;
+      if((+it.qty||0)===0)return;
       const key=it.prod+'|'+it.unidad;
-      if(!consolidated[key])consolidated[key]={desc:it.prod,unidad:it.unidad,total:0,obs:''};
+      if(!consolidated[key])consolidated[key]={desc:it.prod,unidad:it.unidad,grupo_nec:it.grupo||'INSUMOS',total:0,obs:''};
       consolidated[key].total+=Number(it.qty);
     });
   });
@@ -1672,24 +1685,163 @@ function necFiltrarEmpresa(){
   necItems=Object.values(consolidated).map(it=>{
     const inv=db.inventario.find(i=>i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0]));
     const enStock=inv?inv.stock:0;
-    return {...it,enStock,porComprar:Math.max(0,it.total-enStock)};
+    // Auto-asignar grupo según grupo_nec del catálogo
+    let grupoSugerido='Sin asignar';
+    if(it.grupo_nec==='QUIMICOS'||it.grupo_nec==='QUÍMICOS') grupoSugerido='Químicos';
+    else if(it.desc.toUpperCase().includes('FUNDA')) grupoSugerido='Fundas';
+    else if(it.grupo_nec==='INSUMOS') grupoSugerido='Insumos';
+    else if(it.grupo_nec==='MAQUINAS'||it.grupo_nec==='MÁQUINAS') grupoSugerido='Insumos';
+    if(!necGrupos.includes(grupoSugerido)) grupoSugerido='Sin asignar';
+    return {...it,enStock,porComprar:Math.max(0,it.total-enStock),provGrupo:grupoSugerido,seleccionado:false};
   });
   document.getElementById('nec-empresa-lbl').textContent=empresa;
   document.getElementById('nec-items-count').textContent=necItems.length;
   document.getElementById('nec-items-card').style.display='block';
+  necRenderGruposChips();
   necRenderItems();
   toast(`${necItems.length} ítems consolidados para ${empresa}`);
 }
 
+function necAgregarGrupo(){
+  const inp=document.getElementById('nec-nuevo-grupo');
+  const val=(inp.value||'').trim();
+  if(!val){toast('Escribe el nombre del grupo',true);return;}
+  if(necGrupos.includes(val)){toast('Ese grupo ya existe',true);inp.value='';return;}
+  necGrupos.push(val);
+  inp.value='';
+  necRenderGruposChips();
+  necRenderItems();
+  toast(`Grupo "${val}" creado`);
+}
+
+function necEliminarGrupo(g){
+  if(['Sin asignar'].includes(g)){toast('No puedes eliminar el grupo base',true);return;}
+  necGrupos=necGrupos.filter(x=>x!==g);
+  necItems.forEach(it=>{if(it.provGrupo===g)it.provGrupo='Sin asignar';});
+  necRenderGruposChips();
+  necRenderItems();
+}
+
+function necRenderGruposChips(){
+  const el=document.getElementById('nec-grupos-chips');if(!el)return;
+  const colores=['var(--teal)','var(--amber)','#7c6bf8','#e05f9a','#4aada8','#e07a5f'];
+  el.innerHTML=necGrupos.map((g,i)=>{
+    const n=necItems.filter(it=>it.provGrupo===g).length;
+    const c=colores[i%colores.length];
+    return `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ${c};font-size:11px;font-weight:600;color:${c}">
+      ${g} <span style="background:${c};color:var(--navy);border-radius:10px;padding:0 5px;font-size:10px">${n}</span>
+      <button onclick="necExcelGrupo('${g.replace(/'/g,"\'")}','${c}')" title="Descargar Excel de este grupo" style="background:none;border:none;cursor:pointer;color:${c};font-size:11px;padding:0">⬇️</button>
+      ${g!=='Sin asignar'?`<button onclick="necEliminarGrupo('${g.replace(/'/g,"\'")}")" style="background:none;border:none;cursor:pointer;color:${c};font-size:12px;padding:0;line-height:1">×</button>`:''}
+    </span>`;
+  }).join('');
+}
+
+function necToggleAll(chk){
+  necItems.forEach(it=>it.seleccionado=chk.checked);
+  necRenderItems();
+}
+
 function necRenderItems(){
   const body=document.getElementById('nec-body');if(!body)return;
-  body.innerHTML=necItems.map((it,i)=>`<tr>
-    <td>${it.desc}</td><td>${it.unidad}</td>
-    <td style="font-weight:600;color:var(--teal)">${it.total}</td>
-    <td style="color:var(--muted)">${it.enStock}</td>
-    <td style="font-weight:600;color:${it.porComprar>0?'var(--amber)':'var(--muted)'}">${it.porComprar}</td>
-    <td><input value="${it.obs||''}" onchange="necItems[${i}].obs=this.value" placeholder="Observación..." style="width:140px"></td>
-  </tr>`).join('')||'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:14px">Sin ítems</td></tr>';
+  const colores={'Sin asignar':'var(--muted)','Químicos':'var(--teal)','Fundas':'var(--amber)','Insumos':'#7c6bf8','Efectivo':'#e05f9a'};
+  const gruposOptions=necGrupos.map(g=>`<option value="${g}">${g}</option>`).join('');
+  body.innerHTML=necItems.map((it,i)=>{
+    const c=colores[it.provGrupo]||'var(--teal)';
+    return `<tr style="background:${it.seleccionado?'rgba(0,201,167,.05)':''}">
+      <td><input type="checkbox" ${it.seleccionado?'checked':''} onchange="necItems[${i}].seleccionado=this.checked" style="accent-color:var(--teal)"></td>
+      <td style="font-size:12px">${it.desc}</td>
+      <td style="font-size:11px;color:var(--muted)">${it.unidad}</td>
+      <td style="text-align:center;font-weight:600;color:var(--teal)">${it.total}</td>
+      <td style="text-align:center;color:var(--muted);font-size:11px">${it.enStock}</td>
+      <td style="text-align:center;font-weight:600;color:${it.porComprar>0?'var(--amber)':'var(--muted)'}">${it.porComprar}</td>
+      <td>
+        <select onchange="necItems[${i}].provGrupo=this.value;necRenderGruposChips();necRenderGruposResumen()"
+          style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid ${c};color:${c};font-size:11px;font-family:inherit;outline:none;font-weight:600">
+          ${necGrupos.map(g=>`<option value="${g}"${g===it.provGrupo?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </td>
+      <td><input value="${it.obs||''}" onchange="necItems[${i}].obs=this.value" placeholder="Obs..." style="width:120px;font-size:11px;padding:3px 6px;border-radius:4px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;outline:none"></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:14px">Sin ítems</td></tr>';
+  // Asignar grupo en lote a seleccionados
+  const actBtns=document.getElementById('nec-grupos-resumen');
+  necRenderGruposResumen();
+}
+
+function necRenderGruposResumen(){
+  const el=document.getElementById('nec-grupos-resumen');if(!el)return;
+  const selCount=necItems.filter(i=>i.seleccionado).length;
+  const colores=['var(--teal)','var(--amber)','#7c6bf8','#e05f9a','#4aada8','#e07a5f'];
+  const asignBtns=selCount>0?`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--muted)">${selCount} seleccionados → asignar a:</span>
+    ${necGrupos.map((g,i)=>`<button onclick="necAsignarGrupoLote('${g.replace(/'/g,"\'")}")" style="padding:3px 10px;border-radius:15px;border:1px solid ${colores[i%colores.length]};background:transparent;color:${colores[i%colores.length]};font-size:11px;cursor:pointer;font-family:inherit">${g}</button>`).join('')}
+  </div>`:'';
+  const grupos=necGrupos.filter(g=>necItems.some(it=>it.provGrupo===g));
+  el.innerHTML=asignBtns+grupos.map((g,gi)=>{
+    const its=necItems.filter(it=>it.provGrupo===g);
+    const c=colores[necGrupos.indexOf(g)%colores.length];
+    return`<div style="margin-bottom:8px;border:1px solid ${c}33;border-radius:8px;overflow:hidden">
+      <div style="background:${c}18;padding:7px 12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:700;color:${c}">${g} — ${its.length} ítems</span>
+        <button onclick="necExcelGrupo('${g.replace(/'/g,"\'")}','${c}')" style="padding:3px 10px;border-radius:5px;background:${c};border:none;color:var(--navy);font-size:11px;font-weight:700;cursor:pointer">⬇️ Excel</button>
+      </div>
+      <div style="padding:6px 12px;font-size:11px;color:var(--muted)">${its.map(it=>`${it.desc} (${it.porComprar})`).join(' · ')}</div>
+    </div>`;
+  }).join('');
+}
+
+function necAsignarGrupoLote(grupo){
+  necItems.forEach(it=>{if(it.seleccionado)it.provGrupo=grupo;});
+  necRenderGruposChips();
+  necRenderItems();
+}
+
+// ── EXCEL ─────────────────────
+function necExcelGlobal(){
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'EMPRESA';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  necGenerarExcel(necItems,`NEC_${empresa}_${periodo}_COMPLETA`,'Necesidad Completa');
+}
+
+function necExcelGrupo(grupo,color){
+  const items=necItems.filter(it=>it.provGrupo===grupo);
+  if(!items.length){toast('Sin ítems en este grupo',true);return;}
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'EMPRESA';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  necGenerarExcel(items,`NEC_${empresa}_${periodo}_${grupo.replace(/\s+/g,'_').toUpperCase()}`,grupo);
+}
+
+function necGenerarExcel(items,filename,hoja){
+  if(typeof XLSX==='undefined'){toast('Cargando Excel, intenta de nuevo en 2 segundos',true);return;}
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  const num=document.getElementById('nec-num').value||'';
+  const fecha=document.getElementById('nec-fecha').value||'';
+  const elab=document.getElementById('nec-elaborado').value||'';
+  const wb=XLSX.utils.book_new();
+  // Cabecera
+  const rows=[
+    ['NECESIDAD DE COMPRA DE BIENES — FOR COM 01 · VER 01'],
+    [],
+    ['N° Necesidad',num,'Empresa',empresa],
+    ['Período',periodo,'Fecha',fecha],
+    ['Elaborado por',elab,'Grupo',hoja],
+    [],
+    ['N°','Descripción','Unidad','Total Pedido','En Stock','Por Comprar','Grupo Proveedor','Observación']
+  ];
+  items.forEach((it,i)=>{
+    rows.push([i+1,it.desc,it.unidad,it.total,it.enStock,it.porComprar,it.provGrupo||'—',it.obs||'']);
+  });
+  rows.push([]);
+  rows.push(['','','TOTAL ÍTEMS',items.length,'','POR COMPRAR',items.reduce((s,i)=>s+(+i.porComprar||0),0)]);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  // Anchos de columna
+  ws['!cols']=[{wch:5},{wch:40},{wch:12},{wch:14},{wch:10},{wch:12},{wch:18},{wch:22}];
+  // Merge título
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
+  XLSX.utils.book_append_sheet(wb,ws,hoja.substring(0,31));
+  XLSX.writeFile(wb,filename+'.xlsx');
+  toast('✅ Excel descargado: '+filename+'.xlsx');
 }
 
 function necPreview(){
@@ -1704,9 +1856,10 @@ function necPreview(){
       <div class="dmi"><strong>Elaborado por</strong>${document.getElementById('nec-elaborado').value||'—'}</div>
       <div class="dmi"><strong>Req. Origen</strong>${rmNum||'—'}${rmNum?'<span class="dlb">VINCULADO</span>':''}</div>
     </div>
-    <div class="dst">ÍTEMS CONSOLIDADOS — ${empresa}</div>
-    <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total Pedido</th><th>En Stock</th><th>Por Comprar</th><th>Observación</th></tr></thead>
-    <tbody>${necItems.map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td style="${it.porComprar>0?'font-weight:600;color:#c07a00':''}">${it.porComprar}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
+    ${necGrupos.filter(g=>necItems.some(i=>i.provGrupo===g)).map(g=>`
+      <div class="dst">${g.toUpperCase()}</div>
+      <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total</th><th>Stock</th><th>Por Comprar</th><th>Obs.</th></tr></thead>
+      <tbody>${necItems.filter(i=>i.provGrupo===g).map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td style="${it.porComprar>0?'font-weight:600;color:#c07a00':''}">${it.porComprar}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>`).join('')}
     ${df('FOR COM 01 · VER 01 (09 12 2024)')}`;
   openPrint(html);
 }
@@ -1724,8 +1877,7 @@ function necGuardar(){
   document.getElementById('nec-items-card').style.display='none';
   document.getElementById('nec-empresa-sel').value='';
   setNums();
-  toast(`✅ Necesidad ${num} para ${empresa} guardada — ve a "Orden de Compra"`);
-  // refresh OC select
+  toast(`✅ Necesidad ${num} guardada — ve a "Orden de Compra"`);
   const ocSel=document.getElementById('oc-nec-sel');
   if(ocSel){const o=document.createElement('option');o.value=num;o.textContent=`${num} — ${empresa} — ${document.getElementById('nec-periodo').value}`;ocSel.appendChild(o);}
 }
@@ -1743,12 +1895,29 @@ function necRenderList(){
       <td>${n.items.length} ítems</td>
       <td>${n.ocId?`<span class="tag tok">✓ ${n.ocId}</span>`:'<span class="tag twn">⏳ Sin OC</span>'}</td>
       <td>
+        <button class="btn btn-s btn-sm" onclick="necExcelId(${idx})" title="Descargar Excel">⬇️</button>
         <button class="btn btn-a btn-sm" onclick="necPreviewId(${idx})">🖨️</button>
         <button class="btn btn-s btn-sm" onclick="nav('orden-compra')">→ OC</button>
         <button class="btn btn-d btn-sm" onclick="necEliminar(${idx})">✕</button>
       </td>
     </tr>`;
   }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
+}
+
+function necExcelId(idx){
+  const n=db.necesidades[idx];
+  if(!n)return;
+  const tmpItems=n.items;
+  const tmpNecItems=necItems;
+  // Simular contexto para necGenerarExcel
+  necItems=tmpItems;
+  document.getElementById('nec-empresa-lbl').textContent=n.empresa;
+  document.getElementById('nec-periodo').value=n.periodo;
+  document.getElementById('nec-num').value=n.numero;
+  document.getElementById('nec-fecha').value=n.fecha;
+  document.getElementById('nec-elaborado').value=n.elaborado||'';
+  necGenerarExcel(tmpItems,`NEC_${n.empresa}_${n.periodo}`.replace(/\s/g,'_'),'Necesidad');
+  necItems=tmpNecItems;
 }
 
 function necPreviewId(idx){
@@ -1761,10 +1930,11 @@ function necPreviewId(idx){
       <div class="dmi"><strong>Fecha</strong>${n.fecha}</div>
       <div class="dmi"><strong>Req. Origen</strong>${n.rmId}<span class="dlb">VINCULADO</span></div>
     </div>
-    <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total Pedido</th><th>En Stock</th><th>Por Comprar</th><th>Obs.</th></tr></thead>
-    <tbody>${n.items.map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td>${it.porComprar}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
+    <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total</th><th>Stock</th><th>Por Comprar</th><th>Grupo</th><th>Obs.</th></tr></thead>
+    <tbody>${n.items.map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td>${it.porComprar}</td><td>${it.provGrupo||'—'}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
     ${df('FOR COM 01 · VER 01 (09 12 2024)')}`);
 }
+
 function necEliminar(idx){if(!confirm('¿Eliminar?'))return;db.necesidades.splice(idx,1);saveDB();necRenderList();toast('Eliminada');}
 
 // ═══════════════════════════════
