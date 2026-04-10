@@ -1219,13 +1219,17 @@ function initRM(){
   setNums();
 }
 
+// Helper — siempre usa el catálogo actualizado de Supabase si existe
+function rmCat(){ return (window._catalogoOverride&&Object.keys(window._catalogoOverride).length) ? window._catalogoOverride : RM_CAT; }
+
 function rmResetData(){
   rm_data={};
-  Object.keys(RM_CAT).forEach(e=>{
+  const cat=rmCat();
+  Object.keys(cat).forEach(e=>{
     rm_data[e]={};
-    Object.keys(RM_CAT[e]).forEach(c=>{
+    Object.keys(cat[e]).forEach(c=>{
       rm_data[e][c]={};
-      RM_CAT[e][c].forEach(it=>{
+      cat[e][c].forEach(it=>{
         rm_data[e][c][it.p+'|'+it.u]={prod:it.p,grupo:it.g,unidad:it.u,qty:0};
       });
     });
@@ -1258,7 +1262,7 @@ function rmSelEmpresa(e){
 function rmRenderClientesBtns(){
   const el=document.getElementById('rm-clientes-btns');
   if(!el||!rm_empresa) return;
-  const clientes=Object.keys(RM_CAT[rm_empresa]||{});
+  const clientes=Object.keys(rmCat()[rm_empresa]||{}).sort();
   el.innerHTML=clientes.map(c=>{
     const cd=rm_data[rm_empresa]?.[c]||{};
     const total=Object.values(cd).reduce((s,v)=>s+(+v.qty||0),0);
@@ -1293,7 +1297,16 @@ function rmRenderItems(){
   const buscar=(document.getElementById('rm-buscar')||{}).value?.toLowerCase()||'';
   const soloQty=(document.getElementById('rm-solo-qty')||{}).checked||false;
   const cd=rm_data[rm_empresa]?.[rm_cliente]||{};
-  const allItems=RM_CAT[rm_empresa][rm_cliente]||[];
+  const cat=rmCat();
+  // Si el cliente no está en rm_data aún (fue creado en editor de catálogo), inicializarlo
+  if(!rm_data[rm_empresa]) rm_data[rm_empresa]={};
+  if(!rm_data[rm_empresa][rm_cliente]){
+    rm_data[rm_empresa][rm_cliente]={};
+    (cat[rm_empresa]?.[rm_cliente]||[]).forEach(it=>{
+      rm_data[rm_empresa][rm_cliente][it.p+'|'+it.u]={prod:it.p,grupo:it.g,unidad:it.u,qty:0};
+    });
+  }
+  const allItems=cat[rm_empresa]?.[rm_cliente]||[];
   let items=allItems.filter(it=>{
     if(buscar&&!(it.p.toLowerCase().includes(buscar)||it.g.toLowerCase().includes(buscar))) return false;
     if(soloQty&&!(cd[it.p+'|'+it.u]?.qty>0)) return false;
@@ -2464,8 +2477,8 @@ function modalRenderCatalog(){
   });
   // Also collect items already used by other clients of same empresa
   const usedItems={};
-  Object.keys(RM_CAT[rm_empresa]||{}).forEach(cli=>{
-    (RM_CAT[rm_empresa][cli]||[]).forEach(it=>{
+  Object.keys(rmCat()[rm_empresa]||{}).forEach(cli=>{
+    (rmCat()[rm_empresa][cli]||[]).forEach(it=>{
       const key=it.p+'|'+it.u;
       if(!usedItems[key]) usedItems[key]={p:it.p,u:it.u,g:it.g};
     });
@@ -2539,7 +2552,8 @@ function mncAddCustom(){
 function modalGuardarCliente(){
   const nombre=(document.getElementById('mnc-nombre').value||'').trim().toUpperCase();
   if(!nombre){toast('Escribe el nombre del cliente',true);return;}
-  if(RM_CAT[rm_empresa][nombre]){toast('Este cliente ya existe',true);return;}
+  const cat=rmCat();
+  if(cat[rm_empresa]&&cat[rm_empresa][nombre]){toast('Este cliente ya existe',true);return;}
   // Collect selected items
   const checked=[...document.querySelectorAll('#mnc-catalog-list input[type=checkbox]:checked')];
   const items=checked.map(cb=>{
@@ -2548,7 +2562,14 @@ function modalGuardarCliente(){
     const gMap={'QMC':'QUIMICOS','MAT':'INSUMOS','MAQ':'MAQUINAS','EPP':'EPP','SUM':'SUMINISTROS','EXTRA':'EXTRA'};
     return {g:gMap[g]||'INSUMOS',p:desc,u:u,r:0};
   });
-  RM_CAT[rm_empresa][nombre]=items;
+  // Guardar en el catálogo activo (override o RM_CAT)
+  if(window._catalogoOverride&&Object.keys(window._catalogoOverride).length){
+    if(!window._catalogoOverride[rm_empresa]) window._catalogoOverride[rm_empresa]={};
+    window._catalogoOverride[rm_empresa][nombre]=items;
+  } else {
+    if(!RM_CAT[rm_empresa]) RM_CAT[rm_empresa]={};
+    RM_CAT[rm_empresa][nombre]=items;
+  }
   if(!rm_data[rm_empresa])rm_data[rm_empresa]={};
   rm_data[rm_empresa][nombre]={};
   items.forEach(it=>{
@@ -2605,7 +2626,7 @@ function meiRenderList(){
 
 function meiFilterCatalog(){
   const buscar=(document.getElementById('mei-buscar')||{}).value?.toLowerCase()||'';
-  const existing=new Set((RM_CAT[rm_empresa]?.[rm_cliente]||[]).map(it=>it.p.toUpperCase()));
+  const existing=new Set((rmCat()[rm_empresa]?.[rm_cliente]||[]).map(it=>it.p.toUpperCase()));
   const filtered=CATALOG.filter(c=>!existing.has(c.desc.toUpperCase())&&(!buscar||c.desc.toLowerCase().includes(buscar)||c.cod.toLowerCase().includes(buscar)));
   const el=document.getElementById('mei-catalog-list');if(!el)return;
   if(!filtered.length){el.innerHTML='<div style="color:var(--muted);font-size:11px;padding:4px">Sin resultados</div>';return;}
@@ -2618,10 +2639,12 @@ function meiFilterCatalog(){
 }
 
 function meiAddItem(desc,u){
-  if(!RM_CAT[rm_empresa][rm_cliente])RM_CAT[rm_empresa][rm_cliente]=[];
+  const cat=rmCat();
+  if(!cat[rm_empresa]) return;
+  if(!cat[rm_empresa][rm_cliente]) cat[rm_empresa][rm_cliente]=[];
   const key=desc+'|'+u;
-  if(RM_CAT[rm_empresa][rm_cliente].some(it=>it.p===desc)){toast('Ya existe en la lista',true);return;}
-  RM_CAT[rm_empresa][rm_cliente].push({g:'INSUMOS',p:desc,u:u,r:0});
+  if(cat[rm_empresa][rm_cliente].some(it=>it.p===desc)){toast('Ya existe en la lista',true);return;}
+  cat[rm_empresa][rm_cliente].push({g:'INSUMOS',p:desc,u:u,r:0});
   if(!rm_data[rm_empresa][rm_cliente])rm_data[rm_empresa][rm_cliente]={};
   rm_data[rm_empresa][rm_cliente][key]={prod:desc,grupo:'INSUMOS',unidad:u,qty:0};
   meiRenderList();
@@ -3373,13 +3396,14 @@ function campoGenerarRM(){
   rmResetData();
   reqs.forEach(req=>{
     const emp=req.empresa;const cli=req.cliente;if(!emp||!cli) return;
-    if(!RM_CAT[emp]) RM_CAT[emp]={};if(!RM_CAT[emp][cli]) RM_CAT[emp][cli]=[];
+    const cat=rmCat();
+    if(!cat[emp]) cat[emp]={};if(!cat[emp][cli]) cat[emp][cli]=[];
     if(!rm_data[emp]) rm_data[emp]={};if(!rm_data[emp][cli]) rm_data[emp][cli]={};
     (req.items||[]).forEach(it=>{
       if(!it.qty||+it.qty===0) return;
       const key=it.prod+'|'+it.unidad;
-      if(!RM_CAT[emp][cli].find(x=>x.p===it.prod&&x.u===it.unidad))
-        RM_CAT[emp][cli].push({g:it.grupo||'INSUMOS',p:it.prod,u:it.unidad,r:0});
+      if(!cat[emp][cli].find(x=>x.p===it.prod&&x.u===it.unidad))
+        cat[emp][cli].push({g:it.grupo||'INSUMOS',p:it.prod,u:it.unidad,r:0});
       if(!rm_data[emp][cli][key]) rm_data[emp][cli][key]={prod:it.prod,grupo:it.grupo||'INSUMOS',unidad:it.unidad,qty:0};
       rm_data[emp][cli][key].qty+=+it.qty;
     });
