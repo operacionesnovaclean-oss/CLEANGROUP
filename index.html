@@ -927,7 +927,7 @@ function buildPanels(){
     <div class="divider"></div>
     <div class="card-title">📦 Ítems</div>
     <div class="tw"><table class="it">
-      <thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>Desc.</th><th>Subtotal</th><th></th></tr></thead>
+      <thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>Desc.</th><th style="text-align:center" title="¿Aplica IVA?">IVA</th><th>Subtotal</th><th></th></tr></thead>
       <tbody id="oc-items-body"></tbody>
       <tfoot>
         <tr style="background:rgba(0,201,167,.05);font-weight:600"><td colspan="4"></td><td style="font-size:10px;color:var(--muted)">SUBTOTAL</td><td id="oc-sub">$0.00</td><td></td></tr>
@@ -2354,14 +2354,14 @@ function ocCargarNec(){
       const fw=descUp.split(' ').find(w=>w.length>4);
       if(fw) match=CATALOG.find(c=>c.desc.toUpperCase().startsWith(fw));
     }
-    return {cant:it.porComprar,cod:match?match.cod:'',desc:it.desc,precio:0,descuento:0};
+    return {cant:it.porComprar,cod:match?match.cod:'',desc:it.desc,precio:0,descuento:0,iva:true};
   });
   ocRenderItems();
   const conCod=ocItems.filter(i=>i.cod).length;
   toast(ocItems.length+' ítems cargados desde '+num+' ('+nec.empresa+') — '+conCod+' con código auto-asignado');
 }
 
-function ocAddItem(){ocItems.push({cant:1,cod:'',desc:'',precio:0,descuento:0});ocRenderItems();}
+function ocAddItem(){ocItems.push({cant:1,cod:'',desc:'',precio:0,descuento:0,iva:true});ocRenderItems();}
 
 function ocBuildCodCell(it,i){
   var opts=CATALOG.map(function(c){
@@ -2396,6 +2396,7 @@ function ocRenderItems(){
       +'<td><input value="'+it.desc.replace(/"/g,'&quot;')+'" onchange="ocItems['+i+'].desc=this.value" style="min-width:180px"></td>'
       +'<td><input type="number" min="0" step="0.01" value="'+it.precio+'" onchange="ocItems['+i+'].precio=+this.value;ocRenderItems()" style="width:80px"></td>'
       +'<td><input type="number" min="0" step="0.01" value="'+(it.descuento||0)+'" onchange="ocItems['+i+'].descuento=+this.value;ocRenderItems()" style="width:70px"></td>'
+      +'<td style="text-align:center"><input type="checkbox" '+(it.iva!==false?'checked':'')+' onchange="ocItems['+i+'].iva=this.checked;ocCalc()" title="¿Aplica IVA?" style="accent-color:var(--teal);width:15px;height:15px;cursor:pointer"></td>'
       +'<td style="color:var(--teal);font-weight:600">$'+sub.toFixed(2)+'</td>'
       +'<td><button class="btn btn-d btn-sm" onclick="ocItems.splice('+i+',1);ocRenderItems()">✕</button></td>'
       +'</tr>';
@@ -2407,7 +2408,8 @@ function ocPickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){ocIte
 
 function ocCalc(){
   const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
-  const iva=sub*0.15;
+  const ivaBase=ocItems.filter(it=>it.iva!==false).reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
+  const iva=ivaBase*0.15;
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   s('oc-sub','$'+sub.toFixed(2));s('oc-iva','$'+iva.toFixed(2));s('oc-total','$'+(sub+iva).toFixed(2));
 }
@@ -2426,13 +2428,15 @@ function ocGuardar(){
   if(!fecha||!prov){toast('Completa proveedor y fecha',true);return;}
   if(!ocItems.length){toast('Agrega al menos un ítem',true);return;}
   const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
+  const ivaBase=ocItems.filter(it=>it.iva!==false).reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
+  const ivaVal=ivaBase*0.15;
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
   const ocData={
     numero:num,fecha,necId:necNum||null,proveedor:prov,
     provRuc:g('oc-prov-ruc'),provDir:g('oc-prov-dir'),provCont:g('oc-prov-contacto'),provTel:g('oc-prov-tel'),provEmail:g('oc-prov-email'),
     condPago:g('oc-condpago'),tipo:g('oc-tipo'),detalle:g('oc-detalle'),proforma:g('oc-proforma'),fProforma:g('oc-fproforma'),
     contactoCG:g('oc-contacto'),obs:g('oc-obs'),items:JSON.parse(JSON.stringify(ocItems)),
-    subtotal:sub,iva:sub*0.15,total:sub*1.15,aiId:oc_editIdx!==null?db.ordenesCompra[oc_editIdx].aiId:null
+    subtotal:sub,iva:ivaVal,total:sub+ivaVal,aiId:oc_editIdx!==null?db.ordenesCompra[oc_editIdx].aiId:null
   };
   if(oc_editIdx!==null){
     db.ordenesCompra[oc_editIdx]={...db.ordenesCompra[oc_editIdx],...ocData};
@@ -2552,8 +2556,8 @@ function ocPreviewId(idx){
     </div>
     <div class="dst">PROVEEDOR</div>
     <div class="dmg"><div class="dmi"><strong>Razón Social</strong>${o.proveedor}</div><div class="dmi"><strong>RUC</strong>${o.provRuc||'—'}</div><div class="dmi"><strong>Dirección</strong>${o.provDir||'—'}</div><div class="dmi"><strong>Contacto</strong>${o.provCont||'—'}</div></div>
-    <table class="dt"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>Subtotal</th></tr></thead>
-    <tbody>${o.items.map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>$${(+it.precio).toFixed(2)}</td><td>$${((it.cant*it.precio)-(it.descuento||0)).toFixed(2)}</td></tr>`).join('')}</tbody></table>
+    <table class="dt"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>IVA</th><th>Subtotal</th></tr></thead>
+    <tbody>${o.items.map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>$${(+it.precio).toFixed(2)}</td><td style="text-align:center">${it.iva!==false?'15%':'0%'}</td><td>$${((it.cant*it.precio)-(it.descuento||0)).toFixed(2)}</td></tr>`).join('')}</tbody></table>
     <table class="dtot"><tr><td>Subtotal</td><td>$${o.subtotal.toFixed(2)}</td></tr><tr><td>IVA 15%</td><td>$${o.iva.toFixed(2)}</td></tr><tr class="tr"><td>TOTAL</td><td>$${o.total.toFixed(2)}</td></tr></table>
     <div class="dsig"><div class="dsb"><strong>Elaborado por</strong>${o.contactoCG||'—'}<br><br><br>_______________________</div><div class="dsb"><strong>Autorizado por</strong><br><br><br>_______________________</div></div>
     ${df('FOR COM 02 · VER 01 (09 12 2024)')}`);
