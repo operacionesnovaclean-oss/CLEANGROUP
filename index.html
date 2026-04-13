@@ -4,10 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clean Group – Sistema ISO 9001</title>
-<!-- Firebase SDK (compat — funciona con file:// y sin servidor) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -182,6 +181,39 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .cat-item-row label{font-size:12px;color:var(--text);cursor:pointer;flex:1}
 .cat-item-row .cat-unit{font-size:10px;color:var(--muted);white-space:nowrap}
 @media print{body *{visibility:hidden!important}.pmbody,.pmbody *{visibility:visible!important}.pmbody{position:fixed;inset:0;padding:18px}.pmact{display:none!important}}
+/* ── OPERATIVOS ── */
+.op-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.op-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px}
+.op-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.op-name{font-size:13px;font-weight:700;color:#fff}
+.op-meta{font-size:11px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace}
+.op-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.op-tag{font-size:10px;background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.2);color:var(--teal);border-radius:20px;padding:2px 7px}
+.cli-check-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding:4px 0}
+.cli-check-btn{padding:5px 10px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s}
+.cli-check-btn.sel{border-color:var(--teal);background:rgba(0,201,167,.12);color:var(--teal);font-weight:700}
+.cat-tab{padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-family:inherit;font-size:13px;cursor:pointer;transition:all .15s;margin-bottom:-1px}
+.cat-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600}
+.cat-tab:hover{color:var(--text)}
+.cat-grupo-hdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:10px 0 6px;border-bottom:1px solid var(--border);margin:8px 0 4px;display:flex;justify-content:space-between;align-items:center}
+.cat-item-row{display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px}
+.cat-item-row:hover{background:rgba(255,255,255,.03)}
+.cat-item-chk{width:15px;height:15px;accent-color:var(--teal);cursor:pointer;flex-shrink:0}
+.cat-item-name{flex:1;color:var(--text)}
+.cat-item-unit{font-size:11px;color:var(--muted);width:70px;text-align:right}
+.cat-buscar{width:100%;padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;margin-bottom:10px}
+.cat-buscar:focus{border-color:var(--teal)}
+.cat-stats{font-size:12px;color:var(--muted);margin-bottom:8px}
+/* ── CAMPO REQS ── */
+.campo-period-tag{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--teal)}
+.campo-block{background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.campo-block-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none}
+.campo-block-head:hover{background:rgba(255,255,255,.03)}
+.campo-block-body{display:none;border-top:1px solid var(--border);padding:12px 14px}
+.campo-block-body.open{display:block}
+.cons-item-edit{display:none}
+.cons-item-row.editing .cons-item-view{display:none!important}
+.cons-item-row.editing .cons-item-edit{display:flex!important}
 </style>
 </head>
 <body>
@@ -219,6 +251,10 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <button class="nav-item" onclick="nav('inventario')"><span class="nav-icon">📦</span>Inventario</button>
       <div class="sb-sec">Registros</div>
       <button class="nav-item" onclick="nav('historial')"><span class="nav-icon">🗂️</span>Historial</button>
+      <div class="sb-sec">Operativos</div>
+      <button class="nav-item" onclick="nav('operativos')"><span class="nav-icon">👥</span>Usuarios de Campo</button>
+      <button class="nav-item" onclick="nav('campo')"><span class="nav-icon">📥</span>Req. de Campo</button>
+      <button class="nav-item" onclick="nav('catalogo')"><span class="nav-icon">🗂️</span>Editor de Catálogo</button>
     </nav>
     <main class="content" id="main-content">
     <!-- panels injected by JS -->
@@ -279,6 +315,13 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <script>
 // ═══════════════════════════════
+// SUPABASE CONFIG
+// ═══════════════════════════════
+const SB_URL  = 'https://qrdfxksbaoosguxdtolk.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZGZ4a3NiYW9vc2d1eGR0b2xrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODE0MzcsImV4cCI6MjA5MDQ1NzQzN30.LlnuNX4VMQR7EZ00zSGRzJ8PzUHR8bq0yGVoXOvxKg0';
+let _sb = null;  // Supabase client — se inicializa al cargar el SDK
+
+// ═══════════════════════════════
 // AUTH
 // ═══════════════════════════════
 const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'1234'};
@@ -306,19 +349,18 @@ function doLogout(){
 }
 
 // ═══════════════════════════════
-// DB
+// DB (estructura local igual que antes)
 // ═══════════════════════════════
 var db={reqMensuales:[],necesidades:[],ordenesCompra:[],actasIngreso:[],actasEntrega:[],inventario:[],counters:{rm:0,nec:0,oc:0,ai:0,ae:0}};
 
-function setCloudStatus(msg, color){
-  const el = document.getElementById('cloud-indicator');
-  if(el){ el.textContent = msg; el.style.color = color; el.style.background = color==='var(--teal)'?'rgba(0,201,167,.12)':color==='var(--amber)'?'rgba(245,166,35,.12)':'rgba(224,82,99,.12)'; }
+function setCloudStatus(msg,color){
+  const el=document.getElementById('cloud-indicator');
+  if(el){el.textContent=msg;el.style.color=color;el.style.background=color==='var(--teal)'?'rgba(0,201,167,.12)':color==='var(--amber)'?'rgba(245,166,35,.12)':'rgba(224,82,99,.12)';}
 }
 
 function applyDBData(json){
   try{
-    const p = JSON.parse(json);
-    // *** CRÍTICO: nunca reasignar db = {...}, siempre mutar el mismo objeto ***
+    const p=JSON.parse(json);
     db.reqMensuales  = p.reqMensuales  || [];
     db.necesidades   = p.necesidades   || [];
     db.ordenesCompra = p.ordenesCompra || [];
@@ -328,11 +370,12 @@ function applyDBData(json){
     db.counters      = p.counters      || {rm:0,nec:0,oc:0,ai:0,ae:0};
     window._lastSavedJson = json;
     return true;
-  }catch(e){ console.warn('applyDBData error',e); return false; }
+  }catch(e){console.warn('applyDBData error',e);return false;}
 }
 
+// ─── loadDB: carga local primero, luego sincroniza con Supabase ───
 function loadDB(){
-  const mc = document.getElementById('main-content');
+  const mc=document.getElementById('main-content');
 
   function ensureFields(){
     if(!db.inventario||!db.inventario.length) initInv();
@@ -344,8 +387,8 @@ function loadDB(){
     if(!db.counters)      db.counters={rm:0,nec:0,oc:0,ai:0,ae:0};
   }
 
-  // ① Cargar localStorage INMEDIATAMENTE — sin esperar red
-  const localJson = localStorage.getItem('cg_iso_v3');
+  // ① Local inmediato
+  const localJson=localStorage.getItem('cg_iso_v3');
   if(localJson){
     applyDBData(localJson);
     ensureFields();
@@ -353,126 +396,138 @@ function loadDB(){
     initApp();
     setCloudStatus('☁️ Sincronizando...','var(--muted)');
   } else {
-    // Sin datos locales: mostrar pantalla de carga
-    if(mc) mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-size:36px">🔥</div><div style="color:var(--teal);font-size:16px;font-weight:600">Cargando sistema...</div><div style="color:var(--muted);font-size:12px;margin-top:4px" id="load-status">Conectando con Firebase...</div></div>';
+    if(mc) mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-size:36px">🟢</div><div style="color:var(--teal);font-size:16px;font-weight:600">Cargando sistema...</div><div style="color:var(--muted);font-size:12px;margin-top:4px">Conectando con Supabase...</div></div>';
   }
 
-  // ② En segundo plano, traer datos de Firebase y actualizar si son más recientes
-  function syncFromFirestore(){
-    window._fsGet(window._dbDoc).then(snap=>{
-      if(snap.exists()){
-        const data = snap.data();
-        if(data && data.db && data.db !== window._lastSavedJson){
-          const wasBuilt = !!document.getElementById('panel-dashboard');
-          applyDBData(data.db);
-          ensureFields();
-          if(!wasBuilt){
-            buildPanels(); initApp();
-          } else {
-            if(typeof renderDash        ==='function') renderDash();
-            if(typeof rmRenderList      ==='function') rmRenderList();
-            if(typeof necRenderList     ==='function') necRenderList();
-            if(typeof ocRenderList      ==='function') ocRenderList();
-            if(typeof aiRenderList      ==='function') aiRenderList();
-            if(typeof aeRenderList      ==='function') aeRenderList();
-            if(typeof invRender         ==='function') invRender();
-            if(typeof setNums           ==='function') setNums();
-            if(typeof necRefreshSelects ==='function') necRefreshSelects();
-            if(typeof aeRefreshSelects  ==='function') aeRefreshSelects();
-            if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
-          }
+  // ② Sincronizar con Supabase
+  async function syncFromSupabase(){
+    if(!_sb){ setTimeout(syncFromSupabase,300); return; }
+    try{
+      const {data,error}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
+      if(error){
+        if(error.code==='PGRST116'){
+          // Fila no existe → arrancar con datos locales
+          if(!localJson){ ensureFields(); buildPanels(); initApp(); }
+          setCloudStatus('☁️ En línea','var(--teal)');
+          return;
         }
-      } else {
-        // Firebase vacío — si no había datos locales, construir UI vacía
+        // Otro error de Supabase — mostrar en consola pero continuar con datos locales
+        console.warn('Supabase maindb error:',error.message||error.code||JSON.stringify(error));
         if(!localJson){ ensureFields(); buildPanels(); initApp(); }
+        setCloudStatus('⚠️ Sin conexión ('+( error.message||error.code||'err')+ ')','var(--amber)');
+        return;
       }
-      // Firebase respondió correctamente → siempre mostrar En línea
+      if(data && data.db && data.db !== window._lastSavedJson){
+        const wasBuilt=!!document.getElementById('panel-dashboard');
+        applyDBData(data.db);
+        ensureFields();
+        if(!wasBuilt){ buildPanels(); initApp(); }
+        else{
+          if(typeof renderDash==='function') renderDash();
+          if(typeof rmRenderList==='function') rmRenderList();
+          if(typeof necRenderList==='function') necRenderList();
+          if(typeof ocRenderList==='function') ocRenderList();
+          if(typeof aiRenderList==='function') aiRenderList();
+          if(typeof aeRenderList==='function') aeRenderList();
+          if(typeof invRender==='function') invRender();
+          if(typeof setNums==='function') setNums();
+          if(typeof necRefreshSelects==='function') necRefreshSelects();
+          if(typeof aeRefreshSelects==='function') aeRefreshSelects();
+          if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+        }
+      } else if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('☁️ En línea','var(--teal)');
-    }).catch(err=>{
-      console.warn('Firestore sync error:', err);
-      if(!localJson){ ensureFields(); buildPanels(); initApp(); }
-      setCloudStatus('⚠️ Sin conexión','var(--amber)');
-    });
-  }
-
-  // Esperar a que Firebase esté listo, con reintentos
-  let attempts = 0;
-  function waitAndSync(){
-    if(window._dbDoc && window._fsGet){
-      syncFromFirestore();
-    } else if(attempts < 16){
-      attempts++;
-      setTimeout(waitAndSync, 500);
-    } else {
+      // Cargar catálogo desde Supabase (campo_catalog) para tenerlo disponible globalmente
+      _sb.from('campo_catalog').select('catalog').eq('id',1).single()
+        .then(({data,error})=>{
+          if(!error && data && data.catalog && Object.keys(data.catalog).length){
+            window._catalogoOverride = data.catalog;
+          }
+        }).catch(e=>console.warn('campo_catalog load:',e?.message||e));
+      // Suscripción en tiempo real
+      // Polling cada 30s en vez de realtime (evita DataCloneError del postMessage del SDK)
+      setInterval(async ()=>{
+        try{
+          const {data:pd}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
+          if(pd && pd.db && pd.db!==window._lastSavedJson){
+            applyDBData(pd.db);
+            if(typeof renderDash==='function') renderDash();
+            if(typeof rmRenderList==='function') rmRenderList();
+            if(typeof necRenderList==='function') necRenderList();
+            if(typeof ocRenderList==='function') ocRenderList();
+            if(typeof aiRenderList==='function') aiRenderList();
+            if(typeof aeRenderList==='function') aeRenderList();
+            if(typeof invRender==='function') invRender();
+            if(typeof setNums==='function') setNums();
+            if(typeof necRefreshSelects==='function') necRefreshSelects();
+            if(typeof aeRefreshSelects==='function') aeRefreshSelects();
+            if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+            setCloudStatus('☁️ En línea','var(--teal)');
+          }
+        }catch(e){ /* silencioso — no spamear consola */ }
+      }, 30000);
+    }catch(err){
+      const msg=err?.message||err?.error_description||JSON.stringify(err)||'Error desconocido';
+      console.warn('Supabase sync error:',msg, err);
       if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('⚠️ Sin conexión','var(--amber)');
     }
   }
-  waitAndSync();
+  syncFromSupabase();
 }
-// ── Sistema de guardado optimizado ──────────────────────────────────────────
-// 1) Guarda en localStorage INMEDIATAMENTE (sin esperar red)
-// 2) Envía a Firebase con debounce de 800ms (agrupa cambios rápidos)
-// 3) Si hay una escritura en progreso, encola la siguiente
-window._saveTimer   = null;   // timer del debounce
-window._saveQueue   = false;  // hay un guardado pendiente mientras se escribe
-window._saving      = false;  // escritura Firebase en curso
+
+// ── Guardado optimizado con debounce ──
+window._saveTimer=null; window._saveQueue=false; window._saving=false;
 
 function saveDB(){
-  const json = JSON.stringify(db);
-  // ① Guardar local INMEDIATAMENTE — la UI siempre responde rápido
-  localStorage.setItem('cg_iso_v3', json);
+  const json=JSON.stringify(db);
+  localStorage.setItem('cg_iso_v3',json);
   setCloudStatus('💾 Local ✓  ☁️ pendiente...','var(--muted)');
-
-  if(!window._dbDoc || !window._fsSet){
-    setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)');
-    return;
-  }
-
-  // ② Debounce: cancela el timer anterior y programa uno nuevo a 800ms
+  if(!_sb){ setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)'); return; }
   clearTimeout(window._saveTimer);
-  window._saveTimer = setTimeout(()=> _flushToFirebase(), 800);
+  window._saveTimer=setTimeout(()=>_flushToSupabase(),800);
 }
 
-function _flushToFirebase(){
-  // Si ya hay una escritura en curso, marcar como pendiente y salir
-  if(window._saving){ window._saveQueue = true; return; }
-
-  const json = localStorage.getItem('cg_iso_v3'); // usar la versión más reciente
+async function _flushToSupabase(){
+  if(window._saving){ window._saveQueue=true; return; }
+  const json=localStorage.getItem('cg_iso_v3');
   if(!json) return;
-
-  window._saving        = true;
-  window._saveQueue     = false;
-  window._lastSavedJson = json;
+  window._saving=true; window._saveQueue=false;
+  window._lastSavedJson=json;
   setCloudStatus('☁️ Sincronizando...','var(--muted)');
-
-  window._fsSet(window._dbDoc, { db: json, updated: new Date().toISOString() })
-    .then(()=>{
-      window._saving = false;
-      setCloudStatus('☁️ Guardado ✓','var(--teal)');
-      clearTimeout(window._cloudTimer);
-      window._cloudTimer = setTimeout(()=> setCloudStatus('☁️ En línea','var(--teal)'), 2000);
-      // Si hubo cambios mientras se guardaba, enviar de nuevo
-      if(window._saveQueue) _flushToFirebase();
-    })
-    .catch(err=>{
-      window._saving = false;
-      console.warn('Firestore save error', err);
-      setCloudStatus('⚠️ Error — reintentando...','var(--amber)');
-      // Reintentar en 3 segundos
-      setTimeout(()=> _flushToFirebase(), 3000);
-    });
+  try{
+    const {error}=await _sb.from('maindb').upsert({id:1,db:json,updated:new Date().toISOString()},{onConflict:'id'});
+    window._saving=false;
+    setCloudStatus('☁️ Guardado ✓','var(--teal)');
+    clearTimeout(window._cloudTimer);
+    if(error){
+      window._saving=false;
+      const msg=error.message||error.code||JSON.stringify(error);
+      console.warn('Supabase save error:',msg);
+      setCloudStatus('⚠️ Error guardando — reintentando...','var(--amber)');
+      setTimeout(()=>_flushToSupabase(),3000);
+      return;
+    }
+    window._saving=false;
+    setCloudStatus('☁️ Guardado ✓','var(--teal)');
+    clearTimeout(window._cloudTimer);
+    window._cloudTimer=setTimeout(()=>setCloudStatus('☁️ En línea','var(--teal)'),2000);
+    if(window._saveQueue) _flushToSupabase();
+  }catch(err){
+    window._saving=false;
+    console.warn('Supabase save error:',err?.message||JSON.stringify(err)||err);
+    setCloudStatus('⚠️ Error — reintentando...','var(--amber)');
+    setTimeout(()=>_flushToSupabase(),3000);
+  }
 }
+
 function resetAll(){
   if(!confirm('¿Borrar TODOS los datos registrados? Esta acción no se puede deshacer.'))return;
   localStorage.removeItem('cg_iso_v3');
   db.reqMensuales=[];db.necesidades=[];db.ordenesCompra=[];
   db.actasIngreso=[];db.actasEntrega=[];db.inventario=[];
   db.counters={rm:0,nec:0,oc:0,ai:0,ae:0};
-  initInv();
-  saveDB();
-  setNums();
-  renderDash();
+  initInv(); saveDB(); setNums(); renderDash();
   toast('✅ Datos borrados. La app está lista para empezar de cero.');
 }
 
@@ -480,7 +535,7 @@ function resetAll(){
 // CATALOG
 // ═══════════════════════════════
 const CATALOG=[
-  {cod:'QMC-N-001',desc:'ALCOHOL ANTISEPTCO - GALON',u:'Unidad'},
+  {cod:'QMC-N-001',desc:'ALCOHOL ANTISEPTICO',u:'Galón'},
   {cod:'QMC-N-002',desc:'ACEITE 10W30',u:'Unidad'},
   {cod:'QMC-N-003',desc:'ACEITE 2 TIEMPOS',u:'Unidad'},
   {cod:'EPP-U-001',desc:'ARNES DE SEGURIDAD',u:'Unidad'},
@@ -488,56 +543,52 @@ const CATALOG=[
   {cod:'MAQ-U-002',desc:'ASPIRADORAS 48 LTS',u:'Unidad'},
   {cod:'MAT-N-001',desc:'ATOMIZADORES COMPLETOS',u:'Unidad'},
   {cod:'MAT-N-002',desc:'BALDE 12 LITROS',u:'Unidad'},
-  {cod:'SUM-N-001',desc:'BORRADOR',u:'Unidad'},
-  {cod:'EPP-N-002',desc:'BOTAS DE CAUCHO',u:'Unidad'},
-  {cod:'EPP-N-003',desc:'BOTAS PUNTA DE ACERO',u:'Unidad'},
+  {cod:'MAT-N-066',desc:'BARREDORA COMPLETA',u:'Unidad'},
+  {cod:'MAT-N-069',desc:'BASTON TELESCOPICO',u:'Unidad'},
+  {cod:'MAT-N-076',desc:'BASTON TELESCOPICO DE PISCINA',u:'Unidad'},
+  {cod:'EPP-N-002',desc:'BOTAS DE CAUCHO',u:'Par'},
+  {cod:'EPP-N-003',desc:'BOTAS PUNTA DE ACERO',u:'Par'},
   {cod:'MAT-N-003',desc:'BROCHAS',u:'Unidad'},
-  {cod:'SUM-N-002',desc:'CAJA DE CLICK',u:'Unidad'},
   {cod:'HER-U-001',desc:'CAJA DE HERRAMIENTAS',u:'Unidad'},
-  {cod:'SUM-N-003',desc:'CALCULADORAS',u:'Unidad'},
-  {cod:'UNI-N-001',desc:'CAMISAS POLOS',u:'Unidad'},
-  {cod:'UNI-N-002',desc:'CAMISAS TIPO COLUMBIA',u:'Unidad'},
   {cod:'EPP-U-004',desc:'CASCOS',u:'Unidad'},
   {cod:'MAT-N-004',desc:'CEPILLO DE MANO',u:'Unidad'},
   {cod:'MAQ-U-003',desc:'CEPILLOS DE PULIDORAS DE 17',u:'Unidad'},
   {cod:'MAQ-U-004',desc:'CEPILLOS DE PULIDORAS DE 20',u:'Unidad'},
-  {cod:'QMC-N-004',desc:'CERA POLWAX',u:'Unidad'},
+  {cod:'QMC-N-004',desc:'CERA POLWAX',u:'Galón'},
   {cod:'EPP-U-005',desc:'CHALECOS',u:'Unidad'},
   {cod:'SUM-N-004',desc:'CINTAS DE EMBALAJE',u:'Unidad'},
-  {cod:'QMC-N-005',desc:'CLORO - GALON',u:'Unidad'},
-  {cod:'QMC-N-006',desc:'CLORO - LITRO',u:'Unidad'},
-  {cod:'UNI-N-003',desc:'COFIAS',u:'Unidad'},
-  {cod:'MAQ-U-005',desc:'COMPRESOR DE AIRE',u:'Unidad'},
-  {cod:'EQP-U-001',desc:'COMPUTADORA SERVIDOR',u:'Unidad'},
-  {cod:'QMC-N-007',desc:'CREOLINA - GALON',u:'Unidad'},
-  {cod:'MAQ-N-006',desc:'CUBRE MANGUERAS',u:'Unidad'},
-  {cod:'MAT-N-005',desc:'DETERGENTE - KILOS',u:'Unidad'},
-  {cod:'QMC-N-033',desc:'DILUYENTE - GALON',u:'Unidad'},
+  {cod:'QMC-N-005',desc:'CLORO - GALON',u:'Galón'},
+  {cod:'QMC-N-030',desc:'CLORO - GALON',u:'Galón'},
+  {cod:'QMC-N-006',desc:'CLORO - LITRO',u:'Litros'},
+  {cod:'QMC-N-007',desc:'CREOLINA - GALON',u:'Galón'},
+  {cod:'MAT-N-005',desc:'DETERGENTE - KILOS',u:'Kilos'},
+  {cod:'QMC-N-033',desc:'DILUYENTE - GALON',u:'Galón'},
   {cod:'MAQ-N-007',desc:'DISCO BLANCO 3M 17',u:'Unidad'},
   {cod:'MAQ-N-008',desc:'DISCO BLANCO 3M 20',u:'Unidad'},
   {cod:'MAQ-N-037',desc:'DISCO NEGRO 3M 17',u:'Unidad'},
   {cod:'MAQ-N-009',desc:'DISCO NEGRO 3M 20',u:'Unidad'},
   {cod:'MAQ-N-010',desc:'DISCO ROJO 3M 17',u:'Unidad'},
   {cod:'MAQ-N-011',desc:'DISCO ROJO 3M 20',u:'Unidad'},
+  {cod:'MAQ-N-042',desc:'ESCALERA ARTICULADA',u:'Unidad'},
   {cod:'MAQ-U-012',desc:'ESCALERA DE TIJERA DE 3MTS',u:'Unidad'},
+  {cod:'MAQ-U-036',desc:'ESCALERA DE TIJERAS 2 MTS',u:'Unidad'},
   {cod:'MAT-N-006',desc:'ESCOBA DE FIBRA',u:'Unidad'},
   {cod:'MAT-N-007',desc:'ESCOBA PLASTICA DE 45 GRADOS',u:'Unidad'},
   {cod:'MAT-N-008',desc:'ESCOBAS PLASTICAS',u:'Unidad'},
   {cod:'MAT-N-009',desc:'ESCOBILLON DE PISO CERDAS SUAVES 60 CMS',u:'Unidad'},
-  {cod:'MAQ-U-013',desc:'ESMERIL',u:'Unidad'},
+  {cod:'MAT-N-065',desc:'ESCURRIDOR DE PISO',u:'Unidad'},
   {cod:'MAT-N-010',desc:'ESPATULA 4',u:'Unidad'},
   {cod:'MAT-N-011',desc:'ESPONJA PARA PLATOS',u:'Unidad'},
   {cod:'MAT-N-012',desc:'ESTRUCTURA DE BARREDORA 60CMS',u:'Unidad'},
   {cod:'MAT-N-013',desc:'ESTRUCTURA MOPA PLANA DE 45 CM',u:'Unidad'},
   {cod:'MAQ-U-014',desc:'EXTENSION ELECTRICAS DE 100MTS',u:'Unidad'},
   {cod:'MAQ-U-015',desc:'EXTENSION ELECTRICAS 50MTS',u:'Unidad'},
-  {cod:'EQP-U-002',desc:'EXTINTORES',u:'Unidad'},
   {cod:'MAQ-N-016',desc:'FILTROS DE ASPIRADORAS KARCHER NT48',u:'Unidad'},
-  {cod:'QMC-N-008',desc:'FORMULA -100 - DESENGRASANTE - CANECA',u:'Unidad'},
-  {cod:'QMC-N-009',desc:'FORMULA -100 - DESENGRASANTE - GALON',u:'Unidad'},
-  {cod:'QMC-N-010',desc:'FORMULA -50 - DESENGRASANTE - CANECA',u:'Unidad'},
-  {cod:'QMC-N-011',desc:'FORMULA -50 - DESENGRASANTE - GALON',u:'Unidad'},
-  {cod:'QMC-N-012',desc:'FORMULA -50 - DESENGRASANTE - LITRO',u:'Unidad'},
+  {cod:'QMC-N-008',desc:'FORMULA -100 - DESENGRASANTE - CANECA',u:'Canecas'},
+  {cod:'QMC-N-009',desc:'FORMULA -100 - DESENGRASANTE - GALON',u:'Galón'},
+  {cod:'QMC-N-010',desc:'FORMULA -50 - DESENGRASANTE - CANECA',u:'Canecas'},
+  {cod:'QMC-N-011',desc:'FORMULA -50 - DESENGRASANTE - GALON',u:'Galón'},
+  {cod:'QMC-N-012',desc:'FORMULA -50 - DESENGRASANTE - LITRO',u:'Litros'},
   {cod:'MAT-N-014',desc:'FUNDA PARA ASPIRADORA',u:'Unidad'},
   {cod:'MAT-N-015',desc:'FUNDAS 18 X 22 BLANCAS',u:'Unidad'},
   {cod:'MAT-N-016',desc:'FUNDAS 18 X 22 NEGRAS',u:'Unidad'},
@@ -545,130 +596,108 @@ const CATALOG=[
   {cod:'MAT-N-018',desc:'FUNDAS 30 X 36 NEGRAS',u:'Unidad'},
   {cod:'MAT-N-019',desc:'FUNDAS 36 X 40 NEGRAS',u:'Unidad'},
   {cod:'MAT-N-020',desc:'FUNDAS 39 X 55 NEGRAS',u:'Unidad'},
-  {cod:'QMC-N-013',desc:'GASOLINA - GALON',u:'Unidad'},
-  {cod:'MAT-N-021',desc:'GUANTES NEGROS 7',u:'Unidad'},
-  {cod:'MAT-N-022',desc:'GUANTES NEGROS 8',u:'Unidad'},
-  {cod:'MAT-N-023',desc:'GUANTES NEGROS 8.5',u:'Unidad'},
-  {cod:'MAT-N-024',desc:'GUANTES NEGROS 9',u:'Unidad'},
-  {cod:'MAT-N-025',desc:'GUANTES QUIRURGICOS CAJAS DE 100',u:'Unidad'},
+  {cod:'MAT-N-064',desc:'GAFAS TRANSPARENTES',u:'Unidad'},
+  {cod:'QMC-N-013',desc:'GASOLINA - GALON',u:'Galón'},
+  {cod:'MAT-N-074',desc:'GUANTES DE JARDINERIA',u:'Par'},
+  {cod:'MAT-N-021',desc:'GUANTES NEGROS # 7',u:'Par'},
+  {cod:'MAT-N-022',desc:'GUANTES NEGROS # 8',u:'Par'},
+  {cod:'MAT-N-023',desc:'GUANTES NEGROS # 8.5',u:'Par'},
+  {cod:'MAT-N-024',desc:'GUANTES NEGROS # 9',u:'Par'},
+  {cod:'MAT-N-025',desc:'GUANTES QUIRURGICOS (CAJAS 100)',u:'Caja'},
   {cod:'MAQ-U-017',desc:'HIDROLAVADORA A GASOLINA 3600 PSI',u:'Unidad'},
   {cod:'MAQ-U-018',desc:'HIDROLAVADORA A GASOLINA 3000 PSI',u:'Unidad'},
   {cod:'MAQ-U-019',desc:'HIDROLAVADORA ELECTRICAS',u:'Unidad'},
-  {cod:'EQP-U-003',desc:'IMPRESORA EPSON L3950',u:'Unidad'},
-  {cod:'EQP-U-004',desc:'IMPRESORAS EPSON L3110',u:'Unidad'},
-  {cod:'EQP-U-005',desc:'IMPRESORAS EPSON WF 3720',u:'Unidad'},
+  {cod:'UNI-N-008',desc:'IMPERMEABLES',u:'Unidad'},
   {cod:'MAT-N-026',desc:'INSECTICIDA SPRAY',u:'Unidad'},
-  {cod:'QMC-N-014',desc:'JABON DE MANOS QUIDOL GALON',u:'Unidad'},
-  {cod:'QMC-N-031',desc:'JABON DE MANOS QUIDOL CANECA',u:'Unidad'},
+  {cod:'QMC-N-014',desc:'JABON DE MANOS - QUIDOL - GALON',u:'Galón'},
+  {cod:'QMC-N-031',desc:'JABON DE MANOS - QUIDOL - CANECA',u:'Canecas'},
   {cod:'MAT-N-027',desc:'JABON LAVAVAJILLAS 450GR',u:'Unidad'},
-  {cod:'QMC-N-015',desc:'JABON PH NEUTRO GALON',u:'Unidad'},
-  {cod:'SUM-N-005',desc:'LACIPES',u:'Unidad'},
-  {cod:'EQP-U-006',desc:'LAPTOP HP',u:'Unidad'},
+  {cod:'QMC-N-015',desc:'JABON PH NEUTRO - GALON',u:'Galón'},
   {cod:'QMC-N-016',desc:'LEJIA SELLO ROJO',u:'Unidad'},
   {cod:'MAT-N-028',desc:'LIJA DE AGUA 400 POR PLIEGO',u:'Unidad'},
   {cod:'MAT-N-029',desc:'LIMPIA VIDRIO CON APLICADOR',u:'Unidad'},
+  {cod:'MAT-N-061',desc:'LIMPIADOR DE ACERO INOXIDABLE',u:'Unidad'},
   {cod:'MAT-N-030',desc:'LIMPIADOR DE VIDRIOS CON EXTENSION',u:'Unidad'},
   {cod:'EPP-U-007',desc:'LINEAS DE VIDA',u:'Unidad'},
+  {cod:'MAQ-N-041',desc:'MANGUERA DE 100 MTS',u:'Unidad'},
   {cod:'MAQ-U-020',desc:'MANGUERAS DE AGUA 30MTS',u:'Unidad'},
   {cod:'MAQ-U-021',desc:'MANGUERAS DE ASPIRADORAS',u:'Unidad'},
   {cod:'MAQ-U-022',desc:'MANGUERAS DE PRESION 10 MTS',u:'Unidad'},
   {cod:'MAT-N-031',desc:'MANO DE OSO',u:'Unidad'},
-  {cod:'MAQ-U-023',desc:'MANZANA DE MOTOGUADAÑA',u:'Unidad'},
-  {cod:'MAQ-U-024',desc:'MAQUINA DE SOLDAR',u:'Unidad'},
+  {cod:'MAT-N-068',desc:'MASCARILLAS (CAJA DE 100)',u:'Caja'},
   {cod:'MAT-N-032',desc:'MICROFIBRAS AMARILLAS',u:'Unidad'},
-  {cod:'MAT-N-033',desc:'MICROFIBRAS AZUL',u:'Unidad'},
-  {cod:'MAT-N-034',desc:'MICROFIBRAS ROJA',u:'Unidad'},
+  {cod:'MAT-N-033',desc:'MICROFIBRAS AZUL o CELESTE',u:'Unidad'},
+  {cod:'MAT-N-034',desc:'MICROFIBRAS ROJA o ROSADA',u:'Unidad'},
   {cod:'MAT-N-035',desc:'MICROFIBRAS VERDE',u:'Unidad'},
+  {cod:'MAT-N-071',desc:'MOPA PLANA COMPLETA 60CM',u:'Unidad'},
+  {cod:'MAT-N-073',desc:'MOPA PLANA COMPLETA 45CM',u:'Unidad'},
   {cod:'MAT-N-036',desc:'MOPAS DE MOÑO',u:'Unidad'},
   {cod:'MAT-N-037',desc:'MOPAS IMPORTADAS DE VINCHA BLANCA',u:'Unidad'},
   {cod:'MAQ-U-025',desc:'MOTOGUADAÑA',u:'Unidad'},
   {cod:'QMC-N-017',desc:'NEFTALINA ROSADA',u:'Unidad'},
-  {cod:'MAQ-U-026',desc:'NYLON PARA MOTOGUADAÑA',u:'Unidad'},
+  {cod:'EPP-U-008',desc:'OREJERAS',u:'Unidad'},
   {cod:'UNI-N-004',desc:'OVEROLES TALLA L',u:'Unidad'},
   {cod:'UNI-N-005',desc:'OVEROLES TALLA M',u:'Unidad'},
+  {cod:'MAQ-N-048',desc:'PALA',u:'Unidad'},
   {cod:'MAT-N-038',desc:'PALO DE ESCOBA',u:'Unidad'},
   {cod:'MAT-N-039',desc:'PALOS DE ESCOBA 2MTS',u:'Unidad'},
-  {cod:'UNI-N-006',desc:'PANTALONES JEANS',u:'Unidad'},
-  {cod:'MAT-N-040',desc:'PAPEL HIGIENICO PERSONAL',u:'Unidad'},
   {cod:'MAT-N-041',desc:'PAPEL HIGIENICO JUMBO',u:'Unidad'},
   {cod:'MAT-N-042',desc:'PAPEL HIGIENICO JUMBO 250MTS',u:'Unidad'},
   {cod:'MAT-N-043',desc:'PAPEL TOALLA EN Z',u:'Unidad'},
-  {cod:'MAT-N-044',desc:'PASTILLA AZUL PATO TANQUE',u:'Unidad'},
   {cod:'MAT-N-045',desc:'PASTILLAS TIPS AMBIENTAL',u:'Unidad'},
   {cod:'MAT-N-046',desc:'PASTILLAS TIPS AMBIENTAL CON GANCHO',u:'Unidad'},
-  {cod:'EQP-N-008',desc:'PERCHAS',u:'Unidad'},
   {cod:'MAQ-U-027',desc:'PISTOLAS DE HIDROLAVADORAS',u:'Unidad'},
-  {cod:'MAQ-U-028',desc:'PORTA PAD 17',u:'Unidad'},
-  {cod:'MAQ-U-029',desc:'PORTA PAD 20',u:'Unidad'},
   {cod:'MAQ-U-030',desc:'PULIDORA 20',u:'Unidad'},
   {cod:'MAQ-U-031',desc:'PULIDORAS 17',u:'Unidad'},
-  {cod:'MAQ-U-032',desc:'PUZZI 10',u:'Unidad'},
-  {cod:'MAQ-U-033',desc:'PUZZI VACMASTER',u:'Unidad'},
-  {cod:'QMC-N-018',desc:'QUIDESOL - DESINFECTANTE - CANECA',u:'Unidad'},
-  {cod:'QMC-N-019',desc:'QUIDESOL - DESINFECTANTE - GALON',u:'Unidad'},
-  {cod:'QMC-N-020',desc:'QUIDESOL - DESINFECTANTE - LITRO',u:'Unidad'},
-  {cod:'QMC-N-021',desc:'QUIDESOL SIN AROMA NEUTRO - CANECA',u:'Unidad'},
-  {cod:'QMC-N-022',desc:'QUIDESOL SIN AROMA NEUTRO - GALON',u:'Unidad'},
-  {cod:'QMC-N-023',desc:'QUIDESOL SIN AROMA NEUTRO - LITRO',u:'Unidad'},
+  {cod:'QMC-N-018',desc:'QUIDESOL - DESINFECTANTE - CANECA',u:'Canecas'},
+  {cod:'QMC-N-019',desc:'QUIDESOL - DESINFECTANTE - GALON',u:'Galón'},
+  {cod:'QMC-N-020',desc:'QUIDESOL - DESINFECTANTE - LITRO',u:'Litros'},
+  {cod:'QMC-N-021',desc:'QUIDESOL SIN AROMA NEUTRO - CANECA',u:'Canecas'},
+  {cod:'QMC-N-022',desc:'QUIDESOL SIN AROMA NEUTRO - GALON',u:'Galón'},
+  {cod:'QMC-N-023',desc:'QUIDESOL SIN AROMA NEUTRO - LITRO',u:'Litros'},
+  {cod:'MAQ-N-052',desc:'RASTRILLO',u:'Unidad'},
   {cod:'MAT-N-047',desc:'RECOGEDOR',u:'Unidad'},
   {cod:'QMC-N-024',desc:'RECUPERADOR DE ACERO EN CREMA',u:'Unidad'},
   {cod:'MAT-N-048',desc:'REPUESTO BARREDORA DE 60 CM',u:'Unidad'},
   {cod:'MAT-N-049',desc:'REPUESTO DE MOPA PLANA 45 CM',u:'Unidad'},
   {cod:'MAT-N-050',desc:'REPUESTO DE MOPA PLANA 60 CM',u:'Unidad'},
-  {cod:'QMC-N-025',desc:'SANITAIR - AMBIENTAL - GALON',u:'Unidad'},
-  {cod:'QMC-N-026',desc:'SANITAIR - AMBIENTAL - SIN OLOR - SIN COLOR - CANECA',u:'Unidad'},
+  {cod:'QMC-N-025',desc:'SANITAIR - AMBIENTAL - GALON',u:'Galón'},
+  {cod:'QMC-N-028',desc:'SANITAIR - AMBIENTAL - CANECA',u:'Canecas'},
+  {cod:'QMC-N-029',desc:'SANITAIR - AMBIENTAL - LITRO',u:'Litros'},
+  {cod:'QMC-N-026',desc:'SANITAIR - AMBIENTAL - SIN OLOR - SIN COLOR - CANECA',u:'Canecas'},
+  {cod:'MAT-N-067',desc:'SACOS',u:'Unidad'},
+  {cod:'MAT-N-060',desc:'SEÑALETICA DE PISO',u:'Unidad'},
   {cod:'QMC-N-027',desc:'SILICON QUICK',u:'Unidad'},
-  {cod:'MAQ-U-034',desc:'SOPLADORAS A GASOLINA',u:'Unidad'},
-  {cod:'MAQ-U-035',desc:'SOPLADORAS ELECTRICAS',u:'Unidad'},
   {cod:'MAT-U-051',desc:'SQUEEGY',u:'Unidad'},
-  {cod:'MAQ-U-036',desc:'ESCALERA DE TIJERAS 2 MTS',u:'Unidad'},
   {cod:'MAT-N-052',desc:'TIPS SAPOLIO SPRAY',u:'Unidad'},
   {cod:'MAT-N-053',desc:'TOALLAS DE MANOS POR ROLLO',u:'Unidad'},
   {cod:'MAT-N-054',desc:'TRAPEADOR DE MICROFIBRA',u:'Unidad'},
   {cod:'MAT-N-055',desc:'VALVULA PARA ATOMIZADOR',u:'Unidad'},
+  {cod:'MAT-N-063',desc:'VENTOSA',u:'Unidad'},
   {cod:'MAT-N-056',desc:'VILEDAS NEGRAS',u:'Unidad'},
   {cod:'MAT-N-057',desc:'VILEDAS VERDES',u:'Unidad'},
   {cod:'MAT-N-058',desc:'VINCHAS PARA MOPAS IMPORTADAS',u:'Unidad'},
   {cod:'MAT-N-059',desc:'WAIPE POR FUNDAS',u:'Unidad'},
   {cod:'EPP-N-007',desc:'ZAPATOS DESCARTABLES',u:'Unidad'},
-  {cod:'QMC-N-028',desc:'SANITAIR - AMBIENTAL - CANECA',u:'Unidad'},
-  {cod:'QMC-N-029',desc:'SANITAIR - AMBIENTAL - LITRO',u:'Unidad'},
-  {cod:'QMC-N-030',desc:'CLORO - GALON',u:'Unidad'},
   {cod:'MAQ-U-037',desc:'CARRITO RUBBERMAID',u:'Unidad'},
-  {cod:'MAT-N-061',desc:'LIMPIADOR DE ACERO INOXIDABLE',u:'Unidad'},
-  {cod:'MAT-N-060',desc:'SEÑALETICA DE PISO',u:'Unidad'},
   {cod:'MAQ-N-038',desc:'CARRITO UTILITARIO',u:'Unidad'},
-  {cod:'MAQ-N-041',desc:'MANGUERA DE 100 MTS',u:'Unidad'},
-  {cod:'MAQ-N-042',desc:'ESCALERA ARTICULADA',u:'Unidad'},
-  {cod:'MAT-N-063',desc:'VENTOSA',u:'Unidad'},
-  {cod:'MAT-N-064',desc:'GAFAS TRANSPARENTES',u:'Unidad'},
-  {cod:'MAT-N-065',desc:'ESCURRIDOR DE PISO',u:'Unidad'},
-  {cod:'MAT-N-066',desc:'BARREDORA COMPLETA',u:'Unidad'},
-  {cod:'MAT-N-067',desc:'SACOS',u:'Unidad'},
-  {cod:'MAT-N-068',desc:'MASCARILLAS CAJA DE 100',u:'Unidad'},
-  {cod:'MAT-N-069',desc:'BASTON TELESCOPICO',u:'Unidad'},
-  {cod:'MAT-N-076',desc:'BASTON TELESCOPICO DE PISCINA',u:'Unidad'},
-  {cod:'EPP-U-008',desc:'OREJERAS',u:'Unidad'},
-  {cod:'SUM-N-021',desc:'PROTECTORES PLASTICOS DE HOJA',u:'Unidad'},
-  {cod:'MAT-N-071',desc:'MOPA PLANA COMPLETA 60CM',u:'Unidad'},
-  {cod:'SUM-N-022',desc:'SEPARADORES DE HOJA',u:'Unidad'},
-  {cod:'SUM-N-023',desc:'CARPETA PLASTICAS',u:'Unidad'},
-  {cod:'SUM-N-024',desc:'CINTA DOBLE FAST',u:'Unidad'},
-  {cod:'MAQ-N-045',desc:'TRICIMOTO',u:'Unidad'},
   {cod:'MAQ-N-043',desc:'ANDAMIOS',u:'Unidad'},
   {cod:'MAQ-N-044',desc:'TACHO HERCULES',u:'Unidad'},
-  {cod:'UNI-N-008',desc:'IMPERMEABLES',u:'Unidad'},
-  {cod:'MAT-N-073',desc:'MOPA PLANA COMPLETA 45CM',u:'Unidad'},
-  {cod:'MAT-N-074',desc:'GUANTES DE JARDINERIA',u:'Unidad'},
+  {cod:'MAQ-N-045',desc:'TRICIMOTO',u:'Unidad'},
   {cod:'MAQ-N-046',desc:'CORTADOR DE RAMAS PARTE ALTA',u:'Unidad'},
   {cod:'MAQ-N-047',desc:'PICO DE LORO',u:'Unidad'},
-  {cod:'MAQ-N-048',desc:'PALA',u:'Unidad'},
   {cod:'MAQ-N-049',desc:'TIJERAS DE JARDIN',u:'Unidad'},
   {cod:'MAQ-N-050',desc:'LIMA',u:'Unidad'},
   {cod:'MAQ-N-051',desc:'PICO',u:'Unidad'},
-  {cod:'MAQ-N-052',desc:'RASTRILLO',u:'Unidad'},
   {cod:'MAQ-N-053',desc:'CORTASETOS',u:'Unidad'},
-  {cod:'MAT-N-077',desc:'EMBUDO',u:'Unidad'}
+  {cod:'MAT-N-076',desc:'ENVASES DE ATOMIZADOR',u:'Unidad'},
+  {cod:'MAT-N-077',desc:'EMBUDO',u:'Unidad'},
+  {cod:'SUM-N-002',desc:'CAJA DE CLICK',u:'Caja'},
+  {cod:'SUM-N-016',desc:'RESMAS DE HOJAS',u:'Unidad'},
+  {cod:'SUM-N-021',desc:'PROTECTORES PLASTICOS DE HOJA',u:'Unidad'},
+  {cod:'SUM-N-022',desc:'SEPARADORES DE HOJA',u:'Unidad'},
+  {cod:'SUM-N-023',desc:'CARPETA PLASTICAS',u:'Unidad'},
+  {cod:'SUM-N-024',desc:'CINTA DOBLE FAST',u:'Unidad'},
 ];
 
 const PROVEEDORES=[
@@ -818,7 +847,7 @@ function buildPanels(){
 
 <!-- 2. NECESIDAD DE COMPRA -->
 <div class="panel" id="panel-necesidad">
-  <div class="ph"><h2>2. Necesidad de Compra — por Empresa</h2><p>Se genera <strong>una por empresa</strong> (INMOCLEAN / NOVACLEAN / HOMECLEAN) consolidando los ítems de todos sus clientes.</p><span class="iso-code">FOR COM 01 · VER 01 (09 12 2024)</span></div>
+  <div class="ph"><h2>2. Necesidad de Compra — por Empresa</h2><p>Consolida ítems por empresa, agrupa por proveedor y descarga en Excel.</p><span class="iso-code">FOR COM 01 · VER 01 (09 12 2024)</span></div>
   <div class="card"><div class="card-title">🔗 Origen: Requisición Mensual</div>
     <div class="fg">
       <div class="fi"><label>Seleccionar Requisición</label><select id="nec-rm-sel" onchange="necCargarRM()"><option value="">-- Seleccionar --</option></select></div>
@@ -833,15 +862,32 @@ function buildPanels(){
     </div>
   </div>
   <div class="card" id="nec-items-card" style="display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin:0">📦 Ítems consolidados — <span id="nec-empresa-lbl" style="color:var(--teal)"></span> <span class="badge" id="nec-items-count">0</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📦 Ítems — <span id="nec-empresa-lbl" style="color:var(--teal)"></span> <span class="badge" id="nec-items-count">0</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <!-- Gestión de grupos -->
+        <div style="display:flex;gap:5px;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 8px">
+          <span style="font-size:11px;color:var(--muted)">Nuevo grupo:</span>
+          <input id="nec-nuevo-grupo" placeholder="Ej: Químicos NOVA" style="width:130px;padding:3px 7px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;font-family:inherit;outline:none">
+          <button class="btn btn-s btn-sm" onclick="necAgregarGrupo()">＋</button>
+        </div>
+        <button class="btn btn-s" onclick="necExcelGlobal()">⬇️ Excel completo</button>
+        <button class="btn btn-s" onclick="necPdfActivo()" style="background:var(--red);color:#fff">📄 PDF</button>
+        <button class="btn btn-s" onclick="necWhatsappActivo()" style="background:#25D366;color:#fff">💬 WhatsApp</button>
         <button class="btn btn-a" onclick="necPreview()">🖨️ Vista previa</button>
-        <button class="btn btn-p" onclick="necGuardar()">💾 Guardar → lista para OC</button>
+        <button class="btn btn-p" onclick="necGuardar()">💾 Guardar</button>
       </div>
     </div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:10px">El stock disponible se descuenta automáticamente. Ajusta cantidades antes de guardar.</p>
-    <div class="tw"><table class="it"><thead><tr><th>Producto</th><th>Unidad</th><th>Total Pedido</th><th>En Stock</th><th>Por Comprar</th><th>Obs.</th></tr></thead><tbody id="nec-body"></tbody></table></div>
+    <!-- Grupos activos -->
+    <div id="nec-grupos-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Asigna cada ítem a un grupo de proveedor. Usa <strong>Sel. todo</strong> para asignar en bloque. Puedes descargar cada grupo en Excel separado.</p>
+    <div class="tw"><table class="it"><thead><tr>
+      <th style="width:28px"><input type="checkbox" id="nec-chk-all" onchange="necToggleAll(this)" style="accent-color:var(--teal)"></th>
+      <th>Producto</th><th>Unidad</th><th style="text-align:center">Total</th><th style="text-align:center">Stock</th><th style="text-align:center">Comprar</th>
+      <th>Grupo proveedor</th><th>Obs.</th>
+    </tr></thead><tbody id="nec-body"></tbody></table></div>
+    <!-- Resumen por grupo -->
+    <div id="nec-grupos-resumen" style="margin-top:14px"></div>
   </div>
   <div class="card"><div class="card-title">📁 Necesidades Guardadas <span class="badge" id="nec-count">0</span></div>
     <div class="tw"><table><thead><tr><th>N°</th><th>Empresa</th><th>Período</th><th>Req. Origen</th><th>Ítems</th><th>OC Generada</th><th>Acciones</th></tr></thead><tbody id="nec-list"></tbody></table></div>
@@ -1068,6 +1114,167 @@ function buildPanels(){
   <div class="ph"><h2>Historial de Registros</h2><p>Todos los documentos con sus vínculos</p></div>
   <div class="card"><div class="tw"><table><thead><tr><th>Tipo</th><th>Número</th><th>Fecha</th><th>Descripción</th><th>Vinculado a</th><th></th></tr></thead><tbody id="hist-body"></tbody></table></div></div>
 </div>
+
+<!-- GESTIÓN OPERATIVOS -->
+<div class="panel" id="panel-operativos">
+  <div class="ph">
+    <h2>👥 Usuarios de Campo</h2>
+    <p>Crea las credenciales de los operativos para el portal de campo.</p>
+    <span class="iso-code">Archivo: portal_operativo.html</span>
+    <button class="btn btn-s" style="margin-top:8px;font-size:11px" onclick="nopRecargarCatalogo()">🔄 Recargar catálogo</button>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">➕ Nuevo usuario</div>
+      <button class="btn btn-s btn-sm" onclick="opPublishCatalog()">🔄 Publicar catálogo al portal</button>
+    </div>
+    <div class="fg">
+      <div class="fi"><label>Nombre completo</label><input id="nop-nombre" placeholder="Ej: Carlos Mendez"></div>
+      <div class="fi"><label>Usuario (login)</label><input id="nop-usuario" placeholder="Ej: cmendez" style="font-family:'JetBrains Mono',monospace"></div>
+      <div class="fi"><label>Contraseña</label><input id="nop-pass" type="text" placeholder="Mínimo 4 caracteres"></div>
+      <div class="fi">
+        <label>Empresa</label>
+        <select id="nop-empresa" onchange="nopRenderCliCheckboxes()" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          <option value="">-- Seleccionar --</option>
+          <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:4px">
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:8px">Clientes asignados</label>
+      <div id="nop-cli-grid" class="cli-check-grid">
+        <span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>
+      </div>
+      <!-- Agregar cliente que no está en la lista -->
+      <div style="display:flex;gap:6px;margin-top:10px;align-items:center">
+        <input id="nop-cli-manual" placeholder="Agregar cliente no listado..." 
+          style="flex:1;padding:7px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none"
+          onkeydown="if(event.key==='Enter'){nopAgregarManual();event.preventDefault()}">
+        <button class="btn btn-s btn-sm" onclick="nopAgregarManual()" style="white-space:nowrap">＋ Agregar</button>
+      </div>
+      <div id="nop-cli-extras" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-p" onclick="nopGuardar()">💾 Guardar usuario</button>
+      <button class="btn btn-s" onclick="nopLimpiar()">🗑️ Limpiar</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 Usuarios registrados <span class="badge" id="op-count">0</span></div>
+    <div id="op-list"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+  </div>
+</div>
+
+<!-- REQUISICIONES DE CAMPO -->
+<div class="panel" id="panel-campo">
+  <div class="ph">
+    <h2>📥 Requisiciones de Campo</h2>
+    <p>Todo lo que los operativos cargaron desde sus puntos, consolidado y listo para generar la requisición mensual.</p>
+  </div>
+  <div class="card">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="campo-periodo-sel" onchange="campoRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"><option value="">Todos los períodos</option></select>
+      <select id="campo-empresa-sel" onchange="campoRender()" style="padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">Todas las empresas</option><option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+      </select>
+      <select id="campo-op-sel" onchange="campoRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"><option value="">Todos los operativos</option></select>
+      <button class="btn btn-s btn-sm" onclick="campoReload()">🔄 Actualizar</button>
+    </div>
+  </div>
+  <div class="sg" id="campo-stats"></div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📊 Consolidado por cliente <span class="badge" id="campo-count">0</span></div>
+      <button class="btn btn-a" onclick="campoGenerarRM()">⚡ Generar Requisición Mensual</button>
+    </div>
+    <div id="campo-consolidado"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 Envíos individuales</div>
+    <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha / Hora</th><th>Ítems</th><th></th></tr></thead><tbody id="campo-list"></tbody></table></div>
+  </div>
+</div>
+<div class="panel" id="panel-catalogo">
+  <div class="panel-header"><h2>🗂️ Editor de Catálogo</h2></div>
+  <div class="panel-body">
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button id="cat-tab-editar"   class="cat-tab active" onclick="catTab('editar')">✏️ Editar cliente</button>
+      <button id="cat-tab-nuevo"    class="cat-tab"        onclick="catTab('nuevo')">➕ Nuevo cliente</button>
+      <button id="cat-tab-mover"    class="cat-tab"        onclick="catTab('mover')">🔀 Mover cliente</button>
+    </div>
+
+    <!-- TAB: EDITAR CLIENTE EXISTENTE -->
+    <div id="cat-pane-editar">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa</label>
+          <select id="cat-ed-empresa" onchange="catEdLoadClientes()">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <div class="fi" style="flex:0 0 220px">
+          <label>Cliente</label>
+          <select id="cat-ed-cliente" onchange="catEdLoadItems()">
+            <option value="">— Cliente —</option>
+          </select>
+        </div>
+        <div style="font-size:12px;color:var(--muted)" id="cat-ed-info"></div>
+      </div>
+      <div id="cat-ed-body"></div>
+    </div>
+
+    <!-- TAB: NUEVO CLIENTE -->
+    <div id="cat-pane-nuevo" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="fi" style="flex:0 0 220px">
+          <label>Nombre del cliente</label>
+          <input id="cat-nv-nombre" placeholder="Ej: NUEVO CLIENTE SA" style="text-transform:uppercase">
+        </div>
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa</label>
+          <select id="cat-nv-empresa">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <button class="btn btn-s" onclick="catNvRenderBase()">Ver ítems base →</button>
+      </div>
+      <div id="cat-nv-body"></div>
+    </div>
+
+    <!-- TAB: MOVER CLIENTE -->
+    <div id="cat-pane-mover" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa origen</label>
+          <select id="cat-mv-emp-origen" onchange="catMvLoadClientes()">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <div class="fi" style="flex:0 0 220px">
+          <label>Cliente a mover</label>
+          <select id="cat-mv-cliente">
+            <option value="">— Cliente —</option>
+          </select>
+        </div>
+        <div class="fi" style="flex:0 0 160px">
+          <label>Empresa destino</label>
+          <select id="cat-mv-emp-destino">
+            <option value="">— Empresa —</option>
+            <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+          </select>
+        </div>
+        <button class="btn btn-s" style="background:var(--amber);color:var(--navy)" onclick="catMoverCliente()">🔀 Mover</button>
+      </div>
+      <div id="cat-mv-info" style="font-size:12px;color:var(--muted)"></div>
+    </div>
+
+  </div>
+</div>
   `;
 }
 
@@ -1080,13 +1287,10 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:invRender,historial:histRender};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:invRender,historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel};
   if(fns[name]) fns[name]();
 }
 
-// ═══════════════════════════════
-// INIT APP
-// ═══════════════════════════════
 function initApp(){
   const today=new Date().toISOString().split('T')[0];
   ['rm-fecha','nec-fecha','oc-fecha','ai-fecha','ae-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=today;});
@@ -1179,13 +1383,17 @@ function initRM(){
   setNums();
 }
 
+// Helper — siempre usa el catálogo actualizado de Supabase si existe
+function rmCat(){ return (window._catalogoOverride&&Object.keys(window._catalogoOverride).length) ? window._catalogoOverride : RM_CAT; }
+
 function rmResetData(){
   rm_data={};
-  Object.keys(RM_CAT).forEach(e=>{
+  const cat=rmCat();
+  Object.keys(cat).forEach(e=>{
     rm_data[e]={};
-    Object.keys(RM_CAT[e]).forEach(c=>{
+    Object.keys(cat[e]).forEach(c=>{
       rm_data[e][c]={};
-      RM_CAT[e][c].forEach(it=>{
+      cat[e][c].forEach(it=>{
         rm_data[e][c][it.p+'|'+it.u]={prod:it.p,grupo:it.g,unidad:it.u,qty:0};
       });
     });
@@ -1218,7 +1426,7 @@ function rmSelEmpresa(e){
 function rmRenderClientesBtns(){
   const el=document.getElementById('rm-clientes-btns');
   if(!el||!rm_empresa) return;
-  const clientes=Object.keys(RM_CAT[rm_empresa]||{});
+  const clientes=Object.keys(rmCat()[rm_empresa]||{}).sort();
   el.innerHTML=clientes.map(c=>{
     const cd=rm_data[rm_empresa]?.[c]||{};
     const total=Object.values(cd).reduce((s,v)=>s+(+v.qty||0),0);
@@ -1253,7 +1461,16 @@ function rmRenderItems(){
   const buscar=(document.getElementById('rm-buscar')||{}).value?.toLowerCase()||'';
   const soloQty=(document.getElementById('rm-solo-qty')||{}).checked||false;
   const cd=rm_data[rm_empresa]?.[rm_cliente]||{};
-  const allItems=RM_CAT[rm_empresa][rm_cliente]||[];
+  const cat=rmCat();
+  // Si el cliente no está en rm_data aún (fue creado en editor de catálogo), inicializarlo
+  if(!rm_data[rm_empresa]) rm_data[rm_empresa]={};
+  if(!rm_data[rm_empresa][rm_cliente]){
+    rm_data[rm_empresa][rm_cliente]={};
+    (cat[rm_empresa]?.[rm_cliente]||[]).forEach(it=>{
+      rm_data[rm_empresa][rm_cliente][it.p+'|'+it.u]={prod:it.p,grupo:it.g,unidad:it.u,qty:0};
+    });
+  }
+  const allItems=cat[rm_empresa]?.[rm_cliente]||[];
   let items=allItems.filter(it=>{
     if(buscar&&!(it.p.toLowerCase().includes(buscar)||it.g.toLowerCase().includes(buscar))) return false;
     if(soloQty&&!(cd[it.p+'|'+it.u]?.qty>0)) return false;
@@ -1562,6 +1779,7 @@ function rmAgregarItemAlCliente(){
 // 2. NECESIDAD DE COMPRA
 // ═══════════════════════════════
 let necItems=[];
+let necGrupos=['Sin asignar','Químicos','Fundas','Insumos','Efectivo'];
 
 function necRefreshSelects(){
   const sel=document.getElementById('nec-rm-sel');if(!sel)return;
@@ -1571,7 +1789,6 @@ function necRefreshSelects(){
 
 function initNec(){
   necRefreshSelects();
-  // Populate OC nec select
   const ocSel=document.getElementById('oc-nec-sel');
   if(ocSel){
     ocSel.innerHTML='<option value="">-- Manual / Nueva --</option>';
@@ -1585,12 +1802,11 @@ function necCargarRM(){
   const info=document.getElementById('nec-rm-info');
   if(!num){info.style.display='none';necItems=[];necRenderItems();document.getElementById('nec-items-card').style.display='none';return;}
   const rm=db.reqMensuales.find(r=>r.numero===num);
-  if(!rm) return;
+  if(!rm)return;
   info.style.display='block';
   document.getElementById('nec-rm-desc').textContent=`${rm.numero} — ${rm.periodo} — ${rm.activos} clientes con pedido`;
   document.getElementById('nec-periodo').value=rm.periodo;
   document.getElementById('nec-elaborado').value=rm.elaborado||'';
-  // Reset empresa selector
   document.getElementById('nec-empresa-sel').value='';
   necItems=[];necRenderItems();document.getElementById('nec-items-card').style.display='none';
 }
@@ -1601,17 +1817,15 @@ function necFiltrarEmpresa(){
   if(!empresa||!rmNum){necItems=[];necRenderItems();document.getElementById('nec-items-card').style.display='none';return;}
   const rm=db.reqMensuales.find(r=>r.numero===rmNum);
   if(!rm){toast('Selecciona primero la Requisición',true);return;}
-  // Check if already generated for this empresa
   const existe=db.necesidades.find(n=>n.rmId===rmNum&&n.empresa===empresa);
   if(existe){toast(`Ya existe la Necesidad ${existe.numero} para ${empresa} en esta requisición`,true);return;}
-  // Consolidate items for this empresa only
   const empData=rm.data[empresa]||{};
   const consolidated={};
   Object.values(empData).forEach(cli=>{
     Object.values(cli).forEach(it=>{
-      if((+it.qty||0)===0) return;
+      if((+it.qty||0)===0)return;
       const key=it.prod+'|'+it.unidad;
-      if(!consolidated[key])consolidated[key]={desc:it.prod,unidad:it.unidad,total:0,obs:''};
+      if(!consolidated[key])consolidated[key]={desc:it.prod,unidad:it.unidad,grupo_nec:it.grupo||'INSUMOS',total:0,obs:''};
       consolidated[key].total+=Number(it.qty);
     });
   });
@@ -1619,24 +1833,272 @@ function necFiltrarEmpresa(){
   necItems=Object.values(consolidated).map(it=>{
     const inv=db.inventario.find(i=>i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0]));
     const enStock=inv?inv.stock:0;
-    return {...it,enStock,porComprar:Math.max(0,it.total-enStock)};
+    // Auto-asignar grupo según grupo_nec del catálogo
+    let grupoSugerido='Sin asignar';
+    if(it.grupo_nec==='QUIMICOS'||it.grupo_nec==='QUÍMICOS') grupoSugerido='Químicos';
+    else if(it.desc.toUpperCase().includes('FUNDA')) grupoSugerido='Fundas';
+    else if(it.grupo_nec==='INSUMOS') grupoSugerido='Insumos';
+    else if(it.grupo_nec==='MAQUINAS'||it.grupo_nec==='MÁQUINAS') grupoSugerido='Insumos';
+    if(!necGrupos.includes(grupoSugerido)) grupoSugerido='Sin asignar';
+    return {...it,enStock,porComprar:Math.max(0,it.total-enStock),provGrupo:grupoSugerido,seleccionado:false};
   });
   document.getElementById('nec-empresa-lbl').textContent=empresa;
   document.getElementById('nec-items-count').textContent=necItems.length;
   document.getElementById('nec-items-card').style.display='block';
+  necRenderGruposChips();
   necRenderItems();
   toast(`${necItems.length} ítems consolidados para ${empresa}`);
 }
 
+function necAgregarGrupo(){
+  const inp=document.getElementById('nec-nuevo-grupo');
+  const val=(inp.value||'').trim();
+  if(!val){toast('Escribe el nombre del grupo',true);return;}
+  if(necGrupos.includes(val)){toast('Ese grupo ya existe',true);inp.value='';return;}
+  necGrupos.push(val);
+  inp.value='';
+  necRenderGruposChips();
+  necRenderItems();
+  toast(`Grupo "${val}" creado`);
+}
+
+function necEliminarGrupo(g){
+  if(['Sin asignar'].includes(g)){toast('No puedes eliminar el grupo base',true);return;}
+  necGrupos=necGrupos.filter(x=>x!==g);
+  necItems.forEach(it=>{if(it.provGrupo===g)it.provGrupo='Sin asignar';});
+  necRenderGruposChips();
+  necRenderItems();
+}
+
+function necRenderGruposChips(){
+  const el=document.getElementById('nec-grupos-chips');if(!el)return;
+  const colores=['var(--teal)','var(--amber)','#7c6bf8','#e05f9a','#4aada8','#e07a5f'];
+  el.innerHTML=necGrupos.map((g,i)=>{
+    const n=necItems.filter(it=>it.provGrupo===g).length;
+    const c=colores[i%colores.length];
+    return `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ${c};font-size:11px;font-weight:600;color:${c}">
+      ${g} <span style="background:${c};color:var(--navy);border-radius:10px;padding:0 5px;font-size:10px">${n}</span>
+      <button onclick="necExcelGrupo('${g.replace(/'/g,"\'")}','${c}')" title="Descargar Excel de este grupo" style="background:none;border:none;cursor:pointer;color:${c};font-size:11px;padding:0">⬇️</button>
+      ${g!=='Sin asignar'?`<button onclick="necEliminarGrupo('${g.replace(/'/g,"\'")}")" style="background:none;border:none;cursor:pointer;color:${c};font-size:12px;padding:0;line-height:1">×</button>`:''}
+    </span>`;
+  }).join('');
+}
+
+function necToggleAll(chk){
+  necItems.forEach(it=>it.seleccionado=chk.checked);
+  necRenderItems();
+}
+
 function necRenderItems(){
   const body=document.getElementById('nec-body');if(!body)return;
-  body.innerHTML=necItems.map((it,i)=>`<tr>
-    <td>${it.desc}</td><td>${it.unidad}</td>
-    <td style="font-weight:600;color:var(--teal)">${it.total}</td>
-    <td style="color:var(--muted)">${it.enStock}</td>
-    <td style="font-weight:600;color:${it.porComprar>0?'var(--amber)':'var(--muted)'}">${it.porComprar}</td>
-    <td><input value="${it.obs||''}" onchange="necItems[${i}].obs=this.value" placeholder="Observación..." style="width:140px"></td>
-  </tr>`).join('')||'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:14px">Sin ítems</td></tr>';
+  const colores={'Sin asignar':'var(--muted)','Químicos':'var(--teal)','Fundas':'var(--amber)','Insumos':'#7c6bf8','Efectivo':'#e05f9a'};
+  const gruposOptions=necGrupos.map(g=>`<option value="${g}">${g}</option>`).join('');
+  body.innerHTML=necItems.map((it,i)=>{
+    const c=colores[it.provGrupo]||'var(--teal)';
+    return `<tr style="background:${it.seleccionado?'rgba(0,201,167,.05)':''}">
+      <td><input type="checkbox" ${it.seleccionado?'checked':''} onchange="necItems[${i}].seleccionado=this.checked" style="accent-color:var(--teal)"></td>
+      <td style="font-size:12px">${it.desc}</td>
+      <td style="font-size:11px;color:var(--muted)">${it.unidad}</td>
+      <td style="text-align:center;font-weight:600;color:var(--teal)">${it.total}</td>
+      <td style="text-align:center;color:var(--muted);font-size:11px">${it.enStock}</td>
+      <td style="text-align:center;font-weight:600;color:${it.porComprar>0?'var(--amber)':'var(--muted)'}">${it.porComprar}</td>
+      <td>
+        <select onchange="necItems[${i}].provGrupo=this.value;necRenderGruposChips();necRenderGruposResumen()"
+          style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid ${c};color:${c};font-size:11px;font-family:inherit;outline:none;font-weight:600">
+          ${necGrupos.map(g=>`<option value="${g}"${g===it.provGrupo?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </td>
+      <td><input value="${it.obs||''}" onchange="necItems[${i}].obs=this.value" placeholder="Obs..." style="width:120px;font-size:11px;padding:3px 6px;border-radius:4px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;outline:none"></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:14px">Sin ítems</td></tr>';
+  // Asignar grupo en lote a seleccionados
+  const actBtns=document.getElementById('nec-grupos-resumen');
+  necRenderGruposResumen();
+}
+
+function necRenderGruposResumen(){
+  const el=document.getElementById('nec-grupos-resumen');if(!el)return;
+  const selCount=necItems.filter(i=>i.seleccionado).length;
+  const colores=['var(--teal)','var(--amber)','#7c6bf8','#e05f9a','#4aada8','#e07a5f'];
+  const asignBtns=selCount>0?`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--muted)">${selCount} seleccionados → asignar a:</span>
+    ${necGrupos.map((g,i)=>`<button onclick="necAsignarGrupoLote('${g.replace(/'/g,"\\'")}")" style="padding:3px 10px;border-radius:15px;border:1px solid ${colores[i%colores.length]};background:transparent;color:${colores[i%colores.length]};font-size:11px;cursor:pointer;font-family:inherit">${g}</button>`).join('')}
+  </div>`:'';
+  const grupos=necGrupos.filter(g=>necItems.some(it=>it.provGrupo===g));
+  el.innerHTML=asignBtns+grupos.map((g,gi)=>{
+    const its=necItems.filter(it=>it.provGrupo===g);
+    const c=colores[necGrupos.indexOf(g)%colores.length];
+    const gi2=necGrupos.indexOf(g);
+    return`<div style="margin-bottom:10px;border:1px solid ${c}44;border-radius:10px;overflow:hidden">
+      <div style="background:${c}18;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <span style="font-size:13px;font-weight:700;color:${c}">${g} <span style="font-weight:400;font-size:11px">— ${its.length} ítems · ${its.reduce((s,i)=>s+(+i.porComprar||0),0)} por comprar</span></span>
+        <div style="display:flex;gap:5px">
+          <button data-action="nec-excel-g" data-gi="${gi2}"
+            style="padding:5px 12px;border-radius:6px;background:${c};border:none;color:var(--navy);font-size:11px;font-weight:700;cursor:pointer">⬇️ Excel</button>
+          <button data-action="nec-pdf-g" data-gi="${gi2}"
+            style="padding:5px 12px;border-radius:6px;background:#c0392b;border:none;color:#fff;font-size:11px;font-weight:700;cursor:pointer">📄 PDF</button>
+          <button data-action="nec-wa-g" data-gi="${gi2}"
+            style="padding:5px 12px;border-radius:6px;background:#25D366;border:none;color:#fff;font-size:11px;font-weight:700;cursor:pointer">💬 WhatsApp</button>
+        </div>
+      </div>
+      <div style="padding:8px 14px;font-size:11px;color:var(--muted);line-height:2">
+        ${its.map(it=>`<span style="margin-right:8px;white-space:nowrap">${it.desc} <strong style="color:var(--text)">(${it.porComprar})</strong></span>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function necAsignarGrupoLote(grupo){
+  necItems.forEach(it=>{if(it.seleccionado)it.provGrupo=grupo;});
+  necRenderGruposChips();
+  necRenderItems();
+}
+
+// Event delegation para botones de grupo en el resumen
+document.addEventListener('click',function(e){
+  const btn=e.target.closest('[data-action^="nec-"]');
+  if(!btn)return;
+  const action=btn.dataset.action;
+  const gi=parseInt(btn.dataset.gi);
+  if(isNaN(gi))return;
+  const grupo=necGrupos[gi];
+  if(!grupo)return;
+  const colores=['var(--teal)','var(--amber)','#7c6bf8','#e05f9a','#4aada8','#e07a5f'];
+  const c=colores[gi%colores.length];
+  if(action==='nec-excel-g') necExcelGrupo(grupo,c);
+  if(action==='nec-pdf-g')   necPdfGrupo(grupo,c);
+  if(action==='nec-wa-g')    necWaGrupo(grupo);
+});
+
+// ── EXCEL ─────────────────────
+function necExcelGlobal(){
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'EMPRESA';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  necGenerarExcel(necItems,`NEC_${empresa}_${periodo}_COMPLETA`,'Necesidad Completa');
+}
+
+function necExcelGrupo(grupo,color){
+  const items=necItems.filter(it=>it.provGrupo===grupo);
+  if(!items.length){toast('Sin ítems en este grupo',true);return;}
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'EMPRESA';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  necGenerarExcel(items,`NEC_${empresa}_${periodo}_${grupo.replace(/\s+/g,'_').toUpperCase()}`,grupo);
+}
+
+function necPdfGrupo(grupo){
+  const its=necItems.filter(it=>it.provGrupo===grupo);
+  if(!its.length){toast('Sin ítems en este grupo',true);return;}
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  const num=document.getElementById('nec-num').value||'';
+  const fecha=document.getElementById('nec-fecha').value||'';
+  const elab=document.getElementById('nec-elaborado').value||'';
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${grupo} — ${num}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#222;font-size:12px}
+      @media print{@page{margin:15mm}body{padding:0}}
+      .header{background:#0a2e22;color:#fff;padding:14px 20px;border-radius:6px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+      .header h1{margin:0;font-size:16px;color:#00c9a7}
+      .header .sub{font-size:10px;color:#aaa}
+      .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;background:#f8f8f8;padding:10px;border-radius:4px;border:1px solid #eee}
+      .meta-item label{display:block;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+      .meta-item span{font-weight:700;font-size:12px}
+      .grupo-header{background:#0a2e22;color:#00c9a7;padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border-radius:4px 4px 0 0}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      thead tr{background:#f5f5f5}
+      th,td{padding:5px 8px;border:1px solid #ddd;text-align:left}
+      tr:nth-child(even){background:#fafafa}
+      .footer{margin-top:20px;border-top:1px solid #eee;padding-top:10px;font-size:9px;color:#999;text-align:center}
+    </style>
+  </head><body>
+    <div class="header">
+      <div><h1>🧹 CLEAN GROUP</h1><div class="sub">NECESIDAD DE COMPRA — ${grupo.toUpperCase()}</div></div>
+      <div style="text-align:right;font-size:11px"><div style="color:#00c9a7;font-weight:700">${num}</div><div style="color:#aaa">${fecha}</div></div>
+    </div>
+    <div class="meta">
+      <div class="meta-item"><label>Empresa</label><span>${empresa}</span></div>
+      <div class="meta-item"><label>Período</label><span>${periodo}</span></div>
+      <div class="meta-item"><label>Grupo</label><span>${grupo}</span></div>
+      <div class="meta-item"><label>Elaborado por</label><span>${elab||'—'}</span></div>
+      <div class="meta-item"><label>Total ítems</label><span>${its.length}</span></div>
+      <div class="meta-item"><label>Total por comprar</label><span>${its.reduce((s,i)=>s+(+i.porComprar||0),0)}</span></div>
+    </div>
+    <div class="grupo-header">${grupo}</div>
+    <table><thead><tr>
+      <th style="width:30px">N°</th>
+      <th>Descripción del Producto</th>
+      <th style="width:80px;text-align:center">Unidad</th>
+      <th style="width:80px;text-align:center">Total Pedido</th>
+      <th style="width:80px;text-align:center">Por Comprar</th>
+      <th>Observación</th>
+    </tr></thead><tbody>
+    ${its.map((it,i)=>`<tr>
+      <td style="text-align:center;color:#888">${i+1}</td>
+      <td><strong>${it.desc}</strong></td>
+      <td style="text-align:center">${it.unidad}</td>
+      <td style="text-align:center;font-weight:700">${it.total}</td>
+      <td style="text-align:center;font-weight:700;color:${it.porComprar>0?'#c07a00':'#888'}">${it.porComprar}</td>
+      <td style="color:#666;font-size:10px">${it.obs||'—'}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div class="footer">Clean Group · Sistema ISO 9001 · ${grupo} · ${num} — ${periodo}</div>
+    <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+  const w=window.open('','_blank','width=900,height=700');
+  w.document.write(html);w.document.close();
+}
+
+function necWaGrupo(grupo){
+  const its=necItems.filter(it=>it.provGrupo===grupo);
+  if(!its.length){toast('Sin ítems en este grupo',true);return;}
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  const num=document.getElementById('nec-num').value||'';
+  let texto=`*SOLICITUD DE COTIZACIÓN — ${grupo.toUpperCase()}*\n`;
+  texto+=`*${empresa}* · ${periodo} · ${num}\n\n`;
+  texto+=`Estimado proveedor, les solicitamos cotización para los siguientes productos:\n\n`;
+  its.forEach((it,i)=>{
+    texto+=`${i+1}. *${it.desc}* — ${it.porComprar} ${it.unidad}`;
+    if(it.obs) texto+=` _(${it.obs})_`;
+    texto+='\n';
+  });
+  texto+=`\nPor favor confirmar disponibilidad y precios.\n`;
+  texto+=`_Clean Group · ISO 9001 · Compras & Almacén_`;
+  window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+}
+
+function necGenerarExcel(items,filename,hoja){
+  if(typeof XLSX==='undefined'){toast('Cargando Excel, intenta de nuevo en 2 segundos',true);return;}
+  const empresa=document.getElementById('nec-empresa-lbl').textContent||'';
+  const periodo=document.getElementById('nec-periodo').value||'';
+  const num=document.getElementById('nec-num').value||'';
+  const fecha=document.getElementById('nec-fecha').value||'';
+  const elab=document.getElementById('nec-elaborado').value||'';
+  const wb=XLSX.utils.book_new();
+  // Cabecera
+  const rows=[
+    ['NECESIDAD DE COMPRA DE BIENES — FOR COM 01 · VER 01'],
+    [],
+    ['N° Necesidad',num,'Empresa',empresa],
+    ['Período',periodo,'Fecha',fecha],
+    ['Elaborado por',elab,'Grupo',hoja],
+    [],
+    ['N°','Descripción','Unidad','Total Pedido','En Stock','Por Comprar','Grupo Proveedor','Observación']
+  ];
+  items.forEach((it,i)=>{
+    rows.push([i+1,it.desc,it.unidad,it.total,it.enStock,it.porComprar,it.provGrupo||'—',it.obs||'']);
+  });
+  rows.push([]);
+  rows.push(['','','TOTAL ÍTEMS',items.length,'','POR COMPRAR',items.reduce((s,i)=>s+(+i.porComprar||0),0)]);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  // Anchos de columna
+  ws['!cols']=[{wch:5},{wch:40},{wch:12},{wch:14},{wch:10},{wch:12},{wch:18},{wch:22}];
+  // Merge título
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
+  XLSX.utils.book_append_sheet(wb,ws,hoja.substring(0,31));
+  XLSX.writeFile(wb,filename+'.xlsx');
+  toast('✅ Excel descargado: '+filename+'.xlsx');
 }
 
 function necPreview(){
@@ -1651,9 +2113,10 @@ function necPreview(){
       <div class="dmi"><strong>Elaborado por</strong>${document.getElementById('nec-elaborado').value||'—'}</div>
       <div class="dmi"><strong>Req. Origen</strong>${rmNum||'—'}${rmNum?'<span class="dlb">VINCULADO</span>':''}</div>
     </div>
-    <div class="dst">ÍTEMS CONSOLIDADOS — ${empresa}</div>
-    <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total Pedido</th><th>En Stock</th><th>Por Comprar</th><th>Observación</th></tr></thead>
-    <tbody>${necItems.map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td style="${it.porComprar>0?'font-weight:600;color:#c07a00':''}">${it.porComprar}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
+    ${necGrupos.filter(g=>necItems.some(i=>i.provGrupo===g)).map(g=>`
+      <div class="dst">${g.toUpperCase()}</div>
+      <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total</th><th>Stock</th><th>Por Comprar</th><th>Obs.</th></tr></thead>
+      <tbody>${necItems.filter(i=>i.provGrupo===g).map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td style="${it.porComprar>0?'font-weight:600;color:#c07a00':''}">${it.porComprar}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>`).join('')}
     ${df('FOR COM 01 · VER 01 (09 12 2024)')}`;
   openPrint(html);
 }
@@ -1671,8 +2134,7 @@ function necGuardar(){
   document.getElementById('nec-items-card').style.display='none';
   document.getElementById('nec-empresa-sel').value='';
   setNums();
-  toast(`✅ Necesidad ${num} para ${empresa} guardada — ve a "Orden de Compra"`);
-  // refresh OC select
+  toast(`✅ Necesidad ${num} guardada — ve a "Orden de Compra"`);
   const ocSel=document.getElementById('oc-nec-sel');
   if(ocSel){const o=document.createElement('option');o.value=num;o.textContent=`${num} — ${empresa} — ${document.getElementById('nec-periodo').value}`;ocSel.appendChild(o);}
 }
@@ -1689,13 +2151,149 @@ function necRenderList(){
       <td><span class="tag tbl" style="font-size:10px">${n.rmId}</span></td>
       <td>${n.items.length} ítems</td>
       <td>${n.ocId?`<span class="tag tok">✓ ${n.ocId}</span>`:'<span class="tag twn">⏳ Sin OC</span>'}</td>
-      <td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="necExcelId(${idx})" title="Descargar Excel">⬇️ XLS</button>
+        <button class="btn btn-s btn-sm" onclick="necPdfId(${idx})" title="Descargar PDF" style="background:var(--red);color:#fff">📄 PDF</button>
+        <button class="btn btn-s btn-sm" onclick="necWhatsappId(${idx})" title="Enviar por WhatsApp" style="background:#25D366;color:#fff">💬 WA</button>
         <button class="btn btn-a btn-sm" onclick="necPreviewId(${idx})">🖨️</button>
         <button class="btn btn-s btn-sm" onclick="nav('orden-compra')">→ OC</button>
         <button class="btn btn-d btn-sm" onclick="necEliminar(${idx})">✕</button>
       </td>
     </tr>`;
   }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
+}
+
+function necPdfActivo(){
+  const n={
+    numero:document.getElementById('nec-num').value,
+    empresa:document.getElementById('nec-empresa-lbl').textContent,
+    periodo:document.getElementById('nec-periodo').value,
+    fecha:document.getElementById('nec-fecha').value,
+    elaborado:document.getElementById('nec-elaborado').value,
+    rmId:document.getElementById('nec-rm-sel').value,
+    items:necItems
+  };
+  necPdfId(-1,n);
+}
+function necWhatsappActivo(){
+  const n={
+    numero:document.getElementById('nec-num').value,
+    empresa:document.getElementById('nec-empresa-lbl').textContent,
+    periodo:document.getElementById('nec-periodo').value,
+    fecha:document.getElementById('nec-fecha').value,
+    rmId:document.getElementById('nec-rm-sel').value,
+    items:necItems
+  };
+  necWhatsappId(-1,n);
+}
+
+function necPdfId(idx,nOverride){
+  const n=nOverride||(db.necesidades[idx]);if(!n)return;
+  // Agrupar ítems por grupo proveedor
+  const grupos={};
+  n.items.forEach(it=>{
+    const g=it.provGrupo||'Sin asignar';
+    if(!grupos[g])grupos[g]=[];
+    grupos[g].push(it);
+  });
+  const tablasPorGrupo=Object.entries(grupos).map(([g,its])=>`
+    <div style="margin-bottom:20px">
+      <div style="background:#0f4c3a;color:#00c9a7;padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border-radius:4px 4px 0 0">${g}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#f5f5f5">
+          <th style="padding:5px 8px;text-align:left;border:1px solid #ddd">Descripción</th>
+          <th style="padding:5px 8px;text-align:center;border:1px solid #ddd">Unidad</th>
+          <th style="padding:5px 8px;text-align:center;border:1px solid #ddd">Total Pedido</th>
+          <th style="padding:5px 8px;text-align:center;border:1px solid #ddd">Por Comprar</th>
+          <th style="padding:5px 8px;text-align:left;border:1px solid #ddd">Obs.</th>
+        </tr></thead>
+        <tbody>${its.map((it,i)=>`<tr style="background:${i%2===0?'#fff':'#fafafa'}">
+          <td style="padding:4px 8px;border:1px solid #eee">${it.desc}</td>
+          <td style="padding:4px 8px;border:1px solid #eee;text-align:center">${it.unidad}</td>
+          <td style="padding:4px 8px;border:1px solid #eee;text-align:center;font-weight:700">${it.total}</td>
+          <td style="padding:4px 8px;border:1px solid #eee;text-align:center;color:${it.porComprar>0?'#c07a00':'#888'};font-weight:${it.porComprar>0?'700':'400'}">${it.porComprar}</td>
+          <td style="padding:4px 8px;border:1px solid #eee;font-size:10px;color:#666">${it.obs||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>NEC — ${n.numero}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#222;font-size:12px}
+      @media print{@page{margin:15mm}body{padding:0}}
+      .header{background:#0a2e22;color:#fff;padding:14px 20px;border-radius:6px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+      .header h1{margin:0;font-size:16px;color:#00c9a7}
+      .header .sub{font-size:10px;color:#aaa}
+      .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;background:#f8f8f8;padding:10px;border-radius:4px;border:1px solid #eee}
+      .meta-item label{display:block;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+      .meta-item span{font-weight:700;font-size:12px}
+      .footer{margin-top:20px;border-top:1px solid #eee;padding-top:10px;font-size:9px;color:#999;text-align:center}
+    </style>
+  </head><body>
+    <div class="header">
+      <div><h1>🧹 CLEAN GROUP</h1><div class="sub">NECESIDAD DE COMPRA DE BIENES — FOR COM 01 · VER 01</div></div>
+      <div style="text-align:right;font-size:11px"><div style="color:#00c9a7;font-weight:700">${n.numero}</div><div style="color:#aaa">${n.fecha||''}</div></div>
+    </div>
+    <div class="meta">
+      <div class="meta-item"><label>Empresa</label><span>${n.empresa}</span></div>
+      <div class="meta-item"><label>Período</label><span>${n.periodo}</span></div>
+      <div class="meta-item"><label>Req. Origen</label><span>${n.rmId}</span></div>
+      <div class="meta-item"><label>Elaborado por</label><span>${n.elaborado||'—'}</span></div>
+      <div class="meta-item"><label>Total ítems</label><span>${n.items.length}</span></div>
+      <div class="meta-item"><label>Por comprar</label><span>${n.items.reduce((s,i)=>s+(+i.porComprar||0),0)}</span></div>
+    </div>
+    ${tablasPorGrupo}
+    <div class="footer">Clean Group · Sistema ISO 9001 · Compras & Almacén · ${n.numero} — ${n.periodo}</div>
+    <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const w=window.open('','_blank','width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+}
+
+function necWhatsappId(idx,nOverride){
+  const n=nOverride||(db.necesidades[idx]);if(!n)return;
+  // Agrupar por grupo proveedor
+  const grupos={};
+  n.items.forEach(it=>{
+    const g=it.provGrupo||'Sin asignar';
+    if(!grupos[g])grupos[g]=[];
+    grupos[g].push(it);
+  });
+  let texto=`*NECESIDAD DE COMPRA — ${n.numero}*\n`;
+  texto+=`*Empresa:* ${n.empresa}\n`;
+  texto+=`*Período:* ${n.periodo}\n`;
+  texto+=`*Fecha:* ${n.fecha||'—'}\n\n`;
+  Object.entries(grupos).forEach(([g,its])=>{
+    texto+=`*📦 ${g.toUpperCase()}*\n`;
+    its.forEach(it=>{
+      texto+=`• ${it.desc} — *${it.porComprar}* ${it.unidad}`;
+      if(it.obs) texto+=` _(${it.obs})_`;
+      texto+='\n';
+    });
+    texto+='\n';
+  });
+  texto+=`_Total: ${n.items.length} ítems — Clean Group ISO 9001_`;
+  const url='https://wa.me/?text='+encodeURIComponent(texto);
+  window.open(url,'_blank');
+}
+
+function necExcelId(idx){
+  const n=db.necesidades[idx];
+  if(!n)return;
+  const tmpItems=n.items;
+  const tmpNecItems=necItems;
+  // Simular contexto para necGenerarExcel
+  necItems=tmpItems;
+  document.getElementById('nec-empresa-lbl').textContent=n.empresa;
+  document.getElementById('nec-periodo').value=n.periodo;
+  document.getElementById('nec-num').value=n.numero;
+  document.getElementById('nec-fecha').value=n.fecha;
+  document.getElementById('nec-elaborado').value=n.elaborado||'';
+  necGenerarExcel(tmpItems,`NEC_${n.empresa}_${n.periodo}`.replace(/\s/g,'_'),'Necesidad');
+  necItems=tmpNecItems;
 }
 
 function necPreviewId(idx){
@@ -1708,10 +2306,11 @@ function necPreviewId(idx){
       <div class="dmi"><strong>Fecha</strong>${n.fecha}</div>
       <div class="dmi"><strong>Req. Origen</strong>${n.rmId}<span class="dlb">VINCULADO</span></div>
     </div>
-    <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total Pedido</th><th>En Stock</th><th>Por Comprar</th><th>Obs.</th></tr></thead>
-    <tbody>${n.items.map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td>${it.porComprar}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
+    <table class="dt"><thead><tr><th>Descripción</th><th>Unidad</th><th>Total</th><th>Stock</th><th>Por Comprar</th><th>Grupo</th><th>Obs.</th></tr></thead>
+    <tbody>${n.items.map(it=>`<tr><td>${it.desc}</td><td>${it.unidad}</td><td><strong>${it.total}</strong></td><td>${it.enStock}</td><td>${it.porComprar}</td><td>${it.provGrupo||'—'}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
     ${df('FOR COM 01 · VER 01 (09 12 2024)')}`);
 }
+
 function necEliminar(idx){if(!confirm('¿Eliminar?'))return;db.necesidades.splice(idx,1);saveDB();necRenderList();toast('Eliminada');}
 
 // ═══════════════════════════════
@@ -1734,19 +2333,23 @@ function ocCargarNec(){
   ocItems=nec.items.filter(it=>it.porComprar>0).map(it=>{
     const descUp=(it.desc||'').toUpperCase().trim();
     let match=null;
+    // 1. Coincidencia exacta
     match=CATALOG.find(c=>c.desc.toUpperCase()===descUp);
+    // 2. Palabras del catálogo (>3 chars) todas presentes en el ítem
     if(!match){
       match=CATALOG.find(c=>{
         const words=c.desc.toUpperCase().split(' ').filter(w=>w.length>3);
-        return words.length>=2 && words.every(w=>descUp.includes(w));
+        return words.length>=2&&words.every(w=>descUp.includes(w));
       });
     }
+    // 3. Palabras del ítem (>3 chars) todas presentes en el catálogo
     if(!match){
       match=CATALOG.find(c=>{
         const words=descUp.split(' ').filter(w=>w.length>3);
-        return words.length>=2 && words.every(w=>c.desc.toUpperCase().includes(w));
+        return words.length>=2&&words.every(w=>c.desc.toUpperCase().includes(w));
       });
     }
+    // 4. Primera palabra significativa al inicio
     if(!match){
       const fw=descUp.split(' ').find(w=>w.length>4);
       if(fw) match=CATALOG.find(c=>c.desc.toUpperCase().startsWith(fw));
@@ -1755,7 +2358,7 @@ function ocCargarNec(){
   });
   ocRenderItems();
   const conCod=ocItems.filter(i=>i.cod).length;
-  toast(ocItems.length+' items cargados desde '+num+' ('+nec.empresa+') — '+conCod+' con código auto-asignado');
+  toast(ocItems.length+' ítems cargados desde '+num+' ('+nec.empresa+') — '+conCod+' con código auto-asignado');
 }
 
 function ocAddItem(){ocItems.push({cant:1,cod:'',desc:'',precio:0,descuento:0});ocRenderItems();}
@@ -1790,7 +2393,7 @@ function ocRenderItems(){
     return '<tr>'
       +'<td><input type="number" min="1" value="'+it.cant+'" onchange="ocItems['+i+'].cant=+this.value;ocCalc()" style="width:55px"></td>'
       +'<td>'+ocBuildCodCell(it,i)+'</td>'
-      +'<td><input value="'+it.desc.replace(/"/g,"&quot;")+'" onchange="ocItems['+i+'].desc=this.value" style="min-width:180px"></td>'
+      +'<td><input value="'+it.desc.replace(/"/g,'&quot;')+'" onchange="ocItems['+i+'].desc=this.value" style="min-width:180px"></td>'
       +'<td><input type="number" min="0" step="0.01" value="'+it.precio+'" onchange="ocItems['+i+'].precio=+this.value;ocRenderItems()" style="width:80px"></td>'
       +'<td><input type="number" min="0" step="0.01" value="'+(it.descuento||0)+'" onchange="ocItems['+i+'].descuento=+this.value;ocRenderItems()" style="width:70px"></td>'
       +'<td style="color:var(--teal);font-weight:600">$'+sub.toFixed(2)+'</td>'
@@ -1849,21 +2452,29 @@ function ocGuardar(){
 
 function ocEditar(idx){
   const o=db.ordenesCompra[idx];
+  if(!o){toast('OC no encontrada',true);return;}
+  nav('orden-compra');
   oc_editIdx=idx;
   ocItems=JSON.parse(JSON.stringify(o.items));
-  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
-  s('oc-num',o.numero);s('oc-fecha',o.fecha);s('oc-condpago',o.condPago);s('oc-tipo',o.tipo);
-  s('oc-detalle',o.detalle);s('oc-proforma',o.proforma);s('oc-fproforma',o.fProforma);
-  s('oc-contacto',o.contactoCG);s('oc-obs',o.obs);
-  s('oc-prov-nombre',o.proveedor);s('oc-prov-ruc',o.provRuc);s('oc-prov-dir',o.provDir);
-  s('oc-prov-contacto',o.provCont);s('oc-prov-tel',o.provTel);s('oc-prov-email',o.provEmail);
-  const necSel=document.getElementById('oc-nec-sel');if(necSel)necSel.value=o.necId||'';
-  ocRenderItems();
-  document.getElementById('oc-edit-banner').style.display='flex';
-  nav('orden-compra');
-  toast(`✏️ Editando OC ${o.numero}`);
+  setTimeout(()=>{
+    const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+    s('oc-num',o.numero);s('oc-fecha',o.fecha);s('oc-condpago',o.condPago);
+    s('oc-tipo',o.tipo);s('oc-detalle',o.detalle);s('oc-proforma',o.proforma);
+    s('oc-fproforma',o.fProforma);s('oc-contacto',o.contactoCG);s('oc-obs',o.obs);
+    s('oc-prov-nombre',o.proveedor);s('oc-prov-ruc',o.provRuc);s('oc-prov-dir',o.provDir);
+    s('oc-prov-contacto',o.provCont);s('oc-prov-tel',o.provTel);s('oc-prov-email',o.provEmail);
+    const necSel=document.getElementById('oc-nec-sel');if(necSel)necSel.value=o.necId||'';
+    const banner=document.getElementById('oc-edit-banner');
+    if(banner){
+      banner.style.display='flex';
+      banner.innerHTML=`<span>✏️ Editando <strong>${o.numero}</strong> — ${o.proveedor}</span>
+        <button onclick="ocCancelarEdicion()" style="margin-left:12px;background:transparent;border:1px solid var(--amber);border-radius:5px;color:var(--amber);padding:2px 10px;cursor:pointer;font-size:11px;font-family:inherit">✕ Cancelar</button>`;
+      banner.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+    ocRenderItems();
+    toast('✏️ Editando OC '+o.numero+' — modifica y guarda');
+  },80);
 }
-
 function ocLimpiar(){
   ocItems=[];oc_editIdx=null;ocRenderItems();
   document.getElementById('oc-edit-banner').style.display='none';
@@ -2468,8 +3079,8 @@ function modalRenderCatalog(){
   });
   // Also collect items already used by other clients of same empresa
   const usedItems={};
-  Object.keys(RM_CAT[rm_empresa]||{}).forEach(cli=>{
-    (RM_CAT[rm_empresa][cli]||[]).forEach(it=>{
+  Object.keys(rmCat()[rm_empresa]||{}).forEach(cli=>{
+    (rmCat()[rm_empresa][cli]||[]).forEach(it=>{
       const key=it.p+'|'+it.u;
       if(!usedItems[key]) usedItems[key]={p:it.p,u:it.u,g:it.g};
     });
@@ -2543,7 +3154,8 @@ function mncAddCustom(){
 function modalGuardarCliente(){
   const nombre=(document.getElementById('mnc-nombre').value||'').trim().toUpperCase();
   if(!nombre){toast('Escribe el nombre del cliente',true);return;}
-  if(RM_CAT[rm_empresa][nombre]){toast('Este cliente ya existe',true);return;}
+  const cat=rmCat();
+  if(cat[rm_empresa]&&cat[rm_empresa][nombre]){toast('Este cliente ya existe',true);return;}
   // Collect selected items
   const checked=[...document.querySelectorAll('#mnc-catalog-list input[type=checkbox]:checked')];
   const items=checked.map(cb=>{
@@ -2552,7 +3164,14 @@ function modalGuardarCliente(){
     const gMap={'QMC':'QUIMICOS','MAT':'INSUMOS','MAQ':'MAQUINAS','EPP':'EPP','SUM':'SUMINISTROS','EXTRA':'EXTRA'};
     return {g:gMap[g]||'INSUMOS',p:desc,u:u,r:0};
   });
-  RM_CAT[rm_empresa][nombre]=items;
+  // Guardar en el catálogo activo (override o RM_CAT)
+  if(window._catalogoOverride&&Object.keys(window._catalogoOverride).length){
+    if(!window._catalogoOverride[rm_empresa]) window._catalogoOverride[rm_empresa]={};
+    window._catalogoOverride[rm_empresa][nombre]=items;
+  } else {
+    if(!RM_CAT[rm_empresa]) RM_CAT[rm_empresa]={};
+    RM_CAT[rm_empresa][nombre]=items;
+  }
   if(!rm_data[rm_empresa])rm_data[rm_empresa]={};
   rm_data[rm_empresa][nombre]={};
   items.forEach(it=>{
@@ -2579,28 +3198,37 @@ function modalEditarItems(){
 
 function meiRenderList(){
   const el=document.getElementById('mei-list');if(!el)return;
-  const items=RM_CAT[rm_empresa]?.[rm_cliente]||[];
-  if(!items.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Sin ítems asignados.</div>';return;}
+  // Leer ítems desde rm_data (la requisición real), no desde el catálogo
+  const dataCliente=rm_data[rm_empresa]?.[rm_cliente]||{};
+  const items=Object.values(dataCliente);
+  if(!items.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Sin ítems con cantidad en esta requisición.</div>';return;}
+  // Ordenar por grupo luego nombre
+  items.sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||(a.prod||'').localeCompare(b.prod||''));
   el.innerHTML=items.map((it,i)=>{
     const edit=meiEdits[i]||{};
     const deleted=edit.deleted||false;
-    const nombre=edit.p!==undefined?edit.p:it.p;
+    const nombre=edit.p!==undefined?edit.p:(it.prod||'');
+    const qty=it.qty||0;
     return `<div class="item-row-edit" style="${deleted?'opacity:.35;text-decoration:line-through':''}">
-      <input value="${nombre}" ${deleted?'disabled':''} 
-        onchange="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].p=this.value"
-        style="flex:1;padding:4px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:12px;font-family:inherit;outline:none">
-      <span style="font-size:10px;color:var(--muted);white-space:nowrap;margin:0 6px">${it.u}</span>
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1">
+        <input value="${nombre.replace(/"/g,'&quot;')}" ${deleted?'disabled':''}
+          onchange="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].p=this.value;meiEdits[${i}]._orig_prod='${it.prod.replace(/'/g,"\\'")}';meiEdits[${i}]._orig_u='${(it.unidad||'').replace(/'/g,"\\'")}'"
+          style="flex:1;padding:4px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:12px;font-family:inherit;outline:none">
+        <span style="font-size:10px;color:var(--muted)">${it.unidad||''} · ${qty} uds</span>
+      </div>
       ${deleted
         ? `<button class="btn btn-s btn-sm" onclick="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].deleted=false;meiRenderList()">↩️</button>`
-        : `<button class="btn btn-d btn-sm" onclick="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].deleted=true;meiRenderList()">🗑️</button>`
+        : `<button class="btn btn-d btn-sm" onclick="meiEdits[${i}]=(meiEdits[${i}]||{});meiEdits[${i}].deleted=true;meiEdits[${i}]._orig_prod='${it.prod.replace(/'/g,"\\'")}';meiEdits[${i}]._orig_u='${(it.unidad||'').replace(/'/g,"\\'")}';meiRenderList()">🗑️</button>`
       }
     </div>`;
   }).join('');
+  // Guardar referencia ordenada para meiGuardar
+  el._itemsRef=items;
 }
 
 function meiFilterCatalog(){
   const buscar=(document.getElementById('mei-buscar')||{}).value?.toLowerCase()||'';
-  const existing=new Set((RM_CAT[rm_empresa]?.[rm_cliente]||[]).map(it=>it.p.toUpperCase()));
+  const existing=new Set((rmCat()[rm_empresa]?.[rm_cliente]||[]).map(it=>it.p.toUpperCase()));
   const filtered=CATALOG.filter(c=>!existing.has(c.desc.toUpperCase())&&(!buscar||c.desc.toLowerCase().includes(buscar)||c.cod.toLowerCase().includes(buscar)));
   const el=document.getElementById('mei-catalog-list');if(!el)return;
   if(!filtered.length){el.innerHTML='<div style="color:var(--muted);font-size:11px;padding:4px">Sin resultados</div>';return;}
@@ -2613,10 +3241,12 @@ function meiFilterCatalog(){
 }
 
 function meiAddItem(desc,u){
-  if(!RM_CAT[rm_empresa][rm_cliente])RM_CAT[rm_empresa][rm_cliente]=[];
+  const cat=rmCat();
+  if(!cat[rm_empresa]) return;
+  if(!cat[rm_empresa][rm_cliente]) cat[rm_empresa][rm_cliente]=[];
   const key=desc+'|'+u;
-  if(RM_CAT[rm_empresa][rm_cliente].some(it=>it.p===desc)){toast('Ya existe en la lista',true);return;}
-  RM_CAT[rm_empresa][rm_cliente].push({g:'INSUMOS',p:desc,u:u,r:0});
+  if(cat[rm_empresa][rm_cliente].some(it=>it.p===desc)){toast('Ya existe en la lista',true);return;}
+  cat[rm_empresa][rm_cliente].push({g:'INSUMOS',p:desc,u:u,r:0});
   if(!rm_data[rm_empresa][rm_cliente])rm_data[rm_empresa][rm_cliente]={};
   rm_data[rm_empresa][rm_cliente][key]={prod:desc,grupo:'INSUMOS',unidad:u,qty:0};
   meiRenderList();
@@ -2625,107 +3255,774 @@ function meiAddItem(desc,u){
 }
 
 function meiGuardar(){
-  const items=RM_CAT[rm_empresa]?.[rm_cliente]||[];
-  const updated=[];
+  const dataCliente=rm_data[rm_empresa]?.[rm_cliente];
+  if(!dataCliente){toast('Sin datos para este cliente',true);return;}
+  // Items ordenados igual que meiRenderList
+  const items=Object.values(dataCliente)
+    .sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||(a.prod||'').localeCompare(b.prod||''));
+  let renombrados=0,eliminados=0,fusionados=0;
   items.forEach((it,i)=>{
     const edit=meiEdits[i]||{};
-    if(edit.deleted)return; // skip deleted
-    const newP=edit.p!==undefined?edit.p.trim().toUpperCase():it.p;
-    const newKey=newP+'|'+it.u;
-    updated.push({...it,p:newP});
-    // Update rm_data key if name changed
-    if(newP!==it.p){
-      const oldKey=it.p+'|'+it.u;
-      const val=rm_data[rm_empresa]?.[rm_cliente]?.[oldKey];
-      if(val&&rm_data[rm_empresa]?.[rm_cliente]){
-        delete rm_data[rm_empresa][rm_cliente][oldKey];
-        rm_data[rm_empresa][rm_cliente][newKey]={...val,prod:newP};
+    const oldKey=it.prod+'|'+it.unidad;
+    if(edit.deleted){
+      delete dataCliente[oldKey];
+      eliminados++;
+      return;
+    }
+    if(edit.p!==undefined){
+      const newNombre=edit.p.trim().toUpperCase();
+      if(newNombre && newNombre!==it.prod){
+        const newKey=newNombre+'|'+it.unidad;
+        if(dataCliente[newKey]){
+          // Fusionar: sumar cantidades
+          dataCliente[newKey].qty=(+dataCliente[newKey].qty||0)+(+it.qty||0);
+          delete dataCliente[oldKey];
+          fusionados++;
+        } else {
+          // Renombrar
+          dataCliente[newKey]={...it,prod:newNombre};
+          delete dataCliente[oldKey];
+          renombrados++;
+        }
       }
     }
   });
-  RM_CAT[rm_empresa][rm_cliente]=updated;
   meiEdits={};
   modalClose('modal-editar-items');
   rmRenderItems();
-  toast('✅ Cambios guardados — '+updated.length+' ítems');
+  if(rm_editIdx!==null) saveDB();
+  let msg='✅ Cambios aplicados';
+  if(renombrados) msg+=' · '+renombrados+' renombrados';
+  if(fusionados)  msg+=' · '+fusionados+' fusionados';
+  if(eliminados)  msg+=' · '+eliminados+' eliminados';
+  toast(msg);
 }
 
 </script>
 
-<!-- Firebase init con autenticación anónima (seguro) -->
+<!-- Supabase init -->
 <script>
-  function _initFirebase() {
-    if (typeof firebase === 'undefined') {
-      setTimeout(_initFirebase, 100);
+(function initSupabase(){
+  if(typeof supabase==='undefined'){ setTimeout(initSupabase,100); return; }
+  _sb = supabase.createClient(SB_URL, SB_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  });
+  window._sb = _sb;
+  console.log('✅ Supabase conectado');
+  setCloudStatus('☁️ En línea','var(--teal)');
+})();
+</script>
+
+<!-- Gestión operativos + campo JS -->
+<script>
+// ════════════════════════════════════════════
+// GESTIÓN OPERATIVOS — ADMIN
+// ════════════════════════════════════════════
+let nop_selClis=[];
+
+async function nopRecargarCatalogo(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  try{
+    const {data}=await _sb.from('campo_catalog').select('catalog').eq('id',1).single();
+    if(data&&data.catalog&&Object.keys(data.catalog).length){
+      window._catalogoOverride=data.catalog;
+      toast('✅ Catálogo recargado desde Supabase');
+      nopRenderCliCheckboxes();
+    } else {
+      toast('No hay catálogo en Supabase, usando base embebida');
+    }
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
+function nopRenderCliCheckboxes(){
+  const emp=document.getElementById('nop-empresa').value;
+  const el=document.getElementById('nop-cli-grid');
+  if(!emp){el.innerHTML='<span style="color:var(--muted);font-size:12px">Selecciona una empresa primero</span>';return;}
+  // Usar catálogo actualizado de Supabase si está disponible, si no el RM_CAT embebido
+  const catActual=(window._catalogoOverride && Object.keys(window._catalogoOverride).length)
+    ? window._catalogoOverride : RM_CAT;
+  const clientes=Object.keys(catActual[emp]||{}).sort();
+  el.innerHTML=clientes.length
+    ? clientes.map(c=>{
+        const sel=nop_selClis.includes(c);
+        return `<button class="cli-check-btn${sel?' sel':''}" onclick="nopTogCli('${c.replace(/'/g,"\\'")}')">${c}</button>`;
+      }).join('')
+    : '<span style="color:var(--muted);font-size:12px">Sin clientes en esta empresa</span>';
+  nopRenderExtras();
+}
+function nopTogCli(c){
+  const i=nop_selClis.indexOf(c);
+  if(i>=0) nop_selClis.splice(i,1); else nop_selClis.push(c);
+  nopRenderCliCheckboxes();
+}
+
+function nopAgregarManual(){
+  const inp=document.getElementById('nop-cli-manual');
+  const val=inp.value.trim().toUpperCase();
+  if(!val)return;
+  if(nop_selClis.includes(val)){toast('Ese cliente ya está en la lista',true);inp.value='';return;}
+  nop_selClis.push(val);
+  inp.value='';
+  nopRenderExtras();
+  toast('✅ "'+val+'" agregado');
+}
+
+function nopRenderExtras(){
+  const emp=document.getElementById('nop-empresa').value;
+  const catActual=(window._catalogoOverride && Object.keys(window._catalogoOverride).length)
+    ? window._catalogoOverride : RM_CAT;
+  const enCatalogo=Object.keys(catActual[emp]||{});
+  const extras=nop_selClis.filter(c=>!enCatalogo.includes(c));
+  const el=document.getElementById('nop-cli-extras');
+  if(!el)return;
+  if(!extras.length){el.innerHTML='';return;}
+  el.innerHTML='<span style="font-size:10px;color:var(--muted);width:100%;display:block;margin-bottom:4px">Clientes agregados manualmente:</span>'+
+    extras.map((c,i)=>`
+      <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:20px;padding:3px 8px;font-size:11px;color:var(--amber)">
+        ${c}
+        <button data-extra="${c.replace(/"/g,'&quot;')}" onclick="nopQuitarExtra(this)" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 2px">×</button>
+      </span>`).join('');
+}
+
+function nopQuitarExtra(btn){
+  const c=btn.dataset.extra;
+  const i=nop_selClis.indexOf(c);
+  if(i>=0)nop_selClis.splice(i,1);
+  nopRenderExtras();
+}
+async function nopGuardar(){
+  const nombre=document.getElementById('nop-nombre').value.trim();
+  const usuario=document.getElementById('nop-usuario').value.trim().toLowerCase();
+  const pass=document.getElementById('nop-pass').value.trim();
+  const empresa=document.getElementById('nop-empresa').value;
+  if(!nombre||!usuario||!pass){toast('Completa nombre, usuario y contraseña',true);return;}
+  if(pass.length<4){toast('La contraseña debe tener al menos 4 caracteres',true);return;}
+  if(!empresa){toast('Selecciona una empresa',true);return;}
+  if(!nop_selClis.length){toast('Asigna al menos un cliente',true);return;}
+  if(!_sb){toast('Sin conexión Supabase',true);return;}
+  try{
+    const {error}=await _sb.from('operativos_usuarios').upsert(
+      {nombre,usuario,password:pass,empresa,clientes:nop_selClis,creado:new Date().toISOString()},
+      {onConflict:'usuario'}
+    );
+    if(error) throw error;
+    toast('✅ Usuario "'+usuario+'" guardado');
+    nopLimpiar(); initOperativosPanel();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+function nopLimpiar(){
+  ['nop-nombre','nop-usuario','nop-pass','nop-cli-manual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('nop-empresa').value='';
+  const ex=document.getElementById('nop-cli-extras');if(ex)ex.innerHTML='';
+  nop_selClis=[]; nopRenderCliCheckboxes();
+}
+async function nopEliminar(usuario){
+  if(!confirm('¿Eliminar usuario "'+usuario+'"?')) return;
+  const {error}=await _sb.from('operativos_usuarios').delete().eq('usuario',usuario);
+  if(error){toast('Error: '+error.message,true);return;}
+  toast('Usuario eliminado'); initOperativosPanel();
+}
+async function nopEditar(usuario){
+  const {data}=await _sb.from('operativos_usuarios').select('*').eq('usuario',usuario).single();
+  if(!data) return;
+  document.getElementById('nop-nombre').value=data.nombre;
+  document.getElementById('nop-usuario').value=data.usuario;
+  document.getElementById('nop-pass').value=data.password;
+  document.getElementById('nop-empresa').value=data.empresa;
+  nop_selClis=[...(data.clientes||[])];
+  nopRenderCliCheckboxes();
+  nopRenderExtras();
+  document.getElementById('nop-nombre').scrollIntoView({behavior:'smooth'});
+}
+async function initOperativosPanel(){
+  const el=document.getElementById('op-list');
+  if(!_sb||!el) return;
+  const {data,error}=await _sb.from('operativos_usuarios').select('*').order('creado',{ascending:false});
+  if(error){el.innerHTML='<p style="color:var(--red);font-size:13px">Error: '+error.message+'</p>';return;}
+  const countEl=document.getElementById('op-count');
+  if(countEl) countEl.textContent=data.length;
+  if(!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No hay usuarios registrados aún.</p>';return;}
+  el.innerHTML='<div class="op-grid">'+data.map(u=>`
+    <div class="op-card">
+      <div class="op-card-head">
+        <div><div class="op-name">👤 ${u.nombre}</div><div class="op-meta">@${u.usuario} · ${u.empresa}</div></div>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-s btn-sm" onclick="nopEditar('${u.usuario}')">✏️</button>
+          <button class="btn btn-d btn-sm" onclick="nopEliminar('${u.usuario}')">🗑️</button>
+        </div>
+      </div>
+      <div class="op-tags">${(u.clientes||[]).map(c=>`<span class="op-tag">${c}</span>`).join('')}</div>
+    </div>`).join('')+'</div>';
+  const opSel=document.getElementById('campo-op-sel');
+  if(opSel){
+    const cur=opSel.value;
+    opSel.innerHTML='<option value="">Todos los operativos</option>'+data.map(u=>`<option${u.nombre===cur?' selected':''}>${u.nombre}</option>`).join('');
+  }
+}
+async function opPublishCatalog(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  const {error}=await _sb.from('campo_catalog').upsert({id:1,catalog:RM_CAT,updated:new Date().toISOString()},{onConflict:'id'});
+  if(error){toast('Error: '+error.message,true);return;}
+  toast('✅ Catálogo publicado al portal de campo');
+}
+
+// ════════════════════════════════════════════
+// REQUISICIONES DE CAMPO — ADMIN
+// ════════════════════════════════════════════
+let _campoReqs=[];
+async function campoReload(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  const {data,error}=await _sb.from('campo_reqs').select('*').order('fecha_iso',{ascending:false}).limit(500);
+  if(error){toast('Error: '+error.message,true);return;}
+  _campoReqs=data||[]; campoRender();
+}
+// ════════════════════════════════════════════
+// EDITOR DE CATÁLOGO
+// ════════════════════════════════════════════
+let cat_working = null; // copia de trabajo del catálogo
+
+async function initCatalogoPanel(){
+  // Siempre cargar la versión más reciente desde Supabase
+  if(_sb){
+    try{
+      const {data}=await _sb.from('campo_catalog').select('catalog').eq('id',1).single();
+      if(data && data.catalog && Object.keys(data.catalog).length){
+        window._catalogoOverride = data.catalog;
+      }
+    }catch(e){}
+  }
+  cat_working = JSON.parse(JSON.stringify(
+    (window._catalogoOverride && Object.keys(window._catalogoOverride).length)
+      ? window._catalogoOverride : RM_CAT
+  ));
+  catTab('editar');
+}
+
+function catTab(tab){
+  ['editar','nuevo','mover'].forEach(t=>{
+    document.getElementById('cat-tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('cat-pane-'+t).style.display = t===tab ? '' : 'none';
+  });
+  if(tab==='editar') catEdReset();
+  if(tab==='mover')  catMvReset();
+}
+
+// ── EDITAR CLIENTE ─────────────────────────
+function catEdReset(){
+  const se=document.getElementById('cat-ed-empresa');
+  const sc=document.getElementById('cat-ed-cliente');
+  if(se) se.value='';
+  if(sc){sc.innerHTML='<option value="">— Cliente —</option>';}
+  const b=document.getElementById('cat-ed-body');
+  if(b) b.innerHTML='';
+  const i=document.getElementById('cat-ed-info');
+  if(i) i.textContent='';
+}
+
+function catEdLoadClientes(){
+  const emp=document.getElementById('cat-ed-empresa').value;
+  const sc=document.getElementById('cat-ed-cliente');
+  sc.innerHTML='<option value="">— Cliente —</option>';
+  document.getElementById('cat-ed-body').innerHTML='';
+  if(!emp||!cat_working[emp]) return;
+  Object.keys(cat_working[emp]).sort().forEach(c=>{
+    const o=document.createElement('option');o.value=c;o.textContent=c;sc.appendChild(o);
+  });
+}
+
+function catEdLoadItems(){
+  const emp=document.getElementById('cat-ed-empresa').value;
+  const cli=document.getElementById('cat-ed-cliente').value;
+  const body=document.getElementById('cat-ed-body');
+  const info=document.getElementById('cat-ed-info');
+  if(!emp||!cli){body.innerHTML='';return;}
+  const items=((cat_working[emp]||{})[cli])||[];
+  info.textContent=items.length+' ítems en catálogo';
+  catEdRender(emp,cli);
+}
+
+function catEdRender(emp,cli){
+  const body=document.getElementById('cat-ed-body');
+  if(!body) return;
+  // Construir lista de todos los ítems base únicos
+  const base = catGetBase();
+  const asignados = ((cat_working[emp]||{})[cli])||[];
+  const asigSet = new Set(asignados.map(x=>x.p+'|'+x.u));
+
+  // Buscar texto
+  const busq=(document.getElementById('cat-ed-buscar')||{}).value||'';
+  const busqL=busq.toLowerCase();
+
+  // Agrupar base
+  const grupos={};
+  base.forEach(it=>{
+    if(busqL && !it.p.toLowerCase().includes(busqL)) return;
+    if(!grupos[it.g]) grupos[it.g]=[];
+    grupos[it.g].push(it);
+  });
+
+  const totalSel=asigSet.size;
+  body.innerHTML=`
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <input class="cat-buscar" id="cat-ed-buscar" placeholder="🔍 Buscar ítem..." oninput="catEdRender('${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}')">
+      <div class="cat-stats">${totalSel} ítems seleccionados</div>
+      <button class="btn btn-s" onclick="catEdGuardar('${emp.replace(/'/g,"\\'")}','${cli.replace(/'/g,"\\'")}')">💾 Guardar cambios</button>
+    </div>
+    <div style="max-height:520px;overflow-y:auto;padding-right:4px">
+    ${Object.entries(grupos).map(([g,its])=>{
+      const nSel=its.filter(it=>asigSet.has(it.p+'|'+it.u)).length;
+      return`<div class="cat-grupo-hdr">
+          <span>${g}</span>
+          <span style="font-size:11px;color:var(--teal)">${nSel}/${its.length}</span>
+        </div>`+
+        its.map(it=>{
+          const key=it.p+'|'+it.u;
+          const chk=asigSet.has(key)?'checked':'';
+          return`<div class="cat-item-row">
+            <input type="checkbox" class="cat-item-chk" ${chk}
+              data-emp="${emp}" data-cli="${cli}" data-p="${it.p.replace(/"/g,'&quot;')}" data-u="${it.u}" data-g="${it.g}"
+              onchange="catTogItem(this)">
+            <span class="cat-item-name">${it.p}</span>
+            <span class="cat-item-unit">${it.u}</span>
+          </div>`;
+        }).join('');
+    }).join('')}
+    </div>`;
+}
+
+function catTogItem(chk){
+  const emp=chk.dataset.emp, cli=chk.dataset.cli;
+  const p=chk.dataset.p, u=chk.dataset.u, g=chk.dataset.g;
+  if(!cat_working[emp]) cat_working[emp]={};
+  if(!cat_working[emp][cli]) cat_working[emp][cli]=[];
+  const arr=cat_working[emp][cli];
+  const idx=arr.findIndex(x=>x.p===p&&x.u===u);
+  if(chk.checked && idx<0) arr.push({g,p,u,r:0});
+  if(!chk.checked && idx>=0) arr.splice(idx,1);
+  // actualizar contador
+  const info=document.getElementById('cat-ed-info');
+  if(info) info.textContent=arr.length+' ítems en catálogo';
+}
+
+async function catEdGuardar(emp,cli){
+  const items=((cat_working[emp]||{})[cli])||[];
+  if(!items.length){toast('El cliente no tiene ítems. Selecciona al menos uno.',true);return;}
+  await catGuardarYPublicar(`Catálogo de ${cli} (${emp}) actualizado — ${items.length} ítems`);
+}
+
+// ── NUEVO CLIENTE ──────────────────────────
+function catNvRenderBase(){
+  const nombre=document.getElementById('cat-nv-nombre').value.trim().toUpperCase();
+  const emp=document.getElementById('cat-nv-empresa').value;
+  if(!nombre){toast('Escribe el nombre del cliente',true);return;}
+  if(!emp){toast('Selecciona la empresa',true);return;}
+  if(cat_working[emp] && cat_working[emp][nombre]){
+    toast('Ese cliente ya existe en '+emp,true);return;
+  }
+  // Inicializar con lista vacía
+  if(!cat_working[emp]) cat_working[emp]={};
+  if(!cat_working[emp][nombre]) cat_working[emp][nombre]=[];
+  catNvRender(emp,nombre);
+}
+
+function catNvRender(emp,nombre){
+  const body=document.getElementById('cat-nv-body');
+  const base=catGetBase();
+  const asignados=cat_working[emp][nombre]||[];
+  const asigSet=new Set(asignados.map(x=>x.p+'|'+x.u));
+  const busq=((document.getElementById('cat-nv-buscar')||{}).value||'').toLowerCase();
+  const grupos={};
+  base.forEach(it=>{
+    if(busq && !it.p.toLowerCase().includes(busq)) return;
+    if(!grupos[it.g]) grupos[it.g]=[];
+    grupos[it.g].push(it);
+  });
+  body.innerHTML=`
+    <div style="background:rgba(0,201,167,.07);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px">
+      Creando <strong>${nombre}</strong> en <strong>${emp}</strong> — selecciona los ítems de su catálogo
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <input class="cat-buscar" id="cat-nv-buscar" placeholder="🔍 Buscar ítem..." oninput="catNvRender('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}')">
+      <div class="cat-stats" id="cat-nv-count">${asigSet.size} seleccionados</div>
+      <button class="btn btn-s" onclick="catNvGuardar('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}')">✅ Crear cliente</button>
+    </div>
+    <div style="max-height:500px;overflow-y:auto;padding-right:4px">
+    ${Object.entries(grupos).map(([g,its])=>{
+      const nSel=its.filter(it=>asigSet.has(it.p+'|'+it.u)).length;
+      return`<div class="cat-grupo-hdr">
+          <span>${g}</span>
+          <span style="font-size:11px"><button style="border:none;background:transparent;color:var(--teal);cursor:pointer;font-size:11px" onclick="catSelGrupoNv('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}','${g}',true)">✓ todos</button> / <button style="border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:11px" onclick="catSelGrupoNv('${emp.replace(/'/g,"\\'")}','${nombre.replace(/'/g,"\\'")}','${g}',false)">ninguno</button> <span style="color:var(--teal)">${nSel}/${its.length}</span></span>
+        </div>`+
+        its.map(it=>{
+          const key=it.p+'|'+it.u;
+          return`<div class="cat-item-row">
+            <input type="checkbox" class="cat-item-chk" ${asigSet.has(key)?'checked':''}
+              data-emp="${emp}" data-cli="${nombre.replace(/"/g,'&quot;')}" data-p="${it.p.replace(/"/g,'&quot;')}" data-u="${it.u}" data-g="${it.g}"
+              onchange="catTogItemNv(this)">
+            <span class="cat-item-name">${it.p}</span>
+            <span class="cat-item-unit">${it.u}</span>
+          </div>`;
+        }).join('');
+    }).join('')}
+    </div>`;
+}
+
+function catTogItemNv(chk){
+  const emp=chk.dataset.emp,cli=chk.dataset.cli,p=chk.dataset.p,u=chk.dataset.u,g=chk.dataset.g;
+  if(!cat_working[emp][cli]) cat_working[emp][cli]=[];
+  const arr=cat_working[emp][cli];
+  const idx=arr.findIndex(x=>x.p===p&&x.u===u);
+  if(chk.checked && idx<0) arr.push({g,p,u,r:0});
+  if(!chk.checked && idx>=0) arr.splice(idx,1);
+  const c=document.getElementById('cat-nv-count');
+  if(c) c.textContent=arr.length+' seleccionados';
+}
+
+function catSelGrupoNv(emp,nombre,grupo,sel){
+  const base=catGetBase().filter(x=>x.g===grupo);
+  if(!cat_working[emp][nombre]) cat_working[emp][nombre]=[];
+  const arr=cat_working[emp][nombre];
+  base.forEach(it=>{
+    const idx=arr.findIndex(x=>x.p===it.p&&x.u===it.u);
+    if(sel && idx<0) arr.push({g:it.g,p:it.p,u:it.u,r:0});
+    if(!sel && idx>=0) arr.splice(idx,1);
+  });
+  catNvRender(emp,nombre);
+}
+
+async function catNvGuardar(emp,nombre){
+  const items=cat_working[emp][nombre]||[];
+  if(!items.length){toast('Selecciona al menos un ítem para el cliente',true);return;}
+  await catGuardarYPublicar(`Cliente "${nombre}" creado en ${emp} — ${items.length} ítems`);
+  // Actualizar selector de empresa/cliente
+  document.getElementById('cat-nv-nombre').value='';
+  document.getElementById('cat-nv-empresa').value='';
+  document.getElementById('cat-nv-body').innerHTML='';
+}
+
+// ── MOVER CLIENTE ──────────────────────────
+function catMvReset(){
+  ['cat-mv-emp-origen','cat-mv-cliente','cat-mv-emp-destino'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  const sc=document.getElementById('cat-mv-cliente');
+  if(sc) sc.innerHTML='<option value="">— Cliente —</option>';
+  const info=document.getElementById('cat-mv-info');
+  if(info) info.textContent='';
+}
+
+function catMvLoadClientes(){
+  const emp=document.getElementById('cat-mv-emp-origen').value;
+  const sc=document.getElementById('cat-mv-cliente');
+  sc.innerHTML='<option value="">— Cliente —</option>';
+  if(!emp||!cat_working[emp]) return;
+  Object.keys(cat_working[emp]).sort().forEach(c=>{
+    const o=document.createElement('option');o.value=c;o.textContent=c;sc.appendChild(o);
+  });
+}
+
+async function catMoverCliente(){
+  const empOrigen=document.getElementById('cat-mv-emp-origen').value;
+  const cli=document.getElementById('cat-mv-cliente').value;
+  const empDestino=document.getElementById('cat-mv-emp-destino').value;
+  const info=document.getElementById('cat-mv-info');
+  if(!empOrigen||!cli||!empDestino){toast('Completa todos los campos',true);return;}
+  if(empOrigen===empDestino){toast('La empresa destino debe ser diferente',true);return;}
+  if(!cat_working[empOrigen]||!cat_working[empOrigen][cli]){toast('Cliente no encontrado',true);return;}
+  if(cat_working[empDestino]&&cat_working[empDestino][cli]){
+    if(!confirm(`"${cli}" ya existe en ${empDestino}. ¿Sobreescribir?`)) return;
+  }
+  const items=cat_working[empOrigen][cli];
+  if(!cat_working[empDestino]) cat_working[empDestino]={};
+  cat_working[empDestino][cli]=items;
+  delete cat_working[empOrigen][cli];
+  info.innerHTML=`<span style="color:var(--teal)">✅ "${cli}" movido de ${empOrigen} → ${empDestino} con ${items.length} ítems</span>`;
+  await catGuardarYPublicar(`"${cli}" movido de ${empOrigen} a ${empDestino}`);
+  catMvReset();
+}
+
+// ── HELPERS ────────────────────────────────
+function catGetBase(){
+  // Extrae ítems únicos de todo el catálogo
+  const seen=new Set(), base=[];
+  const src = cat_working || RM_CAT;
+  Object.values(src).forEach(emp=>Object.values(emp).forEach(lista=>{
+    lista.forEach(it=>{
+      const k=it.p+'|'+it.u;
+      if(!seen.has(k)){seen.add(k);base.push({g:it.g,p:it.p,u:it.u});}
+    });
+  }));
+  // Ordenar por grupo luego nombre
+  return base.sort((a,b)=>a.g.localeCompare(b.g)||a.p.localeCompare(b.p));
+}
+
+async function catGuardarYPublicar(msg){
+  if(!_sb){toast('Sin conexión Supabase',true);return;}
+  try{
+    const {error}=await _sb.from('campo_catalog').upsert({id:1,catalog:cat_working,updated:new Date().toISOString()});
+    if(error) throw error;
+    window._catalogoOverride=cat_working;
+    toast('✅ '+msg+' — catálogo publicado al portal');
+    // Si el panel de Usuarios está activo, refrescar los checkboxes de clientes
+    if(typeof nopRenderCliCheckboxes==='function') nopRenderCliCheckboxes();
+  }catch(e){toast('Error guardando: '+e.message,true);}
+}
+
+async function initCampoPanel(){
+  await initOperativosPanel(); await campoReload();
+}
+function campoRender(){
+  const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
+  const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
+  const opF=(document.getElementById('campo-op-sel')||{}).value||'';
+  let reqs=_campoReqs;
+  if(periodo) reqs=reqs.filter(r=>r.periodo===periodo);
+  if(empresa) reqs=reqs.filter(r=>r.empresa===empresa);
+  if(opF) reqs=reqs.filter(r=>r.operativo===opF);
+  const periodos=[...new Set(_campoReqs.map(r=>r.periodo).filter(Boolean))].sort().reverse();
+  const pSel=document.getElementById('campo-periodo-sel');
+  if(pSel){const cur=pSel.value;pSel.innerHTML='<option value="">Todos los períodos</option>'+periodos.map(p=>`<option${p===cur?' selected':''}>${p}</option>`).join('');}
+  const totalOps=[...new Set(reqs.map(r=>r.operativo))].length;
+  const totalClis=[...new Set(reqs.map(r=>r.cliente))].length;
+  const statsEl=document.getElementById('campo-stats');
+  if(statsEl) statsEl.innerHTML=`
+    <div class="sc st"><div class="l">Envíos recibidos</div><div class="v">${reqs.length}</div><div class="s">Total</div></div>
+    <div class="sc st"><div class="l">Operativos</div><div class="v">${totalOps}</div><div class="s">Han enviado</div></div>
+    <div class="sc sa"><div class="l">Clientes</div><div class="v">${totalClis}</div><div class="s">Cubiertos</div></div>`;
+  document.getElementById('campo-count').textContent=reqs.length;
+  const consolMap={};
+  reqs.forEach(r=>{
+    const emp=r.empresa||'—';const cli=r.cliente||'—';
+    if(!consolMap[emp]) consolMap[emp]={};
+    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set()};
+    const block=consolMap[emp][cli];
+    block.ops.add(r.operativo||'?');block.periodos.add(r.periodo||'?');
+    (r.items||[]).forEach(it=>{
+      if(!it.qty||+it.qty===0) return;
+      const key=it.prod+'|'+it.unidad;
+      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0};
+      block.items[key].qty+=+it.qty;
+    });
+  });
+  const consEl=document.getElementById('campo-consolidado');
+  if(consEl){
+    if(!reqs.length){consEl.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay requisiciones para el filtro seleccionado.</p>';}
+    else{consEl.innerHTML=Object.entries(consolMap).map(([emp,clis])=>Object.entries(clis).map(([cli,data])=>{
+      const itemsArr=Object.values(data.items).filter(i=>i.qty>0);
+      const grupos={};itemsArr.forEach(it=>{if(!grupos[it.grupo]) grupos[it.grupo]=[];grupos[it.grupo].push(it);});
+      const bid='cb-'+emp.replace(/\W/g,'')+'-'+cli.replace(/\W/g,'');
+      const reqIds=reqs.filter(r=>(r.empresa||'—')===emp&&(r.cliente||'—')===cli).map(r=>r.id);
+      return `<div class="campo-block">
+        <div class="campo-block-head" onclick="event.target.closest('.campo-block-head')&&!event.target.closest('.emp-edit-wrap')&&document.getElementById('${bid}').classList.toggle('open')">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <strong style="font-size:13px">${emp} · ${cli}</strong>
+            <span class="campo-period-tag">${[...data.periodos].join(', ')}</span>
+            <span style="font-size:11px;color:var(--muted)">${[...data.ops].join(', ')}</span>
+            <span class="emp-edit-wrap" style="display:inline-flex;align-items:center;gap:4px">
+              <select class="emp-edit-sel" id="empsel-${bid}"
+                style="padding:2px 6px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;outline:none"
+                onchange="event.stopPropagation()">
+                <option value="INMOCLEAN"${emp==='INMOCLEAN'?' selected':''}>INMOCLEAN</option>
+                <option value="NOVACLEAN"${emp==='NOVACLEAN'?' selected':''}>NOVACLEAN</option>
+                <option value="HOMECLEAN"${emp==='HOMECLEAN'?' selected':''}>HOMECLEAN</option>
+              </select>
+              <button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--amber);color:var(--navy);border:none"
+                onclick="event.stopPropagation();campoEditarEmpresa('empsel-${bid}',[${reqIds.map(id=>`'${id}'`).join(',')}])">✓</button>
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="tag tok">${itemsArr.length} ítems</span><span style="color:var(--muted)">▼</span></div>
+        </div>
+        <div class="campo-block-body" id="${bid}">
+          ${Object.entries(grupos).map(([g,its])=>`
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">${g}</div>
+            ${its.map(it=>{
+              // Usar data-attributes — evita todos los problemas de escaping con nombres especiales
+              window._consItems=window._consItems||{};
+              const ik=Object.keys(window._consItems).length;
+              const rowId='cirow'+ik;
+              window._consItems[rowId]={prod:it.prod,unidad:it.unidad,qty:it.qty,emp,cli,reqIds:[...reqIds]};
+              return`<div class="cons-item-row" id="${rowId}" style="border-bottom:1px solid rgba(255,255,255,.03)">
+                <div class="cons-item-view" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
+                  <span>${it.prod}</span>
+                  <span style="display:flex;gap:8px;align-items:center">
+                    <span style="color:var(--muted);font-size:10px">${it.unidad}</span>
+                    <span style="color:var(--teal);font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.qty}</span>
+                    <button data-action="ci-edit" data-rowid="${rowId}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 3px" title="Editar">✏️</button>
+                  </span>
+                </div>
+                <div class="cons-item-edit" style="display:none;padding:7px 0;gap:6px;align-items:center;flex-wrap:wrap">
+                  <input class="ci-prod" data-rowid="${rowId}" value="${it.prod.replace(/"/g,'&quot;')}" placeholder="Nombre del ítem"
+                    style="flex:1;min-width:150px;padding:5px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--teal);color:var(--text);font-size:12px;font-family:inherit;outline:none">
+                  <input class="ci-qty" data-rowid="${rowId}" type="number" min="0" value="${it.qty}" placeholder="Qty"
+                    style="width:65px;padding:5px 8px;border-radius:5px;background:var(--navy);border:1px solid var(--teal);color:var(--teal);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;text-align:center">
+                  <button data-action="ci-save"   data-rowid="${rowId}" style="padding:5px 12px;border-radius:5px;background:var(--teal);border:none;color:var(--navy);font-size:12px;font-weight:700;cursor:pointer">✓ Guardar</button>
+                  <button data-action="ci-cancel" data-rowid="${rowId}" style="padding:5px 10px;border-radius:5px;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:12px;cursor:pointer">✕</button>
+                  <button data-action="ci-del"    data-rowid="${rowId}" style="padding:5px 10px;border-radius:5px;background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;cursor:pointer">🗑️ Eliminar</button>
+                </div>
+              </div>`;
+            }).join('')}`).join('')}
+        </div>
+      </div>`;
+    }).join('')).join('');}
+  }
+  const listEl=document.getElementById('campo-list');
+  if(listEl){listEl.innerHTML=reqs.map(r=>{
+    const cnt=(r.items||[]).filter(i=>i.qty>0).length;
+    const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
+    return `<tr>
+      <td><strong>${r.operativo||'—'}</strong></td><td>${r.empresa||'—'}</td><td>${r.cliente||'—'}</td>
+      <td><span class="campo-period-tag">${r.periodo||'—'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${fecha}</td>
+      <td><span class="tag tok">${cnt} ítems</span></td>
+      <td><button class="btn btn-d btn-sm" onclick="campoEliminar(this,${r.id})">🗑️</button></td>
+    </tr>`;
+  }).join('');}
+}
+// ── EDITAR ÍTEMS DEL CONSOLIDADO — event delegation ────────────
+// El consolidado usa data-attributes para evitar problemas de escaping
+document.addEventListener('click', async function(e){
+  const btn=e.target.closest('[data-action]');
+  if(!btn) return;
+  const action=btn.dataset.action;
+  if(!action||!action.startsWith('ci-')) return;
+  const rowId=btn.dataset.rowid;
+  const row=document.getElementById(rowId);
+  if(!row) return;
+  const meta=window._consItems&&window._consItems[rowId];
+
+  if(action==='ci-edit'){
+    row.classList.add('editing');
+    row.querySelector('.cons-item-view').style.display='none';
+    row.querySelector('.cons-item-edit').style.display='flex';
+    row.querySelector('.ci-prod').focus();
+  }
+  if(action==='ci-cancel'){
+    row.classList.remove('editing');
+    row.querySelector('.cons-item-view').style.display='flex';
+    row.querySelector('.cons-item-edit').style.display='none';
+  }
+  if(action==='ci-save' && meta){
+    const newProd=(row.querySelector('.ci-prod').value||'').trim().toUpperCase();
+    const newQty=parseFloat(row.querySelector('.ci-qty').value)||0;
+    if(!newProd){toast('El nombre no puede estar vacío',true);return;}
+    if(!_sb){toast('Sin conexión',true);return;}
+    btn.textContent='⏳';btn.disabled=true;
+    try{
+      const{data:recs,error}=await _sb.from('campo_reqs').select('id,items').in('id',meta.reqIds);
+      if(error)throw error;
+      const totOrig=recs.reduce((s,r)=>{
+        const it=(r.items||[]).find(x=>x.prod===meta.prod&&x.unidad===meta.unidad);
+        return s+(it?+it.qty:0);
+      },0);
+      for(const rec of recs){
+        const items=[...(rec.items||[])];
+        const idx=items.findIndex(x=>x.prod===meta.prod&&x.unidad===meta.unidad);
+        if(idx<0) continue;
+        const prop=totOrig>0?(+items[idx].qty/totOrig):1;
+        const nQty=Math.max(0,Math.round(newQty*prop));
+        if(newProd===meta.prod){
+          items[idx]={...items[idx],qty:nQty};
+        } else {
+          const existIdx=items.findIndex(x=>x.prod===newProd&&x.unidad===meta.unidad);
+          if(existIdx>=0){
+            items[existIdx].qty=(+items[existIdx].qty||0)+nQty;
+            items.splice(idx,1);
+          } else {
+            items[idx]={...items[idx],prod:newProd,qty:nQty};
+          }
+        }
+        await _sb.from('campo_reqs').update({items}).eq('id',rec.id);
+      }
+      toast('✅ Ítem actualizado');
+      await campoReload();
+    }catch(err){toast('Error: '+err.message,true);btn.textContent='✓ Guardar';btn.disabled=false;}
+  }
+  if(action==='ci-del' && meta){
+    if(!confirm(`¿Eliminar "${meta.prod}" de todos los registros de ${meta.cli}?`)) return;
+    if(!_sb){toast('Sin conexión',true);return;}
+    btn.textContent='⏳';btn.disabled=true;
+    try{
+      const{data:recs,error}=await _sb.from('campo_reqs').select('id,items').in('id',meta.reqIds);
+      if(error)throw error;
+      for(const rec of recs){
+        const items=(rec.items||[]).filter(x=>!(x.prod===meta.prod&&x.unidad===meta.unidad));
+        await _sb.from('campo_reqs').update({items}).eq('id',rec.id);
+      }
+      toast('🗑️ "'+meta.prod+'" eliminado');
+      await campoReload();
+    }catch(err){toast('Error: '+err.message,true);btn.textContent='🗑️ Eliminar';btn.disabled=false;}
+  }
+});
+
+async function campoEditarEmpresa(selId, ids){
+  const nuevaEmp=document.getElementById(selId).value;
+  if(!nuevaEmp||!ids.length){toast('Selecciona una empresa',true);return;}
+  if(!_sb){toast('Sin conexión',true);return;}
+  try{
+    // Actualizar todas las requisiciones de este bloque cliente
+    const{error}=await _sb.from('campo_reqs').update({empresa:nuevaEmp}).in('id',ids);
+    if(error) throw error;
+    toast(`✅ Empresa actualizada a ${nuevaEmp} (${ids.length} registros)`);
+    await campoReload();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
+async function campoEliminar(btn,id){
+  if(!confirm('¿Eliminar este envío?')) return;
+  if(!_sb){toast('Sin conexión',true);return;}
+  const numId=parseInt(id,10);
+  btn.disabled=true;btn.textContent='...';
+  try{
+    const{error,data}=await _sb.from('campo_reqs').delete().eq('id',numId).select();
+    if(error){
+      console.error('Delete error:',error);
+      toast('Error: '+error.message,true);
+      btn.disabled=false;btn.textContent='🗑️';
       return;
     }
-    const firebaseConfig = {
-      apiKey: "AIzaSyDx94VADnHE3aLh0y8we0ck13HmJDW1Dis",
-      authDomain: "cleangroup-5a6d7.firebaseapp.com",
-      projectId: "cleangroup-5a6d7",
-      storageBucket: "cleangroup-5a6d7.firebasestorage.app",
-      messagingSenderId: "7136503563",
-      appId: "1:7136503563:web:f34bda90b43b25aec4640e"
-    };
-
-    const fireApp = firebase.initializeApp(firebaseConfig);
-    const fireDb  = firebase.firestore();
-    // Forzar long polling — evita bloqueos de WebSocket en redes restrictivas
-    fireDb.settings({ experimentalForceLongPolling: true, merge: true });
-    const DB_DOC  = fireDb.collection("cleangroup").doc("maindb");
-
-    window._fireDb        = fireDb;
-    window._dbDoc         = DB_DOC;
-    window._saving        = false;
-    window._lastSavedJson = null;
-    window._fsGet = (docRef) => docRef.get();
-    window._fsSet = (docRef, data, opts) => opts ? docRef.set(data, opts) : docRef.set(data);
-
-    function startFirestoreSync() {
-      DB_DOC.onSnapshot((snap) => {
-        if (!snap.exists) return;
-        const data = snap.data();
-        if (!data || !data.db) return;
-        if (typeof setCloudStatus === 'function') setCloudStatus('☁️ En línea','var(--teal)');
-        if (data.db === window._lastSavedJson) return;
-        try {
-          const remote = JSON.parse(data.db);
-          const keys = ['reqMensuales','necesidades','ordenesCompra','actasIngreso','actasEntrega','inventario','counters'];
-          keys.forEach(k => { if (remote[k] !== undefined) window.db[k] = remote[k]; });
-          window._lastSavedJson = data.db;
-          if (typeof renderDash        === 'function') renderDash();
-          if (typeof rmRenderList      === 'function') rmRenderList();
-          if (typeof necRenderList     === 'function') necRenderList();
-          if (typeof ocRenderList      === 'function') ocRenderList();
-          if (typeof aiRenderList      === 'function') aiRenderList();
-          if (typeof aeRenderList      === 'function') aeRenderList();
-          if (typeof invRender         === 'function') invRender();
-          if (typeof setNums           === 'function') setNums();
-          if (typeof necRefreshSelects === 'function') necRefreshSelects();
-          if (typeof aeRefreshSelects  === 'function') aeRefreshSelects();
-          if (typeof aiPopulateOCSelect=== 'function') aiPopulateOCSelect();
-          console.log('🔄 Datos actualizados desde otro dispositivo');
-        } catch(e) { console.warn('Sync parse error', e); }
-      }, (err) => {
-        console.warn('onSnapshot error:', err);
-        if (typeof setCloudStatus === 'function') setCloudStatus('⚠️ Sin conexión','var(--amber)');
-      });
-      console.log("🔥 Firebase conectado y autenticado");
-    }
-
-    // Autenticación anónima — Firebase solo permite acceso a usuarios autenticados
-    firebase.auth().signInAnonymously()
-      .then(() => {
-        console.log("🔐 Autenticado anónimamente");
-        startFirestoreSync();
-      })
-      .catch(err => {
-        console.warn("Auth error:", err);
-        // Si falla auth, intentar igual (fallback)
-        startFirestoreSync();
-      });
+    // Quitar de la lista local (comparar como número)
+    _campoReqs=_campoReqs.filter(r=>Number(r.id)!==numId);
+    toast('✅ Eliminado correctamente');
+    campoRender();
+  }catch(e){
+    console.error('campoEliminar exception:',e);
+    toast('Error inesperado: '+e.message,true);
+    btn.disabled=false;btn.textContent='🗑️';
   }
-  _initFirebase();
+}
+function campoGenerarRM(){
+  const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
+  const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
+  let reqs=_campoReqs;
+  if(periodo) reqs=reqs.filter(r=>r.periodo===periodo);
+  if(empresa) reqs=reqs.filter(r=>r.empresa===empresa);
+  if(!reqs.length){toast('No hay datos para el filtro actual',true);return;}
+  rmResetData();
+  reqs.forEach(req=>{
+    const emp=req.empresa;const cli=req.cliente;if(!emp||!cli) return;
+    const cat=rmCat();
+    if(!cat[emp]) cat[emp]={};if(!cat[emp][cli]) cat[emp][cli]=[];
+    if(!rm_data[emp]) rm_data[emp]={};if(!rm_data[emp][cli]) rm_data[emp][cli]={};
+    (req.items||[]).forEach(it=>{
+      if(!it.qty||+it.qty===0) return;
+      const key=it.prod+'|'+it.unidad;
+      if(!cat[emp][cli].find(x=>x.p===it.prod&&x.u===it.unidad))
+        cat[emp][cli].push({g:it.grupo||'INSUMOS',p:it.prod,u:it.unidad,r:0});
+      if(!rm_data[emp][cli][key]) rm_data[emp][cli][key]={prod:it.prod,grupo:it.grupo||'INSUMOS',unidad:it.unidad,qty:0};
+      rm_data[emp][cli][key].qty+=+it.qty;
+    });
+  });
+  const p=periodo||(reqs[0]&&reqs[0].periodo)||'';
+  if(p) document.getElementById('rm-periodo').value=p;
+  document.getElementById('rm-fecha').value=new Date().toISOString().split('T')[0];
+  if(empresa) rm_empresa=empresa;
+  toast('✅ Datos cargados en Requisición Mensual → revisa y guarda');
+  nav('req-mensual');
+}
 </script>
 </body>
 </html>
