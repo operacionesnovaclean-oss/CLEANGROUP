@@ -2184,8 +2184,35 @@ function ocCargarNec(){
   if(!num){ocItems=[];ocRenderItems();return;}
   const nec=db.necesidades.find(n=>n.numero===num);
   if(!nec)return;
-  ocItems=nec.items.filter(it=>it.porComprar>0).map(it=>({cant:it.porComprar,cod:'',desc:it.desc,precio:0,descuento:0}));
-  ocRenderItems();toast(`${ocItems.length} ítems cargados desde ${num} (${nec.empresa})`);
+  ocItems=nec.items.filter(it=>it.porComprar>0).map(it=>{
+    const descUp=(it.desc||'').toUpperCase().trim();
+    let match=null;
+    // 1. Coincidencia exacta
+    match=CATALOG.find(c=>c.desc.toUpperCase()===descUp);
+    // 2. Palabras del catálogo (>3 chars) presentes en el ítem
+    if(!match){
+      match=CATALOG.find(c=>{
+        const words=c.desc.toUpperCase().split(' ').filter(w=>w.length>3);
+        return words.length>=2 && words.every(w=>descUp.includes(w));
+      });
+    }
+    // 3. Palabras del ítem (>3 chars) presentes en el catálogo
+    if(!match){
+      match=CATALOG.find(c=>{
+        const words=descUp.split(' ').filter(w=>w.length>3);
+        return words.length>=2 && words.every(w=>c.desc.toUpperCase().includes(w));
+      });
+    }
+    // 4. Primera palabra significativa al inicio del catálogo
+    if(!match){
+      const fw=descUp.split(' ').find(w=>w.length>4);
+      if(fw) match=CATALOG.find(c=>c.desc.toUpperCase().startsWith(fw));
+    }
+    return {cant:it.porComprar,cod:match?match.cod:'',desc:it.desc,precio:0,descuento:0};
+  });
+  ocRenderItems();
+  const conCod=ocItems.filter(i=>i.cod).length;
+  toast(`${ocItems.length} ítems cargados desde ${num} (${nec.empresa}) — ${conCod} con código auto-asignado`);
 }
 
 function ocAddItem(){ocItems.push({cant:1,cod:'',desc:'',precio:0,descuento:0});ocRenderItems();}
