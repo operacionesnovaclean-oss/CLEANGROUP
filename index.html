@@ -2061,17 +2061,88 @@ function necWaGrupo(grupo){
   const empresa=document.getElementById('nec-empresa-lbl').textContent||'';
   const periodo=document.getElementById('nec-periodo').value||'';
   const num=document.getElementById('nec-num').value||'';
-  let texto=`*SOLICITUD DE COTIZACIÓN — ${grupo.toUpperCase()}*\n`;
-  texto+=`*${empresa}* · ${periodo} · ${num}\n\n`;
-  texto+=`Estimado proveedor, les solicitamos cotización para los siguientes productos:\n\n`;
-  its.forEach((it,i)=>{
-    texto+=`${i+1}. *${it.desc}* — ${it.porComprar} ${it.unidad}`;
-    if(it.obs) texto+=` _(${it.obs})_`;
-    texto+='\n';
-  });
-  texto+=`\nPor favor confirmar disponibilidad y precios.\n`;
-  texto+=`_Clean Group · ISO 9001 · Compras & Almacén_`;
-  window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+  const fecha=document.getElementById('nec-fecha').value||'';
+  const elab=document.getElementById('nec-elaborado').value||'';
+
+  // 1. Generar e imprimir el PDF en ventana nueva
+  const tablaRows=its.map(function(it,i){
+    return '<tr style="background:'+(i%2===0?'#fff':'#f7fafc')+'">'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;color:#888">'+(i+1)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd"><strong>'+it.desc+'</strong></td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center">'+it.unidad+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;font-weight:700;color:#c07a00">'+it.porComprar+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:10px;color:#666">'+(it.obs||'—')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  const pdfHtml='<!DOCTYPE html><html><head><meta charset="utf-8">'
+    +'<title>Cotización '+grupo+' — '+num+'</title>'
+    +'<style>'
+    +'body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#222;font-size:12px}'
+    +'@media print{@page{margin:15mm}body{padding:0}.no-print{display:none}}'
+    +'.header{background:#0a2e22;color:#fff;padding:14px 20px;border-radius:6px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}'
+    +'.header h1{margin:0;font-size:16px;color:#00c9a7}'
+    +'.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;background:#f8f8f8;padding:10px;border-radius:4px;border:1px solid #eee}'
+    +'.meta-item label{display:block;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}'
+    +'.meta-item span{font-weight:700;font-size:12px}'
+    +'.grupo-hdr{background:#0f4c3a;color:#00c9a7;padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border-radius:4px 4px 0 0}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'thead tr{background:#f5f5f5}'
+    +'th{padding:6px 8px;text-align:left;border:1px solid #ddd;font-size:10px}'
+    +'.footer{margin-top:20px;border-top:1px solid #eee;padding-top:10px;font-size:9px;color:#999;text-align:center}'
+    +'.aviso{background:#fff8e1;border:1px solid #f5a623;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:#7a5000}'
+    +'</style></head><body>'
+    +'<div class="header">'
+    +'<div><h1>🧹 CLEAN GROUP</h1><div style="font-size:10px;color:#aaa">SOLICITUD DE COTIZACIÓN — '+grupo.toUpperCase()+'</div></div>'
+    +'<div style="text-align:right;font-size:11px"><div style="color:#00c9a7;font-weight:700">'+num+'</div><div style="color:#aaa">'+fecha+'</div></div>'
+    +'</div>'
+    +'<div class="aviso">📋 Estimado proveedor, les solicitamos amablemente cotizar los siguientes productos y confirmar disponibilidad y precios a la brevedad.</div>'
+    +'<div class="meta">'
+    +'<div class="meta-item"><label>Empresa</label><span>'+empresa+'</span></div>'
+    +'<div class="meta-item"><label>Período</label><span>'+periodo+'</span></div>'
+    +'<div class="meta-item"><label>Grupo</label><span>'+grupo+'</span></div>'
+    +'<div class="meta-item"><label>Elaborado por</label><span>'+(elab||'—')+'</span></div>'
+    +'<div class="meta-item"><label>Total ítems</label><span>'+its.length+'</span></div>'
+    +'<div class="meta-item"><label>Necesidad</label><span>'+num+'</span></div>'
+    +'</div>'
+    +'<div class="grupo-hdr">'+grupo+'</div>'
+    +'<table><thead><tr>'
+    +'<th style="width:30px;text-align:center">N°</th>'
+    +'<th>Descripción del Producto</th>'
+    +'<th style="width:70px;text-align:center">Unidad</th>'
+    +'<th style="width:80px;text-align:center">Cantidad</th>'
+    +'<th>Observación</th>'
+    +'</tr></thead><tbody>'+tablaRows+'</tbody></table>'
+    +'<div class="footer">Clean Group · Sistema ISO 9001 · Solicitud de Cotización · '+num+' — '+periodo+'</div>'
+    +'<div class="no-print" style="margin-top:20px;text-align:center">'
+    +'<button onclick="window.print()" style="padding:10px 24px;background:#0a2e22;color:#00c9a7;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;margin-right:8px">🖨️ Imprimir / Guardar PDF</button>'
+    +'<button onclick="window.close()" style="padding:10px 20px;background:#eee;color:#333;border:none;border-radius:6px;font-size:14px;cursor:pointer">✕ Cerrar</button>'
+    +'<p style="margin-top:12px;font-size:11px;color:#888">Guarda como PDF e imprímelo → luego adjúntalo en WhatsApp al proveedor</p>'
+    +'</div>'
+    +'<script>setTimeout(function(){window.print();},400);<\/script>'
+    +'</body></html>';
+
+  const pdfWin=window.open('','_blank','width=900,height=700');
+  if(pdfWin){pdfWin.document.write(pdfHtml);pdfWin.document.close();}
+
+  // 2. Abrir WhatsApp con mensaje que indica que se adjunta el PDF
+  setTimeout(function(){
+    const total=its.reduce(function(s,it){return s+(+it.porComprar||0);},0);
+    let texto='*SOLICITUD DE COTIZACIÓN — '+grupo.toUpperCase()+'*\n';
+    texto+='*'+empresa+'* · '+periodo+' · '+num+'\n\n';
+    texto+='Estimado proveedor, adjunto PDF con los '+its.length+' productos a cotizar.\n\n';
+    texto+='*Resumen:*\n';
+    its.forEach(function(it,i){
+      texto+=(i+1)+'. *'+it.desc+'* — '+it.porComprar+' '+it.unidad;
+      if(it.obs) texto+=' _('+it.obs+')_';
+      texto+='\n';
+    });
+    texto+='\nPor favor confirmar disponibilidad y precios.\n';
+    texto+='_Clean Group · ISO 9001 · Compras & Almacén_';
+    window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+  },800);
+
+  toast('📄 PDF generado — guárdalo y adjúntalo en WhatsApp al proveedor');
 }
 
 function necGenerarExcel(items,filename,hoja){
@@ -2272,27 +2343,86 @@ function necWhatsappId(idx,nOverride){
   const n=nOverride||(db.necesidades[idx]);if(!n)return;
   // Agrupar por grupo proveedor
   const grupos={};
-  n.items.forEach(it=>{
+  n.items.forEach(function(it){
     const g=it.provGrupo||'Sin asignar';
     if(!grupos[g])grupos[g]=[];
     grupos[g].push(it);
   });
-  let texto=`*NECESIDAD DE COMPRA — ${n.numero}*\n`;
-  texto+=`*Empresa:* ${n.empresa}\n`;
-  texto+=`*Período:* ${n.periodo}\n`;
-  texto+=`*Fecha:* ${n.fecha||'—'}\n\n`;
-  Object.entries(grupos).forEach(([g,its])=>{
-    texto+=`*📦 ${g.toUpperCase()}*\n`;
-    its.forEach(it=>{
-      texto+=`• ${it.desc} — *${it.porComprar}* ${it.unidad}`;
-      if(it.obs) texto+=` _(${it.obs})_`;
+
+  // 1. Generar PDF con todos los grupos
+  const tablaRows=n.items.map(function(it,i){
+    return '<tr style="background:'+(i%2===0?'#fff':'#f7fafc')+'">'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;color:#888">'+(i+1)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd"><strong>'+it.desc+'</strong></td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center">'+(it.unidad||'')+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;font-weight:700;color:#c07a00">'+(it.porComprar||0)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;color:#555">'+(it.provGrupo||'Sin asignar')+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:10px;color:#666">'+(it.obs||'—')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  const pdfHtml='<!DOCTYPE html><html><head><meta charset="utf-8">'
+    +'<title>Necesidad '+n.numero+'</title>'
+    +'<style>'
+    +'body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#222;font-size:12px}'
+    +'@media print{@page{margin:15mm}body{padding:0}.no-print{display:none}}'
+    +'.header{background:#0a2e22;color:#fff;padding:14px 20px;border-radius:6px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}'
+    +'.header h1{margin:0;font-size:16px;color:#00c9a7}'
+    +'.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;background:#f8f8f8;padding:10px;border-radius:4px;border:1px solid #eee}'
+    +'.meta-item label{display:block;font-size:9px;color:#888;text-transform:uppercase;margin-bottom:2px}'
+    +'.meta-item span{font-weight:700}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'th{padding:6px 8px;background:#f5f5f5;text-align:left;border:1px solid #ddd;font-size:10px}'
+    +'.footer{margin-top:20px;border-top:1px solid #eee;padding-top:10px;font-size:9px;color:#999;text-align:center}'
+    +'</style></head><body>'
+    +'<div class="header">'
+    +'<div><h1>🧹 CLEAN GROUP</h1><div style="font-size:10px;color:#aaa">NECESIDAD DE COMPRA — SOLICITUD DE COTIZACIÓN</div></div>'
+    +'<div style="text-align:right;font-size:11px"><div style="color:#00c9a7;font-weight:700">'+n.numero+'</div><div style="color:#aaa">'+(n.fecha||'')+'</div></div>'
+    +'</div>'
+    +'<div class="meta">'
+    +'<div class="meta-item"><label>Empresa</label><span>'+n.empresa+'</span></div>'
+    +'<div class="meta-item"><label>Período</label><span>'+n.periodo+'</span></div>'
+    +'<div class="meta-item"><label>Total ítems</label><span>'+n.items.length+'</span></div>'
+    +'</div>'
+    +'<table><thead><tr>'
+    +'<th style="width:30px;text-align:center">N°</th>'
+    +'<th>Descripción</th><th style="width:70px;text-align:center">Unidad</th>'
+    +'<th style="width:80px;text-align:center">Cantidad</th>'
+    +'<th style="width:90px">Grupo</th><th>Obs.</th>'
+    +'</tr></thead><tbody>'+tablaRows+'</tbody></table>'
+    +'<div class="footer">Clean Group · Sistema ISO 9001 · '+n.numero+' — '+n.periodo+'</div>'
+    +'<div class="no-print" style="margin-top:20px;text-align:center">'
+    +'<button onclick="window.print()" style="padding:10px 24px;background:#0a2e22;color:#00c9a7;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;margin-right:8px">🖨️ Imprimir / Guardar PDF</button>'
+    +'<p style="margin-top:10px;font-size:11px;color:#888">Guarda como PDF y adjúntalo en WhatsApp</p>'
+    +'</div>'
+    +'<script>setTimeout(function(){window.print();},400);<\/script>'
+    +'</body></html>';
+
+  const pdfWin=window.open('','_blank','width=900,height=700');
+  if(pdfWin){pdfWin.document.write(pdfHtml);pdfWin.document.close();}
+
+  // 2. Abrir WA con mensaje resumen
+  setTimeout(function(){
+    let texto='*NECESIDAD DE COMPRA — '+n.numero+'*\n';
+    texto+='*Empresa:* '+n.empresa+'\n';
+    texto+='*Período:* '+n.periodo+'\n';
+    texto+='*Fecha:* '+(n.fecha||'—')+'\n\n';
+    texto+='Estimado proveedor, adjunto PDF con detalle completo de los productos a cotizar.\n\n';
+    Object.entries(grupos).forEach(function(entry){
+      const g=entry[0], its=entry[1];
+      texto+='*📦 '+g.toUpperCase()+'*\n';
+      its.forEach(function(it){
+        texto+='• '+it.desc+' — *'+(it.porComprar||0)+'* '+(it.unidad||'');
+        if(it.obs) texto+=' _('+it.obs+')_';
+        texto+='\n';
+      });
       texto+='\n';
     });
-    texto+='\n';
-  });
-  texto+=`_Total: ${n.items.length} ítems — Clean Group ISO 9001_`;
-  const url='https://wa.me/?text='+encodeURIComponent(texto);
-  window.open(url,'_blank');
+    texto+='_Total: '+n.items.length+' ítems — Clean Group ISO 9001_';
+    window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+  },800);
+
+  toast('📄 PDF generado — guárdalo y adjúntalo en WhatsApp');
 }
 
 function necExcelId(idx){
@@ -2382,33 +2512,28 @@ function ocNecSelChange(){
   // Obtener grupos disponibles en esta necesidad
   const grupos=[...new Set((nec.items||[]).map(it=>it.provGrupo||'Sin asignar'))].filter(Boolean).sort();
 
-  // Poblar selector de grupos — todos seleccionables aunque ya tengan OC
+  // Poblar selector de grupos
   grupoSel.innerHTML='<option value="">-- Todos los ítems --</option>'
     +grupos.map(g=>{
-      const ocCount=db.ordenesCompra.filter(o=>o.necId===num&&o.grupoNec===g).length;
-      const label=ocCount>0?g+' ('+ocCount+' OC)':g;
-      const col=ocCount>0?'color:var(--teal)':'';
-      return '<option value="'+g+'"'+(col?' style="'+col+'"':'')+'>'+label+'</option>';
+      const yaOrdenado=db.ordenesCompra.some(o=>o.necId===num&&(o.grupoNec===g));
+      return `<option value="${g}"${yaOrdenado?' style="color:var(--teal)"':''}>${g}${yaOrdenado?' ✓':''}</option>`;
     }).join('');
   grupoFi.style.display=grupos.length>0?'block':'none';
 
-  // Mostrar OC ya generadas desde esta necesidad
+  // Mostrar OC ya generadas
   const ocIds=nec.ocIds||(nec.ocId?[nec.ocId]:[]);
   if(ocIds.length>0){
     infoBox.style.display='block';
-    ocsList.innerHTML=ocIds.map(function(id){
+    ocsList.innerHTML=ocIds.map(id=>{
       const oc=db.ordenesCompra.find(o=>o.numero===id);
-      return '<span class="tag tok" style="font-size:11px;cursor:pointer" title="'+(oc?oc.proveedor:'')+'">'
-        +id+(oc?' — '+oc.proveedor:'')+'</span>';
+      return `<span class="tag tok" style="font-size:11px;cursor:pointer" title="${oc?oc.proveedor:''}">${id}${oc?' — '+oc.proveedor:''}</span>`;
     }).join('');
-    // Mostrar cuántos grupos tienen OC vs cuántos faltan
-    const gruposConOC=[...new Set(db.ordenesCompra.filter(o=>o.necId===num&&o.grupoNec).map(o=>o.grupoNec))];
-    const gruposPendientes=grupos.filter(g=>!gruposConOC.includes(g));
+    // Grupos pendientes
+    const gruposOrdenados=[...new Set(db.ordenesCompra.filter(o=>o.necId===num&&o.grupoNec).map(o=>o.grupoNec))];
+    const gruposPendientes=grupos.filter(g=>!gruposOrdenados.includes(g));
     pendientes.innerHTML=gruposPendientes.length
-      ?'Grupos pendientes de OC: <strong style="color:var(--amber)">'+gruposPendientes.join(', ')+'</strong>'
-      +'<span style="color:var(--muted);font-size:10px;margin-left:8px">(puedes generar OC adicionales de cualquier grupo)</span>'
-      :'<span style="color:var(--teal)">✅ Todos los grupos tienen OC</span>'
-      +'<span style="color:var(--muted);font-size:10px;margin-left:8px">(puedes generar OC adicionales)</span>';
+      ?`Grupos pendientes de OC: <strong style="color:var(--amber)">${gruposPendientes.join(', ')}</strong>`
+      :'<span style="color:var(--teal)">✅ Todos los grupos tienen OC</span>';
   } else {
     infoBox.style.display='none';
   }
