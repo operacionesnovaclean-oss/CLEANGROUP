@@ -903,7 +903,8 @@ function buildPanels(){
       <button onclick="ocCancelarEdicion()" style="margin-left:10px;background:transparent;border:1px solid var(--amber);border-radius:5px;color:var(--amber);padding:2px 8px;cursor:pointer;font-size:11px;font-family:inherit">✕ Cancelar</button>
     </div>
     <div class="fg">
-      <div class="fi"><label>Cargar desde Necesidad</label><select id="oc-nec-sel" onchange="ocCargarNec()"><option value="">-- Manual / Nueva --</option></select></div>
+      <div class="fi"><label>Cargar desde Necesidad</label><select id="oc-nec-sel" onchange="ocNecSelChange()"><option value="">-- Manual / Nueva --</option></select></div>
+      <div class="fi" id="oc-grupo-fi" style="display:none"><label>Grupo / Proveedor a ordenar</label><select id="oc-nec-grupo" onchange="ocCargarNec()"><option value="">-- Todos los ítems --</option></select></div>
       <div class="fi"><label>N° Orden de Compra</label><input id="oc-num" placeholder="Ej: OC-001"></div>
       <div class="fi"><label>Fecha</label><input id="oc-fecha" type="date"></div>
       <div class="fi"><label>Condición de Pago</label><select id="oc-condpago"><option>30 días</option><option>60 días</option><option>Contado</option><option>15 días</option><option>90 días</option></select></div>
@@ -912,6 +913,15 @@ function buildPanels(){
       <div class="fi"><label>N° Proforma</label><input id="oc-proforma" placeholder="Opcional"></div>
       <div class="fi"><label>Fecha Proforma</label><input id="oc-fproforma" type="date"></div>
       <div class="fi"><label>Contacto Clean Group</label><input id="oc-contacto" value="JAVIER ZOLLER"></div>
+    </div>
+    <div id="oc-nec-info-box" style="display:none;background:rgba(0,201,167,.06);border:1px solid rgba(0,201,167,.25);border-radius:9px;padding:12px 16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--teal);margin-bottom:6px">📋 OC generadas desde esta necesidad</div>
+          <div id="oc-nec-ocs-list" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+        </div>
+        <div id="oc-nec-grupos-pendientes" style="font-size:11px;color:var(--muted)"></div>
+      </div>
     </div>
     <div class="divider"></div>
     <div class="card-title">🏭 Proveedor</div>
@@ -1789,11 +1799,7 @@ function necRefreshSelects(){
 
 function initNec(){
   necRefreshSelects();
-  const ocSel=document.getElementById('oc-nec-sel');
-  if(ocSel){
-    ocSel.innerHTML='<option value="">-- Manual / Nueva --</option>';
-    db.necesidades.filter(n=>!n.ocId).forEach(n=>{const o=document.createElement('option');o.value=n.numero;o.textContent=`${n.numero} — ${n.empresa} — ${n.periodo}`;ocSel.appendChild(o);});
-  }
+  if(typeof ocRefreshNecSelect==='function') ocRefreshNecSelect();
   necRenderList();setNums();
 }
 
@@ -2144,19 +2150,28 @@ function necRenderList(){
   const body=document.getElementById('nec-list');if(!body)return;
   body.innerHTML=db.necesidades.length?db.necesidades.slice().reverse().map((n,i)=>{
     const idx=db.necesidades.length-1-i;
+    const ocIds=n.ocIds||(n.ocId?[n.ocId]:[]);
+    const grupos=[...new Set((n.items||[]).map(it=>it.provGrupo||'Sin asignar'))].filter(Boolean);
+    const gruposOrdenados=[...new Set(db.ordenesCompra.filter(o=>o.necId===n.numero&&o.grupoNec).map(o=>o.grupoNec))];
+    const gruposPendientes=grupos.filter(g=>!gruposOrdenados.includes(g));
+    const ocBadges=ocIds.length
+      ?ocIds.map(id=>{const oc=db.ordenesCompra.find(o=>o.numero===id);return `<span class="tag tok" style="font-size:10px" title="${oc?oc.proveedor:''}">✓ ${id}${oc&&oc.grupoNec?' ('+oc.grupoNec+')':''}</span>`;}).join(' ')
+      :'<span class="tag twn">⏳ Sin OC</span>';
+    const pendBadge=gruposPendientes.length&&ocIds.length
+      ?`<br><span style="font-size:10px;color:var(--amber)">⚠️ Pendiente: ${gruposPendientes.join(', ')}</span>`:'';
     return `<tr>
       <td><code style="color:var(--teal)">${n.numero}</code></td>
       <td><span class="tag tbl">${n.empresa}</span></td>
       <td>${n.periodo}</td>
       <td><span class="tag tbl" style="font-size:10px">${n.rmId}</span></td>
-      <td>${n.items.length} ítems</td>
-      <td>${n.ocId?`<span class="tag tok">✓ ${n.ocId}</span>`:'<span class="tag twn">⏳ Sin OC</span>'}</td>
+      <td>${n.items.length} ítems · ${grupos.length} grupos</td>
+      <td>${ocBadges}${pendBadge}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-s btn-sm" onclick="necExcelId(${idx})" title="Descargar Excel">⬇️ XLS</button>
         <button class="btn btn-s btn-sm" onclick="necPdfId(${idx})" title="Descargar PDF" style="background:var(--red);color:#fff">📄 PDF</button>
         <button class="btn btn-s btn-sm" onclick="necWhatsappId(${idx})" title="Enviar por WhatsApp" style="background:#25D366;color:#fff">💬 WA</button>
         <button class="btn btn-a btn-sm" onclick="necPreviewId(${idx})">🖨️</button>
-        <button class="btn btn-s btn-sm" onclick="nav('orden-compra')">→ OC</button>
+        <button class="btn btn-p btn-sm" onclick="ocDesdeNec(${idx})">+ OC</button>
         <button class="btn btn-d btn-sm" onclick="necEliminar(${idx})">✕</button>
       </td>
     </tr>`;
@@ -2313,16 +2328,93 @@ function necPreviewId(idx){
 
 function necEliminar(idx){if(!confirm('¿Eliminar?'))return;db.necesidades.splice(idx,1);saveDB();necRenderList();toast('Eliminada');}
 
+function ocDesdeNec(idx){
+  const n=db.necesidades[idx];if(!n)return;
+  nav('orden-compra');
+  setTimeout(()=>{
+    ocRefreshNecSelect();
+    const sel=document.getElementById('oc-nec-sel');
+    if(sel){sel.value=n.numero;ocNecSelChange();}
+    toast(`📋 Necesidad ${n.numero} seleccionada — elige el grupo de proveedor y completa la OC`);
+  },120);
+}
+
 // ═══════════════════════════════
 // 3. ORDEN DE COMPRA
 // ═══════════════════════════════
 let ocItems=[], oc_editIdx=null;
 
-function initOC(){
+function ocRefreshNecSelect(){
   const sel=document.getElementById('oc-nec-sel');if(!sel)return;
+  const curVal=sel.value;
   sel.innerHTML='<option value="">-- Manual / Nueva --</option>';
-  db.necesidades.filter(n=>!n.ocId).forEach(n=>{const o=document.createElement('option');o.value=n.numero;o.textContent=`${n.numero} — ${n.empresa} — ${n.periodo}`;sel.appendChild(o);});
+  db.necesidades.forEach(n=>{
+    const ocIds=n.ocIds||(n.ocId?[n.ocId]:[]);
+    const o=document.createElement('option');
+    o.value=n.numero;
+    o.textContent=`${n.numero} — ${n.empresa} — ${n.periodo}${ocIds.length?' ['+ocIds.length+' OC generada'+(ocIds.length>1?'s':'') +']':''}`;
+    sel.appendChild(o);
+  });
+  if(curVal) sel.value=curVal;
+}
+
+function initOC(){
+  ocRefreshNecSelect();
   ocRenderList();setNums();
+}
+
+function ocNecSelChange(){
+  const num=document.getElementById('oc-nec-sel').value;
+  const grupoFi=document.getElementById('oc-grupo-fi');
+  const grupoSel=document.getElementById('oc-nec-grupo');
+  const infoBox=document.getElementById('oc-nec-info-box');
+  const ocsList=document.getElementById('oc-nec-ocs-list');
+  const pendientes=document.getElementById('oc-nec-grupos-pendientes');
+
+  if(!num){
+    grupoFi.style.display='none';
+    infoBox.style.display='none';
+    ocItems=[];ocRenderItems();return;
+  }
+  const nec=db.necesidades.find(n=>n.numero===num);
+  if(!nec){grupoFi.style.display='none';infoBox.style.display='none';return;}
+
+  // Obtener grupos disponibles en esta necesidad
+  const grupos=[...new Set((nec.items||[]).map(it=>it.provGrupo||'Sin asignar'))].filter(Boolean).sort();
+
+  // Poblar selector de grupos — todos seleccionables aunque ya tengan OC
+  grupoSel.innerHTML='<option value="">-- Todos los ítems --</option>'
+    +grupos.map(g=>{
+      const ocCount=db.ordenesCompra.filter(o=>o.necId===num&&o.grupoNec===g).length;
+      const label=ocCount>0?g+' ('+ocCount+' OC)':g;
+      const col=ocCount>0?'color:var(--teal)':'';
+      return '<option value="'+g+'"'+(col?' style="'+col+'"':'')+'>'+label+'</option>';
+    }).join('');
+  grupoFi.style.display=grupos.length>0?'block':'none';
+
+  // Mostrar OC ya generadas desde esta necesidad
+  const ocIds=nec.ocIds||(nec.ocId?[nec.ocId]:[]);
+  if(ocIds.length>0){
+    infoBox.style.display='block';
+    ocsList.innerHTML=ocIds.map(function(id){
+      const oc=db.ordenesCompra.find(o=>o.numero===id);
+      return '<span class="tag tok" style="font-size:11px;cursor:pointer" title="'+(oc?oc.proveedor:'')+'">'
+        +id+(oc?' — '+oc.proveedor:'')+'</span>';
+    }).join('');
+    // Mostrar cuántos grupos tienen OC vs cuántos faltan
+    const gruposConOC=[...new Set(db.ordenesCompra.filter(o=>o.necId===num&&o.grupoNec).map(o=>o.grupoNec))];
+    const gruposPendientes=grupos.filter(g=>!gruposConOC.includes(g));
+    pendientes.innerHTML=gruposPendientes.length
+      ?'Grupos pendientes de OC: <strong style="color:var(--amber)">'+gruposPendientes.join(', ')+'</strong>'
+      +'<span style="color:var(--muted);font-size:10px;margin-left:8px">(puedes generar OC adicionales de cualquier grupo)</span>'
+      :'<span style="color:var(--teal)">✅ Todos los grupos tienen OC</span>'
+      +'<span style="color:var(--muted);font-size:10px;margin-left:8px">(puedes generar OC adicionales)</span>';
+  } else {
+    infoBox.style.display='none';
+  }
+
+  // Disparar carga de ítems
+  ocCargarNec();
 }
 
 function ocCargarNec(){
@@ -2330,35 +2422,23 @@ function ocCargarNec(){
   if(!num){ocItems=[];ocRenderItems();return;}
   const nec=db.necesidades.find(n=>n.numero===num);
   if(!nec)return;
-  ocItems=nec.items.filter(it=>it.porComprar>0).map(it=>{
+  const grupoSel=(document.getElementById('oc-nec-grupo')||{}).value||'';
+
+  const itemsFiltrados=(nec.items||[]).filter(it=>(+it.porComprar>0)&&(!grupoSel||(it.provGrupo||'Sin asignar')===grupoSel));
+
+  ocItems=itemsFiltrados.map(it=>{
     const descUp=(it.desc||'').toUpperCase().trim();
     let match=null;
-    // 1. Coincidencia exacta
     match=CATALOG.find(c=>c.desc.toUpperCase()===descUp);
-    // 2. Palabras del catálogo (>3 chars) todas presentes en el ítem
-    if(!match){
-      match=CATALOG.find(c=>{
-        const words=c.desc.toUpperCase().split(' ').filter(w=>w.length>3);
-        return words.length>=2&&words.every(w=>descUp.includes(w));
-      });
-    }
-    // 3. Palabras del ítem (>3 chars) todas presentes en el catálogo
-    if(!match){
-      match=CATALOG.find(c=>{
-        const words=descUp.split(' ').filter(w=>w.length>3);
-        return words.length>=2&&words.every(w=>c.desc.toUpperCase().includes(w));
-      });
-    }
-    // 4. Primera palabra significativa al inicio
-    if(!match){
-      const fw=descUp.split(' ').find(w=>w.length>4);
-      if(fw) match=CATALOG.find(c=>c.desc.toUpperCase().startsWith(fw));
-    }
+    if(!match){match=CATALOG.find(c=>{const words=c.desc.toUpperCase().split(' ').filter(w=>w.length>3);return words.length>=2&&words.every(w=>descUp.includes(w));});}
+    if(!match){match=CATALOG.find(c=>{const words=descUp.split(' ').filter(w=>w.length>3);return words.length>=2&&words.every(w=>c.desc.toUpperCase().includes(w));});}
+    if(!match){const fw=descUp.split(' ').find(w=>w.length>4);if(fw)match=CATALOG.find(c=>c.desc.toUpperCase().startsWith(fw));}
     return {cant:it.porComprar,cod:match?match.cod:'',desc:it.desc,precio:0,descuento:0,iva:true};
   });
   ocRenderItems();
+  const grupoLabel=grupoSel?` (grupo: ${grupoSel})`:'';
   const conCod=ocItems.filter(i=>i.cod).length;
-  toast(ocItems.length+' ítems cargados desde '+num+' ('+nec.empresa+') — '+conCod+' con código auto-asignado');
+  toast(ocItems.length+' ítems cargados desde '+num+' ('+nec.empresa+')'+grupoLabel+' — '+conCod+' con código');
 }
 
 function ocAddItem(){ocItems.push({cant:1,cod:'',desc:'',precio:0,descuento:0,iva:true});ocRenderItems();}
@@ -2431,8 +2511,9 @@ function ocGuardar(){
   const ivaBase=ocItems.filter(it=>it.iva!==false).reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
   const ivaVal=ivaBase*0.15;
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
+  const grupoNec=(document.getElementById('oc-nec-grupo')||{}).value||'';
   const ocData={
-    numero:num,fecha,necId:necNum||null,proveedor:prov,
+    numero:num,fecha,necId:necNum||null,grupoNec:grupoNec||null,proveedor:prov,
     provRuc:g('oc-prov-ruc'),provDir:g('oc-prov-dir'),provCont:g('oc-prov-contacto'),provTel:g('oc-prov-tel'),provEmail:g('oc-prov-email'),
     condPago:g('oc-condpago'),tipo:g('oc-tipo'),detalle:g('oc-detalle'),proforma:g('oc-proforma'),fProforma:g('oc-fproforma'),
     contactoCG:g('oc-contacto'),obs:g('oc-obs'),items:JSON.parse(JSON.stringify(ocItems)),
@@ -2447,8 +2528,19 @@ function ocGuardar(){
   } else {
     db.ordenesCompra.push(ocData);
     db.counters.oc++;
-    if(necNum){const nec=db.necesidades.find(n=>n.numero===necNum);if(nec)nec.ocId=num;}
+    if(necNum){
+      const nec=db.necesidades.find(n=>n.numero===necNum);
+      if(nec){
+        // Migrar ocId legacy → ocIds array
+        if(!nec.ocIds) nec.ocIds=nec.ocId?[nec.ocId]:[];
+        if(!nec.ocIds.includes(num)) nec.ocIds.push(num);
+        nec.ocId=nec.ocIds[0]; // compatibilidad
+      }
+    }
     saveDB();ocRenderList();ocLimpiar();
+    // Actualizar selector de necesidades con nuevo badge
+    ocRefreshNecSelect();
+    necRenderList();
     toast(`✅ OC ${num} guardada → ve a "Acta de Ingreso" cuando llegue la factura`);
     aiPopulateOCSelect();
   }
@@ -2484,43 +2576,100 @@ function ocLimpiar(){
   document.getElementById('oc-edit-banner').style.display='none';
   ['oc-prov-sel','oc-prov-nombre','oc-prov-ruc','oc-prov-dir','oc-prov-contacto','oc-prov-tel','oc-prov-email','oc-proforma','oc-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const s=document.getElementById('oc-nec-sel');if(s)s.value='';
+  const grupoFi=document.getElementById('oc-grupo-fi');if(grupoFi)grupoFi.style.display='none';
+  const grupoSel=document.getElementById('oc-nec-grupo');if(grupoSel)grupoSel.innerHTML='<option value="">-- Todos los ítems --</option>';
+  const infoBox=document.getElementById('oc-nec-info-box');if(infoBox)infoBox.style.display='none';
   setNums();
 }
 function ocCancelarEdicion(){oc_editIdx=null;ocLimpiar();setNums();toast('Edición cancelada');}
 
 function ocPreview(){
-  const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
-  const necNum=g('oc-nec-sel');
-  openPrint(`${dh('ORDEN DE COMPRA','FOR COM 02 · VER 01 (09 12 2024)')}
+  const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
+  const ivaBase=ocItems.filter(it=>it.iva!==false).reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
+  const iva=ivaBase*0.15;
+  const o={
+    numero:g('oc-num'),fecha:g('oc-fecha'),condPago:g('oc-condpago'),tipo:g('oc-tipo'),
+    detalle:g('oc-detalle'),necId:g('oc-nec-sel'),contactoCG:g('oc-contacto'),obs:g('oc-obs'),
+    proveedor:g('oc-prov-nombre'),provRuc:g('oc-prov-ruc'),provDir:g('oc-prov-dir'),
+    provCont:g('oc-prov-contacto'),provTel:g('oc-prov-tel'),provEmail:g('oc-prov-email'),
+    items:ocItems,subtotal:sub,iva,total:sub+iva
+  };
+  openPrint(ocBuildPrintContent(o));
+}
+
+function ocBuildPrintContent(o){
+  const sub=o.subtotal!==undefined?o.subtotal:(o.items||[]).reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
+  const iva=o.iva!==undefined?o.iva:(o.items||[]).filter(it=>it.iva!==false).reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0)*0.15;
+  return `${dh('ORDEN DE COMPRA','FOR COM 02 · VER 01 (09 12 2024)')}
     <div class="dmg">
-      <div class="dmi"><strong>N° OC</strong>${g('oc-num')}</div>
-      <div class="dmi"><strong>Fecha</strong>${g('oc-fecha')}</div>
-      <div class="dmi"><strong>Condición de Pago</strong>${g('oc-condpago')}</div>
-      <div class="dmi"><strong>Tipo</strong>${g('oc-tipo')}</div>
-      <div class="dmi"><strong>Detalle</strong>${g('oc-detalle')}</div>
-      <div class="dmi"><strong>Necesidad origen</strong>${necNum||'—'}${necNum?'<span class="dlb">VINCULADO</span>':''}</div>
-      <div class="dmi"><strong>Contacto CG</strong>${g('oc-contacto')}</div>
+      <div class="dmi"><strong>N° OC</strong>${o.numero}</div>
+      <div class="dmi"><strong>Fecha</strong>${o.fecha}</div>
+      <div class="dmi"><strong>Condición de Pago</strong>${o.condPago||'—'}</div>
+      <div class="dmi"><strong>Tipo</strong>${o.tipo||'—'}</div>
+      <div class="dmi"><strong>Detalle</strong>${o.detalle||'—'}</div>
+      <div class="dmi"><strong>Necesidad origen</strong>${o.necId||'—'}${o.necId?'<span class="dlb">VINCULADO</span>':''}</div>
+      <div class="dmi"><strong>Contacto CG</strong>${o.contactoCG||'—'}</div>
     </div>
     <div class="dst">PROVEEDOR</div>
     <div class="dmg">
-      <div class="dmi"><strong>Razón Social</strong>${g('oc-prov-nombre')}</div>
-      <div class="dmi"><strong>RUC</strong>${g('oc-prov-ruc')}</div>
-      <div class="dmi"><strong>Dirección</strong>${g('oc-prov-dir')}</div>
-      <div class="dmi"><strong>Contacto</strong>${g('oc-prov-contacto')}</div>
-      <div class="dmi"><strong>Teléfono</strong>${g('oc-prov-tel')}</div>
-      <div class="dmi"><strong>Email</strong>${g('oc-prov-email')}</div>
+      <div class="dmi"><strong>Razón Social</strong>${o.proveedor}</div>
+      <div class="dmi"><strong>RUC</strong>${o.provRuc||'—'}</div>
+      <div class="dmi"><strong>Dirección</strong>${o.provDir||'—'}</div>
+      <div class="dmi"><strong>Contacto</strong>${o.provCont||'—'}</div>
+      <div class="dmi"><strong>Teléfono</strong>${o.provTel||'—'}</div>
+      <div class="dmi"><strong>Email</strong>${o.provEmail||'—'}</div>
     </div>
     <div class="dst">ÍTEMS</div>
-    <table class="dt"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>Descuento</th><th>Subtotal</th></tr></thead>
-    <tbody>${ocItems.map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>$${(+it.precio).toFixed(2)}</td><td>$${(+it.descuento||0).toFixed(2)}</td><td><strong>$${((it.cant*it.precio)-(it.descuento||0)).toFixed(2)}</strong></td></tr>`).join('')}</tbody></table>
-    <table class="dtot"><tr><td>Subtotal</td><td>$${sub.toFixed(2)}</td></tr><tr><td>IVA 15%</td><td>$${(sub*0.15).toFixed(2)}</td></tr><tr class="tr"><td>TOTAL</td><td>$${(sub*1.15).toFixed(2)}</td></tr></table>
-    ${g('oc-obs')?`<div style="background:#f7fafc;border-left:3px solid #0f1b2d;padding:9px 13px;font-size:11px;color:#444;margin-top:14px"><strong>Obs:</strong> ${g('oc-obs')}</div>`:''}
+    <table class="dt"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>Desc.</th><th>IVA</th><th>Subtotal</th></tr></thead>
+    <tbody>${(o.items||[]).map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>$${(+it.precio).toFixed(2)}</td><td>$${(+(it.descuento||0)).toFixed(2)}</td><td style="text-align:center">${it.iva!==false?'15%':'0%'}</td><td><strong>$${((it.cant*it.precio)-(it.descuento||0)).toFixed(2)}</strong></td></tr>`).join('')}</tbody>
+    </table>
+    <table class="dtot">
+      <tr><td>Subtotal</td><td>$${sub.toFixed(2)}</td></tr>
+      <tr><td>IVA 15%</td><td>$${iva.toFixed(2)}</td></tr>
+      <tr class="tr"><td>TOTAL</td><td>$${(sub+iva).toFixed(2)}</td></tr>
+    </table>
+    ${o.obs?`<div style="background:#f7fafc;border-left:3px solid #0f1b2d;padding:9px 13px;font-size:11px;color:#444;margin-top:14px"><strong>Obs:</strong> ${o.obs}</div>`:''}
     <div class="dsig">
-      <div class="dsb"><strong>Elaborado por</strong>${g('oc-contacto')}<br><br><br>_______________________<br>Firma</div>
+      <div class="dsb"><strong>Elaborado por</strong>${o.contactoCG||'—'}<br><br><br>_______________________<br>Firma</div>
       <div class="dsb"><strong>Autorizado por</strong><br><br><br><br>_______________________<br>Firma</div>
     </div>
-    ${df('FOR COM 02 · VER 01 (09 12 2024)')}`);
+    ${df('FOR COM 02 · VER 01 (09 12 2024)')}`;
+}
+
+function ocEnviarEmail(idx){
+  const o=db.ordenesCompra[idx];
+  const itemsText=(o.items||[]).map(it=>`  • ${it.cant} x ${it.desc}  →  $${((it.cant*(+it.precio))-(+(it.descuento||0))).toFixed(2)}${it.iva===false?' (sin IVA)':''}`).join('\n');
+  const subject=`Orden de Compra ${o.numero} — CLEAN GROUP CONSORCIO`;
+  const body=`Estimado/a ${o.provCont||o.proveedor},\n\nPor medio del presente le hacemos llegar nuestra Orden de Compra N° ${o.numero} con fecha ${o.fecha}.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━\nÍTEMS SOLICITADOS:\n${itemsText}\n\nSubtotal:  $${(o.subtotal||0).toFixed(2)}\nIVA 15%:   $${(o.iva||0).toFixed(2)}\nTOTAL:     $${(o.total||0).toFixed(2)}\nCond. Pago: ${o.condPago||'—'}\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\nFavor confirmar recepción, disponibilidad y fecha estimada de entrega.\n\nAtentamente,\n${o.contactoCG||'Compras'}\nCLEAN GROUP CONSORCIO\nRUC: 0992575220001 · Tel: 0997345932`;
+  window.open(`mailto:${o.provEmail||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,'_blank');
+  toast('📧 Abriendo cliente de correo...');
+}
+
+function ocEnviarWA(idx){
+  const o=db.ordenesCompra[idx];
+  const itemsText=(o.items||[]).map(it=>`  • ${it.cant} x ${it.desc} — $${((it.cant*(+it.precio))-(+(it.descuento||0))).toFixed(2)}${it.iva===false?' *(sin IVA)*':''}`).join('\n');
+  const msg=`*📋 ORDEN DE COMPRA — CLEAN GROUP CONSORCIO*\n\n*N° OC:* ${o.numero}\n*Fecha:* ${o.fecha}\n*Cond. Pago:* ${o.condPago||'—'}\n\n*Proveedor:* ${o.proveedor}\n*Contacto:* ${o.provCont||'—'}\n\n*ÍTEMS:*\n${itemsText}\n\n*Subtotal:* $${(o.subtotal||0).toFixed(2)}\n*IVA 15%:*  $${(o.iva||0).toFixed(2)}\n*TOTAL:*    $${(o.total||0).toFixed(2)}\n\n_Favor confirmar disponibilidad y fecha de entrega._\n— ${o.contactoCG||'Clean Group'} · CLEAN GROUP CONSORCIO`;
+  const telRaw=(o.provTel||'').replace(/\D/g,'');
+  // Si empieza con 0 → número Ecuador → añadir 593
+  const tel=telRaw.startsWith('0')&&telRaw.length===10?'593'+telRaw.slice(1):telRaw;
+  const url=tel?`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url,'_blank');
+  toast('💬 Abriendo WhatsApp...');
+}
+
+function ocDescargar(idx){
+  const o=db.ordenesCompra[idx];
+  const html=buildPrintDoc(ocBuildPrintContent(o));
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const nombre=o.proveedor.replace(/[^a-zA-Z0-9]/g,'_').toUpperCase();
+  a.download=`OC_${o.numero}_${nombre}_${o.fecha}.html`;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  toast(`✅ Descargado: ${a.download}`);
 }
 
 function ocRenderList(){
@@ -2536,9 +2685,12 @@ function ocRenderList(){
       <td style="color:var(--teal);font-weight:600">$${o.total.toFixed(2)}</td>
       <td>${o.necId?`<span class="tag tbl" style="font-size:10px">${o.necId}</span>`:'<span style="color:var(--muted);font-size:11px">Manual</span>'}</td>
       <td>${o.aiId?`<span class="tag tok">✓ ${o.aiId}</span>`:'<span class="tag twn">⏳ Sin Acta</span>'}</td>
-      <td>
-        <button class="btn btn-a btn-sm" onclick="ocPreviewId(${idx})">🖨️</button>
-        <button class="btn btn-s btn-sm" onclick="ocEditar(${idx})">✏️ Editar</button>
+      <td style="white-space:nowrap">
+        <button class="btn btn-a btn-sm" onclick="ocPreviewId(${idx})" title="Vista previa / Imprimir">🖨️</button>
+        <button class="btn btn-sm" style="background:#1a73e8;color:#fff" onclick="ocEnviarEmail(${idx})" title="Enviar por correo electrónico">📧</button>
+        <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="ocEnviarWA(${idx})" title="Enviar por WhatsApp">💬</button>
+        <button class="btn btn-sm" style="background:var(--surface2);color:var(--teal);border:1px solid var(--border)" onclick="ocDescargar(${idx})" title="Guardar en computador">⬇️ Guardar</button>
+        <button class="btn btn-s btn-sm" onclick="ocEditar(${idx})">✏️</button>
         <button class="btn btn-s btn-sm" onclick="nav('acta-ingreso')">→ Ingreso</button>
         <button class="btn btn-d btn-sm" onclick="ocEliminar(${idx})">✕</button>
       </td>
@@ -2548,19 +2700,7 @@ function ocRenderList(){
 
 function ocPreviewId(idx){
   const o=db.ordenesCompra[idx];
-  openPrint(`${dh('ORDEN DE COMPRA','FOR COM 02 · VER 01 (09 12 2024)')}
-    <div class="dmg">
-      <div class="dmi"><strong>N° OC</strong>${o.numero}</div><div class="dmi"><strong>Fecha</strong>${o.fecha}</div>
-      <div class="dmi"><strong>Condición</strong>${o.condPago}</div><div class="dmi"><strong>Tipo</strong>${o.tipo}</div>
-      <div class="dmi"><strong>Necesidad</strong>${o.necId||'—'}${o.necId?'<span class="dlb">VINCULADO</span>':''}</div>
-    </div>
-    <div class="dst">PROVEEDOR</div>
-    <div class="dmg"><div class="dmi"><strong>Razón Social</strong>${o.proveedor}</div><div class="dmi"><strong>RUC</strong>${o.provRuc||'—'}</div><div class="dmi"><strong>Dirección</strong>${o.provDir||'—'}</div><div class="dmi"><strong>Contacto</strong>${o.provCont||'—'}</div></div>
-    <table class="dt"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>P.Unit.</th><th>IVA</th><th>Subtotal</th></tr></thead>
-    <tbody>${o.items.map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>$${(+it.precio).toFixed(2)}</td><td style="text-align:center">${it.iva!==false?'15%':'0%'}</td><td>$${((it.cant*it.precio)-(it.descuento||0)).toFixed(2)}</td></tr>`).join('')}</tbody></table>
-    <table class="dtot"><tr><td>Subtotal</td><td>$${o.subtotal.toFixed(2)}</td></tr><tr><td>IVA 15%</td><td>$${o.iva.toFixed(2)}</td></tr><tr class="tr"><td>TOTAL</td><td>$${o.total.toFixed(2)}</td></tr></table>
-    <div class="dsig"><div class="dsb"><strong>Elaborado por</strong>${o.contactoCG||'—'}<br><br><br>_______________________</div><div class="dsb"><strong>Autorizado por</strong><br><br><br>_______________________</div></div>
-    ${df('FOR COM 02 · VER 01 (09 12 2024)')}`);
+  openPrint(ocBuildPrintContent(o));
 }
 function ocEliminar(idx){if(!confirm('¿Eliminar OC?'))return;db.ordenesCompra.splice(idx,1);saveDB();ocRenderList();toast('Eliminada');}
 
@@ -3054,7 +3194,54 @@ function histDel(col,idx){if(!confirm('¿Eliminar?'))return;db[col].splice(idx,1
 // ═══════════════════════════════
 function dh(title,isoCode){return `<div class="dh"><div class="dco"><strong>CLEAN GROUP CONSORCIO</strong>CIUDADELA ENTRE RIOS CALLE 1RA MZ W1 VILLA 26<br>GUAYAQUIL, ECUADOR · RUC: 0992575220001 · Telf: 0997345932</div><div class="dtb"><h2>${title}</h2><span class="iso">${isoCode}</span></div></div>`;}
 function df(code){return `<div class="df"><span>CLEAN GROUP CONSORCIO · Sistema Gestión de Calidad ISO 9001</span><span>${code}</span><span>Impreso: ${new Date().toLocaleDateString('es-EC')}</span></div>`;}
-function openPrint(html){document.getElementById('pmbody').innerHTML=html;document.getElementById('pm').classList.add('open');}
+function buildPrintDoc(innerHtml){
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>CLEAN GROUP</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;padding:28px 36px;color:#111;font-size:12px}
+@media print{@page{margin:14mm 12mm}body{padding:0}.no-print{display:none!important}}
+.dh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #0f1b2d;padding-bottom:14px}
+.dco{font-size:11px;color:#444}.dco strong{display:block;font-size:14px;color:#0f1b2d;margin-bottom:3px}
+.dtb{text-align:right}.dtb h2{font-size:15px;font-weight:700;color:#0f1b2d}
+.dtb .iso{font-family:monospace;font-size:9px;background:#f0f4f8;padding:2px 7px;border-radius:4px;color:#555;display:inline-block;margin-top:3px}
+.dmg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.dmi{font-size:11px;color:#555}.dmi strong{color:#111;display:block;margin-bottom:1px}
+.dst{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#0f1b2d;border-bottom:1px solid #ddd;padding-bottom:3px;margin:16px 0 10px}
+.dt{width:100%;border-collapse:collapse;font-size:11px}
+.dt th{background:#0f1b2d;color:#fff;padding:6px 9px;text-align:left;font-size:10px}
+.dt td{padding:6px 9px;border-bottom:1px solid #e8edf2}
+.dt tr:nth-child(even) td{background:#f7fafc}
+.dtot{margin-left:auto;width:240px;margin-top:14px;border-collapse:collapse}
+.dtot td{padding:3px 8px;font-size:11px}
+.dtot td:first-child{color:#555}
+.dtot td:last-child{font-weight:600;text-align:right}
+.dtot tr.tr td{font-size:13px;font-weight:700;color:#0f1b2d;border-top:2px solid #0f1b2d;padding-top:6px}
+.dsig{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:36px}
+.dsb{border-top:1px solid #ccc;padding-top:7px;font-size:10px;color:#555}
+.dsb strong{display:block;color:#111;margin-bottom:2px;font-size:11px}
+.df{margin-top:28px;padding-top:10px;border-top:1px solid #ddd;font-size:9px;color:#aaa;display:flex;justify-content:space-between}
+.dlb{display:inline-block;background:#e8f5f0;color:#0a7a5e;border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;margin-left:6px}
+.no-print{margin-bottom:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#f0f4f8;padding:10px 14px;border-radius:8px}
+.no-print span{font-size:12px;color:#555;margin-right:4px}
+.np-btn{padding:7px 16px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;border:none}
+.np-print{background:#0f1b2d;color:#fff}
+.np-close{background:#e8edf2;color:#333}
+</style>
+</head><body>
+<div class="no-print">
+  <span>Vista previa:</span>
+  <button class="np-btn np-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  <button class="np-btn np-close" onclick="window.close()">✕ Cerrar</button>
+</div>
+<div style="max-width:760px;margin:0 auto">${innerHtml}</div>
+</body></html>`;
+}
+function openPrint(html){
+  const w=window.open('','_blank');
+  if(!w){alert('Permite las ventanas emergentes en tu navegador para poder imprimir.');return;}
+  w.document.write(buildPrintDoc(html));
+  w.document.close();
+}
 
 // ═══════════════════════════════
 // TOAST
