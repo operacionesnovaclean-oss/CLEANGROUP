@@ -1328,15 +1328,21 @@ function initApp(){
 
 function setNums(){
   const m=String(new Date().getMonth()+1).padStart(2,'0');
-  const n=(arr)=>String((arr||[]).length+1).padStart(3,'0');
+  const pad=(n)=>String(n).padStart(3,'0');
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
-  // Only auto-set rm-num if not in edit mode and field is empty
+  // Usar counters oficiales (no length) para evitar saltos al editar
   const rmNumEl=document.getElementById('rm-num');
   if(rmNumEl && rm_editIdx===null && !rmNumEl.value) rmNumEl.value=String(db.counters.rm+1);
-  s('nec-num',`NEC-${m}-${n(db.necesidades)}`);
-  s('oc-num',`OC-${m}-${n(db.ordenesCompra)}`);
-  s('ai-num',`ACT-ING-${m}-${n(db.actasIngreso)}`);
-  s('ae-num',`ENT-${m}-${n(db.actasEntrega)}`);
+  s('nec-num','NEC-'+m+'-'+pad(db.counters.nec+1));
+  s('oc-num','OC-'+m+'-'+pad(db.counters.oc+1));
+  // Solo actualizar ai-num si NO estamos en modo edición
+  if(ai_editIdx===null){
+    s('ai-num','ACT-ING-'+m+'-'+pad(db.counters.ai+1));
+  }
+  // Solo actualizar ae-num si NO estamos en modo edición
+  if(ae_editIdx===null){
+    s('ae-num','ENT-'+m+'-'+pad(db.counters.ae+1));
+  }
 }
 
 // ═══════════════════════════════
@@ -2642,132 +2648,15 @@ function ocEnviarEmail(idx){
 }
 
 function ocEnviarWA(idx){
-  var o=db.ordenesCompra[idx];
-  if(!o) return;
-
-  // Calcular número actual del proveedor
-  var telRaw=(o.provTel||'').replace(/\D/g,'');
-  var telDefault=telRaw.startsWith('0')&&telRaw.length===10?'593'+telRaw.slice(1):telRaw;
-
-  // Prompt con número pre-cargado — el usuario puede editarlo
-  var telInput=prompt(
-    'Número WhatsApp del proveedor\n(código de país incluido, ej: 593993176872)\nEdita si cambió de número:',
-    telDefault
-  );
-  if(telInput===null) return; // canceló
-  var tel=(telInput||'').replace(/\D/g,'');
-
-  // Construir mensaje y URL de WhatsApp
-  var itemsText=(o.items||[]).map(function(it,i){
-    return (i+1)+'. '+it.desc+' ('+it.cant+' uds) — $'+((it.cant*(+it.precio||0))-(+(it.descuento||0))).toFixed(2);
-  }).join('%0A');
-  var waMensaje='*ORDEN DE COMPRA — '+o.numero+'*%0A'
-    +'*Proveedor:* '+o.proveedor+'%0A'
-    +'*Fecha:* '+o.fecha+'%0A'
-    +'*Condición pago:* '+(o.condPago||'—')+'%0A%0A'
-    +'*ÍTEMS:*%0A'+itemsText+'%0A%0A'
-    +'*Subtotal:* $'+(o.subtotal||0).toFixed(2)+'%0A'
-    +'*IVA:* $'+(o.iva||0).toFixed(2)+'%0A'
-    +'*TOTAL: $'+(o.total||0).toFixed(2)+'*%0A%0A'
-    +'_Favor confirmar disponibilidad y fecha de entrega._%0A'
-    +'— '+(o.contactoCG||'Clean Group')+' · CLEAN GROUP CONSORCIO';
-  var waUrl=tel
-    ?'https://wa.me/'+tel+'?text='+waMensaje
-    :'https://wa.me/?text='+waMensaje;
-
-  // Tabla de ítems para el PDF
-  var tablaRows=(o.items||[]).map(function(it,i){
-    var sub=(it.cant*(+it.precio||0))-(+(it.descuento||0));
-    var ivaVal=it.iva===false||it.iva===0?0:15;
-    return '<tr style="background:'+(i%2===0?'#fff':'#f7fafc')+'">'
-      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;color:#888">'+(i+1)+'</td>'
-      +'<td style="padding:5px 8px;border:1px solid #ddd"><b>'+(it.cod||'—')+'</b></td>'
-      +'<td style="padding:5px 8px;border:1px solid #ddd">'+(it.desc||'')+'</td>'
-      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center">'+(it.cant||0)+'</td>'
-      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:right">$'+(+it.precio||0).toFixed(2)+'</td>'
-      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;color:'+(ivaVal===0?'#888':'#c07a00')+';font-size:10px">'+ivaVal+'%</td>'
-      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:right;font-weight:700;color:#0a5c36">$'+sub.toFixed(2)+'</td>'
-      +'</tr>';
-  }).join('');
-
-  var telBadge=tel
-    ?'<div style="background:#e3f2fd;border-left:4px solid #1976d2;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#0d47a1;border-radius:0 4px 4px 0">📱 Enviando a: <strong>+'+tel+'</strong></div>'
-    :'';
-
-  var pdfHtml='<!DOCTYPE html><html><head><meta charset="utf-8">'
-    +'<title>OC '+o.numero+'</title>'
-    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:24px;color:#222;font-size:12px}'
-    +'@page{margin:12mm}@media print{.np{display:none!important}body{padding:0}}'
-    +'table{width:100%;border-collapse:collapse;margin-bottom:14px}'
-    +'th{padding:6px 8px;background:#0f1b2d;color:#fff;font-size:10px;text-align:left}'
-    +'</style></head><body>'
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #0f1b2d;padding-bottom:12px">'
-    +'<div><b style="font-size:16px;color:#0f1b2d">CLEAN GROUP CONSORCIO</b>'
-    +'<div style="font-size:10px;color:#555;margin-top:3px">CIUDADELA ENTRE RIOS CALLE 1RA MZ W1 VILLA 26 · GUAYAQUIL</div>'
-    +'<div style="font-size:10px;color:#555">RUC: 0992575220001 · Telf: 0997345932</div></div>'
-    +'<div style="text-align:right"><b style="font-size:15px;color:#0f1b2d">ORDEN DE COMPRA</b>'
-    +'<div style="font-size:9px;background:#f0f4f8;padding:2px 8px;border-radius:4px;color:#555;display:inline-block;margin-top:3px">FOR COM 02 · VER 01</div>'
-    +'</div></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
-    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">N° Orden de Compra</small><br><b style="font-size:14px;color:#0f1b2d">'+o.numero+'</b></div>'
-    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Fecha</small><br><b>'+o.fecha+'</b></div>'
-    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Condición de Pago</small><br><b>'+(o.condPago||'—')+'</b></div>'
-    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Tipo</small><br><b>'+(o.tipo||'—')+'</b></div>'
-    +'</div>'
-    +'<div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 14px;margin-bottom:14px">'
-    +'<b style="font-size:10px;text-transform:uppercase;color:#0f1b2d;letter-spacing:.5px">Proveedor</b>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;font-size:11px">'
-    +'<div><small style="color:#888">Razón Social</small><br><b>'+o.proveedor+'</b></div>'
-    +'<div><small style="color:#888">RUC</small><br>'+(o.provRuc||'—')+'</div>'
-    +'<div><small style="color:#888">Contacto</small><br>'+(o.provCont||'—')+'</div>'
-    +'<div><small style="color:#888">Teléfono</small><br>'+(o.provTel||'—')+'</div>'
-    +'<div><small style="color:#888">Email</small><br>'+(o.provEmail||'—')+'</div>'
-    +'<div><small style="color:#888">Dirección</small><br>'+(o.provDir||'—')+'</div>'
-    +'</div></div>'
-    +telBadge
-    +'<table><thead><tr>'
-    +'<th style="width:28px;text-align:center">N°</th>'
-    +'<th style="width:90px">Código</th>'
-    +'<th>Descripción</th>'
-    +'<th style="width:50px;text-align:center">Cant.</th>'
-    +'<th style="width:70px;text-align:right">P.Unit.</th>'
-    +'<th style="width:45px;text-align:center">IVA</th>'
-    +'<th style="width:75px;text-align:right">Subtotal</th>'
-    +'</tr></thead><tbody>'+tablaRows+'</tbody></table>'
-    +'<div style="margin-left:auto;width:240px;margin-top:4px">'
-    +'<table style="margin-bottom:0"><tbody>'
-    +'<tr><td style="padding:4px 8px;color:#555">Subtotal</td><td style="padding:4px 8px;text-align:right;font-weight:600">$'+(o.subtotal||0).toFixed(2)+'</td></tr>'
-    +'<tr><td style="padding:4px 8px;color:#555">IVA</td><td style="padding:4px 8px;text-align:right;font-weight:600">$'+(o.iva||0).toFixed(2)+'</td></tr>'
-    +'<tr style="border-top:2px solid #0f1b2d"><td style="padding:6px 8px;font-weight:700;font-size:13px">TOTAL</td>'
-    +'<td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px;color:#0f1b2d">$'+(o.total||0).toFixed(2)+'</td></tr>'
-    +'</tbody></table></div>'
-    +(o.obs?'<div style="margin-top:14px;background:#fffbeb;border-left:3px solid #f5a623;padding:8px 12px;font-size:11px;color:#444"><b>Observaciones:</b> '+o.obs+'</div>':'')
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:36px">'
-    +'<div style="border-top:1px solid #ccc;padding-top:7px;font-size:10px;color:#555"><b style="display:block;color:#111;font-size:11px;margin-bottom:2px">Elaborado por</b>'+(o.contactoCG||'—')+'</div>'
-    +'<div style="border-top:1px solid #ccc;padding-top:7px;font-size:10px;color:#555"><b style="display:block;color:#111;font-size:11px;margin-bottom:2px">Autorizado por</b><br></div>'
-    +'</div>'
-    +'<div style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:9px;color:#aaa;display:flex;justify-content:space-between">'
-    +'<span>CLEAN GROUP CONSORCIO · Sistema Gestión de Calidad ISO 9001</span>'
-    +'<span>FOR COM 02 · VER 01 (09 12 2024)</span>'
-    +'</div>'
-    +'<div class="np" style="margin-top:24px;padding:16px;background:#f0faf4;border:1px solid #c8e6c9;border-radius:8px">'
-    +'<p style="margin-bottom:12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center">Paso 1: Guarda como PDF &nbsp;|&nbsp; Paso 2: Envía por WhatsApp al proveedor</p>'
-    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
-    +'<button onclick="window.print()" style="padding:11px 22px;background:#0f1b2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>'
-    +'<a href="'+waUrl+'" target="_blank" style="padding:11px 22px;background:#25D366;color:#fff;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px">💬 Enviar por WhatsApp'+(tel?' (+'+tel+')':'')+'</a>'
-    +'</div>'
-    +'<p style="margin-top:10px;font-size:11px;color:#777;text-align:center">Guarda el PDF → en WhatsApp usa 📎 para adjuntarlo</p>'
-    +'</div>'
-    +'</body></html>';
-
-  var win=window.open('','_blank');
-  if(!win){
-    toast('Brave bloqueó la ventana — permite pop-ups para este sitio y vuelve a intentarlo',true);
-    return;
-  }
-  win.document.write(pdfHtml);
-  win.document.close();
-  toast('OC lista — imprime el PDF y usa el botón de WhatsApp dentro');
+  const o=db.ordenesCompra[idx];
+  const itemsText=(o.items||[]).map(it=>`  • ${it.cant} x ${it.desc} — $${((it.cant*(+it.precio))-(+(it.descuento||0))).toFixed(2)}${it.iva===false?' *(sin IVA)*':''}`).join('\n');
+  const msg=`*📋 ORDEN DE COMPRA — CLEAN GROUP CONSORCIO*\n\n*N° OC:* ${o.numero}\n*Fecha:* ${o.fecha}\n*Cond. Pago:* ${o.condPago||'—'}\n\n*Proveedor:* ${o.proveedor}\n*Contacto:* ${o.provCont||'—'}\n\n*ÍTEMS:*\n${itemsText}\n\n*Subtotal:* $${(o.subtotal||0).toFixed(2)}\n*IVA 15%:*  $${(o.iva||0).toFixed(2)}\n*TOTAL:*    $${(o.total||0).toFixed(2)}\n\n_Favor confirmar disponibilidad y fecha de entrega._\n— ${o.contactoCG||'Clean Group'} · CLEAN GROUP CONSORCIO`;
+  const telRaw=(o.provTel||'').replace(/\D/g,'');
+  // Si empieza con 0 → número Ecuador → añadir 593
+  const tel=telRaw.startsWith('0')&&telRaw.length===10?'593'+telRaw.slice(1):telRaw;
+  const url=tel?`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url,'_blank');
+  toast('💬 Abriendo WhatsApp...');
 }
 
 function ocDescargar(idx){
