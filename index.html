@@ -719,7 +719,22 @@ const RM_CAT={"INMOCLEAN":{"ACC":[{"g":"QUIMICOS","p":"QUIDESOL","u":"GALÓN","r
 // ═══════════════════════════════
 // INVENTORY INIT
 // ═══════════════════════════════
-function initInv(){db.inventario=CATALOG.map(c=>({cod:c.cod,desc:c.desc,ubic:'',unidad:c.u,stockMin:null,ini:0,entradas:0,salidas:0,stock:0,estado:'OK'}));}
+function initInv(){
+  if(!db.inventario||!db.inventario.length){
+    db.inventario=CATALOG.map(function(c){
+      return {cod:c.cod,desc:c.desc,ubic:'',unidad:c.u,
+        stockMin:null,ini:0,entradas:0,salidas:0,stock:0,
+        estado:'OK',critico:false,fechaCreacion:'',validaciones:{}};
+    });
+  } else {
+    // Migrar ítems existentes que no tengan los nuevos campos
+    db.inventario.forEach(function(it){
+      if(it.critico===undefined) it.critico=false;
+      if(!it.fechaCreacion) it.fechaCreacion='';
+      if(!it.validaciones) it.validaciones={};
+    });
+  }
+}
 
 // ═══════════════════════════════
 // PANEL HTML
@@ -1094,31 +1109,147 @@ function buildPanels(){
 
 <!-- INVENTARIO -->
 <div class="panel" id="panel-inventario">
-  <div class="ph"><h2>Inventario de Bienes en Bodega</h2><p>Actualizado automáticamente por las Actas de Ingreso y Entrega.</p><span class="iso-code">FOR ALM 01 · VER 01 (09 12 2024)</span></div>
-  <div class="sb">
-    <input id="inv-search" placeholder="Buscar..." oninput="invRender()">
-    <select id="inv-cat" onchange="invRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
-      <option value="">Todas</option><option>QMC</option><option>MAT</option><option>MAQ</option><option>EPP</option><option>SUM</option>
-    </select>
-    <button class="btn btn-p btn-sm" onclick="document.getElementById('inv-add').style.display='block'">+ Agregar</button>
+  <div class="ph">
+    <h2>Inventario de Bienes en Bodega</h2>
+    <p>Existencias, stock mínimo, ítems críticos y validación trimestral ISO 9001.</p>
+    <span class="iso-code">FOR ALM 01 · VER 01 (09 12 2024)</span>
   </div>
-  <div class="card" id="inv-add" style="display:none"><div class="card-title">➕ Nuevo Ítem</div>
-    <div class="fg">
-      <div class="fi"><label>Código</label><input id="inv-cod" placeholder="MAT-N-001"></div>
-      <div class="fi"><label>Descripción</label><input id="inv-desc"></div>
-      <div class="fi"><label>Ubicación</label><input id="inv-ubic"></div>
-      <div class="fi"><label>Unidad</label><select id="inv-unidad"><option>Unidad</option><option>Galón</option><option>Litros</option><option>Kilos</option><option>Par</option><option>Caja</option><option>Canecas</option></select></div>
-      <div class="fi"><label>Stock Mínimo</label><input id="inv-min" type="number" min="0"></div>
-      <div class="fi"><label>Existencia Inicial</label><input id="inv-ini" type="number" min="0" value="0"></div>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-p" onclick="invAgregar()">Guardar</button>
-      <button class="btn btn-s" onclick="document.getElementById('inv-add').style.display='none'">Cancelar</button>
-    </div>
+  <div class="sg" id="inv-stats"></div>
+  <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--border)">
+    <button class="cat-tab active" id="inv-tab-stock"    onclick="invTabSwitch('stock')">📦 Stock</button>
+    <button class="cat-tab"        id="inv-tab-valid"    onclick="invTabSwitch('valid')">✅ Validación Trimestral</button>
+    <button class="cat-tab"        id="inv-tab-entradas" onclick="invTabSwitch('entradas')">⬇️ Entradas</button>
+    <button class="cat-tab"        id="inv-tab-salidas"  onclick="invTabSwitch('salidas')">⬆️ Salidas</button>
   </div>
-  <div class="card"><div class="tw"><table><thead><tr><th>Código</th><th>Descripción</th><th>Ubicación</th><th>Unidad</th><th>Stock Mín.</th><th>Inicial</th><th>Entradas</th><th>Salidas</th><th>Stock</th><th>Estado</th><th></th></tr></thead><tbody id="inv-body"></tbody></table></div></div>
-</div>
 
+  <!-- TAB STOCK -->
+  <div id="inv-pane-stock">
+    <div class="sb" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <input id="inv-search" placeholder="🔍 Buscar..." oninput="invRender()" style="flex:1;min-width:200px">
+      <select id="inv-cat" onchange="invRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">Todas</option><option>QMC</option><option>MAT</option><option>MAQ</option><option>EPP</option><option>SUM</option><option>UNI</option><option>HER</option><option>EQP</option>
+      </select>
+      <select id="inv-filtro" onchange="invRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">Todos</option>
+        <option value="critico">⚠️ Solo críticos</option>
+        <option value="bajo">📉 Bajo stock mín.</option>
+      </select>
+      <button class="btn btn-p btn-sm" onclick="invShowAdd()">+ Agregar</button>
+      <button class="btn btn-s btn-sm" onclick="invExportExcel()">⬇️ Excel</button>
+    </div>
+    <!-- Form agregar/editar -->
+    <div class="card" id="inv-add" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="card-title" style="margin:0" id="inv-add-title">➕ Nuevo Ítem</div>
+        <button onclick="invHideAdd()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <div class="fg">
+        <div class="fi"><label>Código</label><input id="inv-cod" placeholder="MAT-N-001"></div>
+        <div class="fi"><label>Descripción</label><input id="inv-desc"></div>
+        <div class="fi"><label>Ubicación en bodega</label><input id="inv-ubic" placeholder="Ej: Estante A-2"></div>
+        <div class="fi"><label>Unidad</label>
+          <select id="inv-unidad" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option>Unidad</option><option>Galón</option><option>Litros</option><option>Kilos</option><option>Par</option><option>Caja</option><option>Canecas</option><option>Metro</option>
+          </select>
+        </div>
+        <div class="fi"><label>Stock Mínimo</label><input id="inv-min" type="number" min="0" placeholder="0"></div>
+        <div class="fi"><label>Existencia Inicial</label><input id="inv-ini" type="number" min="0" value="0"></div>
+        <div class="fi"><label>Tipo de ítem</label>
+          <select id="inv-critico" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option value="no-critico">Normal</option>
+            <option value="critico">⚠️ Crítico / Recurrente</option>
+          </select>
+        </div>
+        <div class="fi"><label>Fecha creación</label><input id="inv-fecha-creacion" type="date"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-p" id="inv-add-btn" onclick="invGuardar()">💾 Guardar</button>
+        <button class="btn btn-s" onclick="invHideAdd()">Cancelar</button>
+      </div>
+    </div>
+    <!-- Tabla stock -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Código</th><th>Descripción</th><th>Ubicación</th><th>Unidad</th>
+          <th style="text-align:center">Stock Mín.</th><th style="text-align:center">Inicial</th>
+          <th style="text-align:center;color:var(--teal)">Entradas</th>
+          <th style="text-align:center;color:var(--amber)">Salidas</th>
+          <th style="text-align:center">Stock</th>
+          <th style="text-align:center">Tipo</th>
+          <th style="text-align:center">Estado</th><th></th>
+        </tr></thead>
+        <tbody id="inv-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- TAB VALIDACIÓN TRIMESTRAL -->
+  <div id="inv-pane-valid" style="display:none">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <div class="card-title" style="margin:0">✅ Validación de Inventario Trimestral</div>
+          <p style="font-size:12px;color:var(--muted);margin-top:4px">Ingresa el stock físico contado para calcular diferencias</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="inv-valid-trim" style="padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option value="Q1">Q1 — Ene-Mar</option><option value="Q2" selected>Q2 — Abr-Jun</option>
+            <option value="Q3">Q3 — Jul-Sep</option><option value="Q4">Q4 — Oct-Dic</option>
+          </select>
+          <input id="inv-valid-anio" type="number" value="2026" min="2024" max="2030"
+            style="width:80px;padding:8px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          <button class="btn btn-p" onclick="invValidGuardar()">💾 Guardar</button>
+          <button class="btn btn-s" onclick="invValidExcel()">⬇️ Excel</button>
+        </div>
+      </div>
+      <div id="inv-valid-resumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px"></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Código</th><th>Descripción</th>
+          <th style="text-align:center">Stock Sistema</th>
+          <th style="text-align:center">Stock Físico</th>
+          <th style="text-align:center">Diferencia</th>
+          <th>Ubicación Física</th>
+          <th style="text-align:center">Estado Ubic.</th>
+          <th style="text-align:center">Estado</th>
+          <th>Comentarios</th>
+        </tr></thead>
+        <tbody id="inv-valid-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- TAB ENTRADAS -->
+  <div id="inv-pane-entradas" style="display:none">
+    <div class="card">
+      <div class="card-title">⬇️ Registro de Entradas <span class="badge" id="inv-ent-count">0</span></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Fecha</th><th>Proveedor</th><th>Documento</th><th>N° Doc.</th>
+          <th>Orden Compra</th><th>Código</th><th>Descripción</th>
+          <th style="text-align:center">Cantidad</th><th>Observación</th>
+        </tr></thead>
+        <tbody id="inv-ent-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- TAB SALIDAS -->
+  <div id="inv-pane-salidas" style="display:none">
+    <div class="card">
+      <div class="card-title">⬆️ Registro de Salidas <span class="badge" id="inv-sal-count">0</span></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Fecha</th><th>Entregado por</th><th>N° Solicitud</th>
+          <th>Departamento</th><th>Recibe</th><th>Código</th>
+          <th>Descripción</th><th style="text-align:center">Cantidad</th><th>Observación</th>
+        </tr></thead>
+        <tbody id="inv-sal-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
 <!-- HISTORIAL -->
 <div class="panel" id="panel-historial">
   <div class="ph"><h2>Historial de Registros</h2><p>Todos los documentos con sus vínculos</p></div>
@@ -1297,7 +1428,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:invRender,historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel};
   if(fns[name]) fns[name]();
 }
 
@@ -1330,19 +1461,14 @@ function setNums(){
   const m=String(new Date().getMonth()+1).padStart(2,'0');
   const pad=(n)=>String(n).padStart(3,'0');
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
-  // Usar counters oficiales (no length) para evitar saltos al editar
+  // Usar counters oficiales para evitar saltos en secuencial al editar
   const rmNumEl=document.getElementById('rm-num');
   if(rmNumEl && rm_editIdx===null && !rmNumEl.value) rmNumEl.value=String(db.counters.rm+1);
   s('nec-num','NEC-'+m+'-'+pad(db.counters.nec+1));
   s('oc-num','OC-'+m+'-'+pad(db.counters.oc+1));
-  // Solo actualizar ai-num si NO estamos en modo edición
-  if(ai_editIdx===null){
-    s('ai-num','ACT-ING-'+m+'-'+pad(db.counters.ai+1));
-  }
-  // Solo actualizar ae-num si NO estamos en modo edición
-  if(ae_editIdx===null){
-    s('ae-num','ENT-'+m+'-'+pad(db.counters.ae+1));
-  }
+  // No sobreescribir si estamos en modo edición
+  if(ai_editIdx===null) s('ai-num','ACT-ING-'+m+'-'+pad(db.counters.ai+1));
+  if(ae_editIdx===null) s('ae-num','ENT-'+m+'-'+pad(db.counters.ae+1));
 }
 
 // ═══════════════════════════════
@@ -2648,15 +2774,116 @@ function ocEnviarEmail(idx){
 }
 
 function ocEnviarWA(idx){
-  const o=db.ordenesCompra[idx];
-  const itemsText=(o.items||[]).map(it=>`  • ${it.cant} x ${it.desc} — $${((it.cant*(+it.precio))-(+(it.descuento||0))).toFixed(2)}${it.iva===false?' *(sin IVA)*':''}`).join('\n');
-  const msg=`*📋 ORDEN DE COMPRA — CLEAN GROUP CONSORCIO*\n\n*N° OC:* ${o.numero}\n*Fecha:* ${o.fecha}\n*Cond. Pago:* ${o.condPago||'—'}\n\n*Proveedor:* ${o.proveedor}\n*Contacto:* ${o.provCont||'—'}\n\n*ÍTEMS:*\n${itemsText}\n\n*Subtotal:* $${(o.subtotal||0).toFixed(2)}\n*IVA 15%:*  $${(o.iva||0).toFixed(2)}\n*TOTAL:*    $${(o.total||0).toFixed(2)}\n\n_Favor confirmar disponibilidad y fecha de entrega._\n— ${o.contactoCG||'Clean Group'} · CLEAN GROUP CONSORCIO`;
-  const telRaw=(o.provTel||'').replace(/\D/g,'');
-  // Si empieza con 0 → número Ecuador → añadir 593
-  const tel=telRaw.startsWith('0')&&telRaw.length===10?'593'+telRaw.slice(1):telRaw;
-  const url=tel?`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`;
-  window.open(url,'_blank');
-  toast('💬 Abriendo WhatsApp...');
+  var o=db.ordenesCompra[idx];
+  if(!o) return;
+
+  // Prompt con número pre-cargado — editable si cambió
+  var telRaw=(o.provTel||'').replace(/\D/g,'');
+  var telDefault=telRaw.startsWith('0')&&telRaw.length===10?'593'+telRaw.slice(1):telRaw;
+  var telInput=prompt('Número WhatsApp del proveedor\n(código de país incluido, ej: 593993176872)\nEdita si cambió de número:',telDefault);
+  if(telInput===null) return;
+  var tel=(telInput||'').replace(/\D/g,'');
+
+  // Mensaje WA
+  var itemsLineas=(o.items||[]).map(function(it,i){
+    return (i+1)+'. '+it.desc+' ('+it.cant+' uds) — $'+((it.cant*(+it.precio||0))-(+(it.descuento||0))).toFixed(2);
+  }).join('%0A');
+  var waMensaje='*ORDEN DE COMPRA — '+o.numero+'*%0A'
+    +'*Proveedor:* '+o.proveedor+'%0A'
+    +'*Fecha:* '+o.fecha+'%0A'
+    +'*Condición pago:* '+(o.condPago||'—')+'%0A%0A'
+    +'*ÍTEMS:*%0A'+itemsLineas+'%0A%0A'
+    +'*Subtotal:* $'+(o.subtotal||0).toFixed(2)+'%0A'
+    +'*IVA:* $'+(o.iva||0).toFixed(2)+'%0A'
+    +'*TOTAL: $'+(o.total||0).toFixed(2)+'*%0A%0A'
+    +'_Favor confirmar disponibilidad y fecha de entrega._%0A'
+    +'— '+(o.contactoCG||'Clean Group')+' · CLEAN GROUP CONSORCIO';
+  var waUrl=tel?('https://wa.me/'+tel+'?text='+waMensaje):('https://wa.me/?text='+waMensaje);
+
+  // Tabla ítems para PDF
+  var tablaRows=(o.items||[]).map(function(it,i){
+    var sub=(it.cant*(+it.precio||0))-(+(it.descuento||0));
+    var ivaVal=it.iva===false||it.iva===0?0:15;
+    return '<tr style="background:'+(i%2===0?'#fff':'#f7fafc')+'">'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;color:#888">'+(i+1)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd"><b>'+(it.cod||'—')+'</b></td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd">'+(it.desc||'')+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center">'+(it.cant||0)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:right">$'+(+it.precio||0).toFixed(2)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;color:'+(ivaVal===0?'#888':'#c07a00')+';font-size:10px">'+ivaVal+'%</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;text-align:right;font-weight:700;color:#0a5c36">$'+sub.toFixed(2)+'</td>'
+      +'</tr>';
+  }).join('');
+
+  var telBadge=tel?('<div style="background:#e3f2fd;border-left:4px solid #1976d2;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#0d47a1;border-radius:0 4px 4px 0">Enviando a: <strong>+'+tel+'</strong></div>'):'';
+
+  var pdfHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>OC '+o.numero+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:24px;color:#222;font-size:12px}'
+    +'@page{margin:12mm}@media print{.np{display:none!important}body{padding:0}}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:14px}'
+    +'th{padding:6px 8px;background:#0f1b2d;color:#fff;font-size:10px;text-align:left}'
+    +'</style></head><body>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #0f1b2d;padding-bottom:12px">'
+    +'<div><b style="font-size:16px;color:#0f1b2d">CLEAN GROUP CONSORCIO</b>'
+    +'<div style="font-size:10px;color:#555;margin-top:3px">CIUDADELA ENTRE RIOS CALLE 1RA MZ W1 VILLA 26 · GUAYAQUIL</div>'
+    +'<div style="font-size:10px;color:#555">RUC: 0992575220001 · Telf: 0997345932</div></div>'
+    +'<div style="text-align:right"><b style="font-size:15px;color:#0f1b2d">ORDEN DE COMPRA</b>'
+    +'<div style="font-size:9px;background:#f0f4f8;padding:2px 8px;border-radius:4px;color:#555;display:inline-block;margin-top:3px">FOR COM 02 · VER 01</div>'
+    +'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">N° Orden de Compra</small><br><b style="font-size:14px;color:#0f1b2d">'+o.numero+'</b></div>'
+    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Fecha</small><br><b>'+o.fecha+'</b></div>'
+    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Condición de Pago</small><br><b>'+(o.condPago||'—')+'</b></div>'
+    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Tipo</small><br><b>'+(o.tipo||'—')+'</b></div>'
+    +'</div>'
+    +'<div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 14px;margin-bottom:14px">'
+    +'<b style="font-size:10px;text-transform:uppercase;color:#0f1b2d">Proveedor</b>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;font-size:11px">'
+    +'<div><small style="color:#888">Razón Social</small><br><b>'+o.proveedor+'</b></div>'
+    +'<div><small style="color:#888">RUC</small><br>'+(o.provRuc||'—')+'</div>'
+    +'<div><small style="color:#888">Contacto</small><br>'+(o.provCont||'—')+'</div>'
+    +'<div><small style="color:#888">Teléfono</small><br>'+(o.provTel||'—')+'</div>'
+    +'<div><small style="color:#888">Email</small><br>'+(o.provEmail||'—')+'</div>'
+    +'<div><small style="color:#888">Dirección</small><br>'+(o.provDir||'—')+'</div>'
+    +'</div></div>'
+    +telBadge
+    +'<table><thead><tr>'
+    +'<th style="width:28px;text-align:center">N°</th>'
+    +'<th style="width:90px">Código</th><th>Descripción</th>'
+    +'<th style="width:50px;text-align:center">Cant.</th>'
+    +'<th style="width:70px;text-align:right">P.Unit.</th>'
+    +'<th style="width:45px;text-align:center">IVA</th>'
+    +'<th style="width:75px;text-align:right">Subtotal</th>'
+    +'</tr></thead><tbody>'+tablaRows+'</tbody></table>'
+    +'<div style="margin-left:auto;width:240px">'
+    +'<table style="margin-bottom:0"><tbody>'
+    +'<tr><td style="padding:4px 8px;color:#555">Subtotal</td><td style="padding:4px 8px;text-align:right;font-weight:600">$'+(o.subtotal||0).toFixed(2)+'</td></tr>'
+    +'<tr><td style="padding:4px 8px;color:#555">IVA</td><td style="padding:4px 8px;text-align:right;font-weight:600">$'+(o.iva||0).toFixed(2)+'</td></tr>'
+    +'<tr style="border-top:2px solid #0f1b2d"><td style="padding:6px 8px;font-weight:700;font-size:13px">TOTAL</td>'
+    +'<td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px;color:#0f1b2d">$'+(o.total||0).toFixed(2)+'</td></tr>'
+    +'</tbody></table></div>'
+    +(o.obs?'<div style="margin-top:14px;background:#fffbeb;border-left:3px solid #f5a623;padding:8px 12px;font-size:11px"><b>Obs:</b> '+o.obs+'</div>':'')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:36px">'
+    +'<div style="border-top:1px solid #ccc;padding-top:7px;font-size:10px;color:#555"><b style="display:block;color:#111;font-size:11px;margin-bottom:2px">Elaborado por</b>'+(o.contactoCG||'—')+'</div>'
+    +'<div style="border-top:1px solid #ccc;padding-top:7px;font-size:10px;color:#555"><b style="display:block;color:#111;font-size:11px;margin-bottom:2px">Autorizado por</b></div>'
+    +'</div>'
+    +'<div style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:9px;color:#aaa;display:flex;justify-content:space-between">'
+    +'<span>CLEAN GROUP CONSORCIO · ISO 9001</span><span>FOR COM 02 · VER 01</span>'
+    +'</div>'
+    +'<div class="np" style="margin-top:24px;padding:16px;background:#f0faf4;border:1px solid #c8e6c9;border-radius:8px">'
+    +'<p style="margin-bottom:12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center">Paso 1: Guarda como PDF &nbsp;|&nbsp; Paso 2: Envía por WhatsApp al proveedor</p>'
+    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+    +'<button onclick="window.print()" style="padding:11px 22px;background:#0f1b2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Imprimir / Guardar PDF</button>'
+    +'<a href="'+waUrl+'" target="_blank" style="padding:11px 22px;background:#25D366;color:#fff;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px">Enviar por WhatsApp'+(tel?' (+'+tel+')':'')+'</a>'
+    +'</div>'
+    +'<p style="margin-top:10px;font-size:11px;color:#777;text-align:center">Guarda el PDF y adjúntalo en WhatsApp con el clip</p>'
+    +'</div></body></html>';
+
+  var win=window.open('','_blank');
+  if(!win){toast('Brave bloqueó la ventana — permite pop-ups para este sitio',true);return;}
+  win.document.write(pdfHtml);
+  win.document.close();
+  toast('OC lista — usa los botones dentro para imprimir y abrir WhatsApp');
 }
 
 function ocDescargar(idx){
@@ -3130,42 +3357,334 @@ function aeEliminar(idx){if(!confirm('¿Eliminar?'))return;db.actasEntrega.splic
 // ═══════════════════════════════
 // INVENTARIO
 // ═══════════════════════════════
+function invTabSwitch(tab){
+  ['stock','valid','entradas','salidas'].forEach(function(t){
+    document.getElementById('inv-pane-'+t).style.display=t===tab?'':'none';
+    document.getElementById('inv-tab-'+t).classList.toggle('active',t===tab);
+  });
+  if(tab==='stock')     {invStatsRender();invRender();}
+  if(tab==='valid')     invValidRender();
+  if(tab==='entradas')  invEntRender();
+  if(tab==='salidas')   invSalRender();
+}
+
+function invShowAdd(cod){
+  const form=document.getElementById('inv-add');
+  form.style.display='block';
+  if(cod){
+    const it=db.inventario.find(function(i){return i.cod===cod;});
+    if(!it)return;
+    document.getElementById('inv-add-title').textContent='✏️ Editar: '+it.desc;
+    document.getElementById('inv-add-btn').textContent='💾 Guardar cambios';
+    document.getElementById('inv-add-btn').onclick=function(){invGuardar(cod);};
+    document.getElementById('inv-cod').value=it.cod;
+    document.getElementById('inv-cod').readOnly=true;
+    document.getElementById('inv-desc').value=it.desc;
+    document.getElementById('inv-ubic').value=it.ubic||'';
+    document.getElementById('inv-unidad').value=it.unidad;
+    document.getElementById('inv-min').value=it.stockMin!=null?it.stockMin:'';
+    document.getElementById('inv-ini').value=it.ini||0;
+    document.getElementById('inv-critico').value=it.critico?'critico':'no-critico';
+    document.getElementById('inv-fecha-creacion').value=it.fechaCreacion||'';
+  } else {
+    document.getElementById('inv-add-title').textContent='➕ Nuevo Ítem';
+    document.getElementById('inv-add-btn').textContent='💾 Guardar';
+    document.getElementById('inv-add-btn').onclick=function(){invGuardar();};
+    document.getElementById('inv-cod').value='';
+    document.getElementById('inv-cod').readOnly=false;
+    document.getElementById('inv-desc').value='';
+    document.getElementById('inv-ubic').value='';
+    document.getElementById('inv-min').value='';
+    document.getElementById('inv-ini').value='0';
+    document.getElementById('inv-critico').value='no-critico';
+    document.getElementById('inv-fecha-creacion').value=new Date().toISOString().split('T')[0];
+  }
+  form.scrollIntoView({behavior:'smooth'});
+}
+function invHideAdd(){document.getElementById('inv-add').style.display='none';}
+
+function invGuardar(editCod){
+  const g=function(id){const el=document.getElementById(id);return el?el.value:'';};
+  const cod=g('inv-cod').trim(), desc=g('inv-desc').trim();
+  if(!cod||!desc){toast('Completa código y descripción',true);return;}
+  const ini=Number(g('inv-ini'))||0;
+  const stockMin=g('inv-min')!==''?Number(g('inv-min')):null;
+  const critico=g('inv-critico')==='critico';
+  if(editCod){
+    const it=db.inventario.find(function(i){return i.cod===editCod;});
+    if(it){
+      it.desc=desc;it.ubic=g('inv-ubic');it.unidad=g('inv-unidad');
+      it.stockMin=stockMin;it.ini=ini;it.critico=critico;
+      it.fechaCreacion=g('inv-fecha-creacion');
+      it.stock=ini+it.entradas-it.salidas;
+      it.estado=it.stockMin!=null&&it.stock<it.stockMin?'BAJO':'OK';
+    }
+    toast('✅ Ítem actualizado');
+  } else {
+    if(db.inventario.find(function(i){return i.cod===cod;})){toast('Ese código ya existe',true);return;}
+    db.inventario.push({
+      cod:cod,desc:desc,ubic:g('inv-ubic'),unidad:g('inv-unidad'),
+      stockMin:stockMin,ini:ini,entradas:0,salidas:0,stock:ini,
+      estado:stockMin!=null&&ini<stockMin?'BAJO':'OK',
+      critico:critico,fechaCreacion:g('inv-fecha-creacion'),validaciones:{}
+    });
+    toast('✅ Ítem agregado');
+  }
+  saveDB();invHideAdd();invStatsRender();invRender();
+}
+
+function invStatsRender(){
+  const el=document.getElementById('inv-stats');if(!el)return;
+  const total=db.inventario.length;
+  const criticos=db.inventario.filter(function(i){return i.critico;}).length;
+  const bajos=db.inventario.filter(function(i){return i.stockMin!=null&&i.stock<i.stockMin;}).length;
+  const sinStock=db.inventario.filter(function(i){return i.stock===0;}).length;
+  el.innerHTML='<div class="sc st"><div class="l">Total Ítems</div><div class="v">'+total+'</div></div>'
+    +'<div class="sc sa"><div class="l">Críticos/Recurrentes</div><div class="v">'+criticos+'</div><div class="s">Requieren control</div></div>'
+    +'<div class="sc sr"><div class="l">Bajo Stock Mín.</div><div class="v">'+bajos+'</div><div class="s">Reabastecer</div></div>'
+    +'<div class="sc sr"><div class="l">Sin Existencias</div><div class="v">'+sinStock+'</div><div class="s">Stock = 0</div></div>';
+}
+
 function invRender(){
   const search=(document.getElementById('inv-search')||{}).value?.toLowerCase()||'';
   const cat=(document.getElementById('inv-cat')||{}).value||'';
+  const filtro=(document.getElementById('inv-filtro')||{}).value||'';
   let list=db.inventario;
-  if(search)list=list.filter(i=>i.cod.toLowerCase().includes(search)||i.desc.toLowerCase().includes(search));
-  if(cat)list=list.filter(i=>i.cod.startsWith(cat));
+  if(search) list=list.filter(function(i){return (i.cod||'').toLowerCase().includes(search)||(i.desc||'').toLowerCase().includes(search);});
+  if(cat)    list=list.filter(function(i){return i.cod.startsWith(cat);});
+  if(filtro==='critico') list=list.filter(function(i){return i.critico;});
+  if(filtro==='bajo')    list=list.filter(function(i){return i.stockMin!=null&&i.stock<i.stockMin;});
   const body=document.getElementById('inv-body');if(!body)return;
-  body.innerHTML=list.map(it=>{
-    const tag=it.stockMin&&it.stock<it.stockMin?'ter':it.stock===0?'twn':'tok';
-    return `<tr>
-      <td><code style="color:var(--teal);font-size:11px">${it.cod}</code></td>
-      <td style="font-size:12px;max-width:200px">${it.desc}</td>
-      <td>${it.ubic||'—'}</td><td>${it.unidad}</td>
-      <td>${it.stockMin??'—'}</td><td>${it.ini}</td>
-      <td style="color:var(--teal)">${it.entradas}</td><td style="color:var(--amber)">${it.salidas}</td>
-      <td><span class="tag ${tag}">${it.stock}</span></td>
-      <td><span class="tag ${it.estado==='OK'?'tok':'ter'}" style="font-size:10px">${it.estado}</span></td>
-      <td><button class="btn btn-s btn-sm" onclick="invEditStock('${it.cod}')">✏️</button></td>
-    </tr>`;
+  if(!list.length){body.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:20px">Sin resultados</td></tr>';return;}
+  body.innerHTML=list.map(function(it){
+    const bajo=it.stockMin!=null&&it.stock<it.stockMin;
+    const tag=bajo?'ter':it.stock===0?'twn':'tok';
+    const critTag=it.critico
+      ?'<span class="tag" style="background:rgba(245,166,35,.15);color:var(--amber);font-size:10px">⚠️ Crítico</span>'
+      :'<span style="color:var(--muted);font-size:11px">Normal</span>';
+    return '<tr style="'+(bajo?'background:rgba(224,82,99,.04)':'')+'">'
+      +'<td><code style="color:var(--teal);font-size:11px">'+it.cod+'</code></td>'
+      +'<td style="font-size:12px;max-width:200px">'+it.desc+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+(it.ubic||'—')+'</td>'
+      +'<td style="font-size:11px">'+it.unidad+'</td>'
+      +'<td style="text-align:center">'+(it.stockMin!=null?it.stockMin:'—')+'</td>'
+      +'<td style="text-align:center;color:var(--muted)">'+(it.ini||0)+'</td>'
+      +'<td style="text-align:center;color:var(--teal);font-weight:600">'+(it.entradas||0)+'</td>'
+      +'<td style="text-align:center;color:var(--amber);font-weight:600">'+(it.salidas||0)+'</td>'
+      +'<td style="text-align:center"><span class="tag '+tag+'" style="font-weight:700;min-width:32px;text-align:center">'+it.stock+'</span></td>'
+      +'<td style="text-align:center">'+critTag+'</td>'
+      +'<td style="text-align:center"><span class="tag '+(it.estado==='OK'||!it.estado?'tok':'ter')+'" style="font-size:10px">'+(it.estado||'OK')+'</span></td>'
+      +'<td style="white-space:nowrap">'
+        +'<button class="btn btn-s btn-sm" onclick="invShowAdd(\''+it.cod+'\')" title="Editar">✏️</button>'
+        +'<button class="btn btn-s btn-sm" onclick="invAjustarStock(\''+it.cod+'\')" title="Ajustar stock">⚖️</button>'
+      +'</td></tr>';
   }).join('');
 }
 
-function invAgregar(){
-  const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
-  const cod=g('inv-cod').trim(),desc=g('inv-desc').trim();
-  if(!cod||!desc){toast('Completa código y descripción',true);return;}
-  const ini=Number(g('inv-ini'))||0;
-  db.inventario.push({cod,desc,ubic:g('inv-ubic'),unidad:g('inv-unidad'),stockMin:Number(g('inv-min'))||null,ini,entradas:0,salidas:0,stock:ini,estado:'OK'});
-  saveDB();invRender();document.getElementById('inv-add').style.display='none';toast('Ítem agregado');
+function invAjustarStock(cod){
+  const it=db.inventario.find(function(i){return i.cod===cod;});if(!it)return;
+  const v=prompt('Ajustar stock para: '+it.desc+'\nActual: '+it.stock+'\nNuevo valor:',it.stock);
+  if(v===null||isNaN(v))return;
+  const nuevo=Number(v);
+  it.ini=nuevo-it.entradas+it.salidas;
+  it.stock=nuevo;
+  it.estado=it.stockMin!=null&&nuevo<it.stockMin?'BAJO':'OK';
+  saveDB();invRender();invStatsRender();
+  toast('✅ Stock ajustado a '+nuevo);
 }
 
-function invEditStock(cod){
-  const it=db.inventario.find(i=>i.cod===cod);if(!it)return;
-  const v=prompt(`Ajustar stock para: ${it.desc}\nActual: ${it.stock}`,it.stock);
-  if(v!==null&&!isNaN(v)){it.stock=Number(v);saveDB();invRender();toast('Stock actualizado');}
+function invAgregar(){invGuardar();}
+
+// ── VALIDACIÓN TRIMESTRAL ──────────────────────────────────────────
+function invValidRender(){
+  var trim=(document.getElementById('inv-valid-trim')||{}).value||'Q2';
+  var anio=(document.getElementById('inv-valid-anio')||{}).value||'2026';
+  var key=anio+'-'+trim;
+  var body=document.getElementById('inv-valid-body');if(!body)return;
+  var ok=0,nov=0,sinVal=0;
+  body.innerHTML=db.inventario.map(function(it,idx){
+    var v=(it.validaciones&&it.validaciones[key])||{};
+    var sf=v.stockFisico!==undefined?v.stockFisico:'';
+    var diff=sf!==''?(+sf-it.stock):'';
+    var estado=sf!==''?(diff===0&&v.estadoUbic==='OK'?'OK':'CON NOVEDADES'):'';
+    if(estado==='OK')ok++; else if(estado==='CON NOVEDADES')nov++; else sinVal++;
+    var dc=diff===''?'var(--muted)':diff===0?'var(--teal)':diff>0?'var(--amber)':'var(--red)';
+    var optsUbic='<option value=""'+(!v.estadoUbic?' selected':'')+'>—</option>'
+      +'<option value="OK"'+(v.estadoUbic==='OK'?' selected':'')+'>OK</option>'
+      +'<option value="NOVEDAD"'+(v.estadoUbic==='NOVEDAD'?' selected':'')+'>NOVEDAD</option>';
+    var estadoHtml=estado===''?'<span style="color:var(--muted);font-size:11px">Pendiente</span>'
+      :estado==='OK'?'<span class="tag tok" style="font-size:10px">OK</span>'
+      :'<span class="tag ter" style="font-size:10px">NOVEDAD</span>';
+    return '<tr>'
+      +'<td><code style="color:var(--teal);font-size:11px">'+it.cod+'</code></td>'
+      +'<td style="font-size:12px">'+it.desc+'</td>'
+      +'<td style="text-align:center;font-weight:700">'+it.stock+'</td>'
+      +'<td style="text-align:center"><input type="number" min="0" data-idx="'+idx+'" data-key="'+key+'" data-campo="stockFisico"'
+        +' value="'+sf+'" placeholder="—" class="inv-valid-inp"'
+        +' style="width:65px;padding:4px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:12px;text-align:center;outline:none"></td>'
+      +'<td style="text-align:center;font-weight:700;color:'+dc+'">'+(diff!==''?(diff>0?'+':'')+diff:'—')+'</td>'
+      +'<td><input data-idx="'+idx+'" data-key="'+key+'" data-campo="ubicFisica"'
+        +' value="'+(v.ubicFisica||'')+'" placeholder="Ej: Estante A-2" class="inv-valid-inp"'
+        +' style="width:110px;padding:4px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
+      +'<td style="text-align:center"><select data-idx="'+idx+'" data-key="'+key+'" data-campo="estadoUbic" class="inv-valid-sel"'
+        +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsUbic+'</select></td>'
+      +'<td style="text-align:center">'+estadoHtml+'</td>'
+      +'<td><input data-idx="'+idx+'" data-key="'+key+'" data-campo="comentarios"'
+        +' value="'+(v.comentarios||'')+'" placeholder="Comentario..." class="inv-valid-inp"'
+        +' style="width:130px;padding:4px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
+      +'</tr>';
+  }).join('');
+  // Bind events via delegation
+  body.removeEventListener('input',invValidBodyInput);
+  body.removeEventListener('change',invValidBodyChange);
+  body.addEventListener('input',invValidBodyInput);
+  body.addEventListener('change',invValidBodyChange);
+  invValidResumen(key,ok,nov,sinVal);
 }
+function invValidBodyInput(e){
+  var el=e.target;
+  if(!el.classList.contains('inv-valid-inp'))return;
+  var idx=+el.dataset.idx, key=el.dataset.key, campo=el.dataset.campo;
+  var valor=campo==='stockFisico'?+el.value:el.value;
+  invValidUpdate(idx,key,campo,valor);
+}
+function invValidBodyChange(e){
+  var el=e.target;
+  if(!el.classList.contains('inv-valid-sel'))return;
+  var idx=+el.dataset.idx, key=el.dataset.key, campo=el.dataset.campo;
+  invValidUpdate(idx,key,campo,el.value);
+}
+
+function invValidResumen(key,ok,nov,sinVal){
+  const total=db.inventario.length;
+  const pct=total>0?Math.round((ok/total)*100):0;
+  const el=document.getElementById('inv-valid-resumen');if(!el)return;
+  const col=pct>=90?'var(--teal)':pct>=70?'var(--amber)':'var(--red)';
+  el.innerHTML='<div class="sc st"><div class="l">Total ítems</div><div class="v">'+total+'</div></div>'
+    +'<div class="sc st"><div class="l">Validados OK</div><div class="v" style="color:var(--teal)">'+ok+'</div></div>'
+    +'<div class="sc sr"><div class="l">Con novedades</div><div class="v">'+nov+'</div></div>'
+    +'<div class="sc sa"><div class="l">Sin validar</div><div class="v">'+sinVal+'</div></div>'
+    +'<div class="sc st"><div class="l">Índice cumplimiento</div><div class="v" style="color:'+col+'">'+pct+'%</div><div class="s">Meta: ≥90%</div></div>';
+}
+
+function invValidUpdate(idx,key,campo,valor){
+  var it=db.inventario[idx];if(!it)return;
+  if(!it.validaciones)it.validaciones={};
+  if(!it.validaciones[key])it.validaciones[key]={};
+  it.validaciones[key][campo]=valor;
+  var v=it.validaciones[key];
+  if(v.stockFisico!==undefined&&v.estadoUbic){
+    v.estado=(+v.stockFisico===it.stock&&v.estadoUbic==='OK')?'OK':'CON NOVEDADES';
+  }
+  saveDB();
+  var ok=0,nov=0,sinVal=0;
+  db.inventario.forEach(function(i){
+    var vv=(i.validaciones&&i.validaciones[key])||{};
+    if(vv.estado==='OK')ok++; else if(vv.estado==='CON NOVEDADES')nov++; else sinVal++;
+  });
+  invValidResumen(key,ok,nov,sinVal);
+}
+
+function invValidGuardar(){saveDB();toast('✅ Validación trimestral guardada');}
+
+function invValidExcel(){
+  if(typeof XLSX==='undefined'){toast('Cargando Excel...',true);return;}
+  const trim=(document.getElementById('inv-valid-trim')||{}).value||'Q2';
+  const anio=(document.getElementById('inv-valid-anio')||{}).value||'2026';
+  const key=anio+'-'+trim;
+  const rows=[
+    ['INVENTARIO DE BIENES EN BODEGA — VALIDACIÓN TRIMESTRAL'],
+    ['Período: '+trim+' '+anio,'','','Fecha: '+new Date().toLocaleDateString('es-EC')],
+    [],
+    ['Código','Descripción','Stock Sistema','Stock Físico','Diferencia','Ubicación Física','Estado Ubic.','Estado','Comentarios']
+  ];
+  db.inventario.forEach(function(it){
+    const v=(it.validaciones&&it.validaciones[key])||{};
+    const diff=v.stockFisico!==undefined?(+v.stockFisico-it.stock):'';
+    rows.push([it.cod,it.desc,it.stock,v.stockFisico!=null?v.stockFisico:'',diff,v.ubicFisica||'',v.estadoUbic||'',v.estado||'Pendiente',v.comentarios||'']);
+  });
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:35},{wch:13},{wch:12},{wch:11},{wch:16},{wch:14},{wch:14},{wch:25}];
+  XLSX.utils.book_append_sheet(wb,ws,'Valid '+trim+' '+anio);
+  XLSX.writeFile(wb,'Validacion_Inv_'+trim+'_'+anio+'.xlsx');
+  toast('✅ Excel de validación descargado');
+}
+
+function invExportExcel(){
+  if(typeof XLSX==='undefined'){toast('Cargando Excel...',true);return;}
+  const rows=[
+    ['INVENTARIO DE BIENES EN BODEGA — FOR ALM 01'],
+    ['Exportado: '+new Date().toLocaleDateString('es-EC')],
+    [],
+    ['Código','Descripción','Ubicación','Unidad','Stock Mín.','Existencia Inicial','Entradas','Salidas','Stock','Tipo','Estado']
+  ];
+  db.inventario.forEach(function(it){
+    rows.push([it.cod,it.desc,it.ubic||'',it.unidad,it.stockMin!=null?it.stockMin:'',it.ini||0,it.entradas||0,it.salidas||0,it.stock,it.critico?'Crítico':'Normal',it.estado||'OK']);
+  });
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:35},{wch:15},{wch:10},{wch:10},{wch:16},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws,'Inventario');
+  XLSX.writeFile(wb,'Inventario_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  toast('✅ Excel descargado');
+}
+
+function invEntRender(){
+  const body=document.getElementById('inv-ent-body');if(!body)return;
+  const count=document.getElementById('inv-ent-count');
+  const rows=[];
+  (db.actasIngreso||[]).forEach(function(acta){
+    (acta.items||[]).forEach(function(it){
+      if(!it.cod&&!it.desc)return;
+      rows.push({fecha:acta.fecha,prov:acta.proveedor||'—',doc:'Acta Ingreso',numDoc:acta.numero,oc:acta.ocId||'—',cod:it.cod||'—',desc:it.desc||'',cant:it.cant||0,obs:it.obs||''});
+    });
+  });
+  if(count)count.textContent=rows.length;
+  if(!rows.length){body.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:16px">Sin registros de entradas</td></tr>';return;}
+  body.innerHTML=rows.slice().reverse().map(function(r){
+    return '<tr>'
+      +'<td style="font-size:11px">'+r.fecha+'</td>'
+      +'<td style="font-size:11px">'+r.prov+'</td>'
+      +'<td style="font-size:11px">'+r.doc+'</td>'
+      +'<td><code style="color:var(--teal);font-size:11px">'+r.numDoc+'</code></td>'
+      +'<td>'+(r.oc!=='—'?'<span class="tag tbl" style="font-size:10px">'+r.oc+'</span>':'—')+'</td>'
+      +'<td><code style="color:var(--teal);font-size:11px">'+r.cod+'</code></td>'
+      +'<td style="font-size:12px">'+r.desc+'</td>'
+      +'<td style="text-align:center;color:var(--teal);font-weight:700">'+r.cant+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+r.obs+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function invSalRender(){
+  const body=document.getElementById('inv-sal-body');if(!body)return;
+  const count=document.getElementById('inv-sal-count');
+  const rows=[];
+  (db.actasEntrega||[]).forEach(function(acta){
+    (acta.items||[]).forEach(function(it){
+      if(!it.cod&&!it.desc)return;
+      rows.push({fecha:acta.fecha,resp:acta.verifNombre||acta.elaborado||'—',numSol:acta.numero,depto:acta.depto||'—',recibe:acta.recNombre||acta.entregadoA||'—',cod:it.cod||'—',desc:it.desc||'',cant:it.cant||0,obs:it.obs||''});
+    });
+  });
+  if(count)count.textContent=rows.length;
+  if(!rows.length){body.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:16px">Sin registros de salidas</td></tr>';return;}
+  body.innerHTML=rows.slice().reverse().map(function(r){
+    return '<tr>'
+      +'<td style="font-size:11px">'+r.fecha+'</td>'
+      +'<td style="font-size:11px">'+r.resp+'</td>'
+      +'<td><code style="color:var(--teal);font-size:11px">'+r.numSol+'</code></td>'
+      +'<td style="font-size:11px">'+r.depto+'</td>'
+      +'<td style="font-size:11px">'+r.recibe+'</td>'
+      +'<td><code style="color:var(--teal);font-size:11px">'+r.cod+'</code></td>'
+      +'<td style="font-size:12px">'+r.desc+'</td>'
+      +'<td style="text-align:center;color:var(--amber);font-weight:700">'+r.cant+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+r.obs+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function invEditStock(cod){invAjustarStock(cod);}
 
 // ═══════════════════════════════
 // HISTORIAL
