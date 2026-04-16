@@ -247,6 +247,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <button class="nav-item" onclick="nav('orden-compra')"><span class="nav-icon">🛒</span>3. Orden de Compra</button>
       <button class="nav-item" onclick="nav('acta-ingreso')"><span class="nav-icon">⬇️</span>4. Acta de Ingreso</button>
       <button class="nav-item" onclick="nav('acta-entrega')"><span class="nav-icon">⬆️</span>5. Acta de Entrega</button>
+      <div class="sb-sec">Reportes</div>
+      <button class="nav-item" onclick="nav('pagos-proveedores')"><span class="nav-icon">💳</span>Compras y Pagos</button>
       <div class="sb-sec">Almacén</div>
       <button class="nav-item" onclick="nav('inventario')"><span class="nav-icon">📦</span>Inventario</button>
       <div class="sb-sec">Registros</div>
@@ -737,6 +739,346 @@ function initInv(){
 }
 
 // ═══════════════════════════════
+// COMPRAS Y PAGOS A PROVEEDORES
+// ═══════════════════════════════
+function initPagos(){
+  if(!db.pagos) db.pagos={};
+  // Poblar selector de años dinámicamente (2024 → año siguiente)
+  var selAnio=document.getElementById('ind-anio');
+  if(selAnio){
+    var hoy=new Date();
+    var anioActual=hoy.getFullYear();
+    var anioSig=anioActual+1;
+    selAnio.innerHTML='';
+    for(var y=2024;y<=anioSig;y++){
+      var opt=document.createElement('option');
+      opt.value=y;
+      opt.textContent=y;
+      if(y===anioActual) opt.selected=true;
+      selAnio.appendChild(opt);
+    }
+  }
+  pagosIndicadores();
+  pagosStatsRender();
+  pagosRender();
+}
+
+function pagosIndicadores(){
+  var anio=+(document.getElementById('ind-anio')||{value:'2026'}).value||2026;
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var ocs=db.ordenesCompra||[];
+  var necs=db.necesidades||[];
+
+  // Para cada OC calcular días desde Necesidad → OC
+  function diasGestion(oc){
+    if(!oc.necId) return null; // sin necesidad vinculada
+    var nec=necs.find(function(n){return n.numero===oc.necId;});
+    if(!nec||!nec.fecha||!oc.fecha) return null;
+    var d1=new Date(nec.fecha), d2=new Date(oc.fecha);
+    if(isNaN(d1)||isNaN(d2)) return null;
+    return Math.round((d2-d1)/(1000*60*60*24));
+  }
+
+  // Agrupar por mes del año seleccionado
+  var porMes=meses.map(function(mes,mi){
+    var mesNum=mi+1;
+    var ocsMes=ocs.filter(function(o){
+      if(!o.fecha) return false;
+      var d=new Date(o.fecha);
+      return d.getFullYear()===anio && d.getMonth()+1===mesNum;
+    });
+    var conNec=ocsMes.filter(function(o){return o.necId;});
+    var enTiempo=conNec.filter(function(o){
+      var d=diasGestion(o); return d!==null&&d<=30;
+    });
+    var fueraTiempo=conNec.filter(function(o){
+      var d=diasGestion(o); return d!==null&&d>30;
+    });
+    var sinNec=ocsMes.filter(function(o){return !o.necId;});
+    var pct=conNec.length>0?Math.round((enTiempo.length/conNec.length)*100):null;
+    return {mes:mes,mesNum:mesNum,total:ocsMes.length,conNec:conNec.length,
+      enTiempo:enTiempo.length,fueraTiempo:fueraTiempo.length,sinNec:sinNec.length,
+      pct:pct,ocs:ocsMes,conNecOcs:conNec};
+  });
+
+  // Resumen anual
+  var totalAnio=porMes.reduce(function(s,m){return s+m.total;},0);
+  var totalConNec=porMes.reduce(function(s,m){return s+m.conNec;},0);
+  var totalEnTiempo=porMes.reduce(function(s,m){return s+m.enTiempo;},0);
+  var totalFuera=porMes.reduce(function(s,m){return s+m.fueraTiempo;},0);
+  var pctAnual=totalConNec>0?Math.round((totalEnTiempo/totalConNec)*100):0;
+  var colAnual=pctAnual>=90?'var(--teal)':pctAnual>=70?'var(--amber)':'var(--red)';
+
+  var resEl=document.getElementById('ind-resumen-anual');
+  if(resEl){
+    resEl.innerHTML=
+      '<div class="sc st"><div class="l">Total OC '+anio+'</div><div class="v">'+totalAnio+'</div></div>'
+      +'<div class="sc st"><div class="l">Con Necesidad vinculada</div><div class="v">'+totalConNec+'</div></div>'
+      +'<div class="sc st"><div class="l">En tiempo (≤30 días)</div><div class="v" style="color:var(--teal)">'+totalEnTiempo+'</div></div>'
+      +'<div class="sc sr"><div class="l">Fuera de tiempo (>30d)</div><div class="v">'+totalFuera+'</div></div>'
+      +'<div class="sc st" style="border:2px solid '+colAnual+'">'
+        +'<div class="l">Índice Anual '+anio+'</div>'
+        +'<div class="v" style="font-size:28px;color:'+colAnual+'">'+pctAnual+'%</div>'
+        +'<div class="s">Meta: ≥90%</div>'
+      +'</div>';
+  }
+
+  // Tabla mensual
+  var body=document.getElementById('ind-body');
+  if(!body)return;
+  body.innerHTML=porMes.map(function(m){
+    if(m.total===0&&m.pct===null){
+      return '<tr style="opacity:.4">'
+        +'<td style="font-weight:600">'+m.mes+'</td>'
+        +'<td style="text-align:center;color:var(--muted)">0</td>'
+        +'<td style="text-align:center">—</td><td style="text-align:center">—</td>'
+        +'<td style="text-align:center">—</td>'
+        +'<td style="text-align:center"><span style="color:var(--muted);font-size:11px">Sin OC</span></td>'
+        +'<td style="color:var(--muted);font-size:11px">—</td>'
+        +'</tr>';
+    }
+    var col=m.pct===null?'var(--muted)':m.pct>=90?'var(--teal)':m.pct>=70?'var(--amber)':'var(--red)';
+    var estadoTag=m.pct===null?'<span style="color:var(--muted);font-size:11px">Sin datos</span>'
+      :m.pct>=90?'<span class="tag tok" style="font-size:10px">✅ META</span>'
+      :m.pct>=70?'<span class="tag twn" style="font-size:10px">⚠️ BAJO</span>'
+      :'<span class="tag ter" style="font-size:10px">❌ CRÍTICO</span>';
+    // Mini barra de progreso
+    var pctVal=m.pct||0;
+    var barra='<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+      +'<div style="flex:1;height:6px;background:var(--surface2);border-radius:3px">'
+      +'<div style="width:'+Math.min(pctVal,100)+'%;height:100%;background:'+col+';border-radius:3px;transition:width .3s"></div></div>'
+      +'<span style="font-size:11px;color:'+col+';font-weight:700;min-width:35px">'+(m.pct!==null?m.pct+'%':'—')+'</span>'
+      +'</div>';
+    // Detalle OC del mes (mini lista)
+    var detalle=m.ocs.length?m.ocs.map(function(o){
+      var dias=diasGestion(o);
+      var dColor=dias===null?'var(--muted)':dias<=30?'var(--teal)':'var(--red)';
+      return '<span class="tag" style="font-size:9px;margin:1px;background:var(--surface2);color:'+dColor+'" title="'+(dias!==null?dias+' días':'Sin necesidad vinculada')+'">'
+        +o.numero+(dias!==null?' ('+dias+'d)':' (—)')+'</span>';
+    }).join(''):'—';
+    return '<tr>'
+      +'<td style="font-weight:700;min-width:100px">'+m.mes+'</td>'
+      +'<td style="text-align:center;font-weight:600">'+m.total+'</td>'
+      +'<td style="text-align:center;color:var(--teal);font-weight:700">'+m.enTiempo+'</td>'
+      +'<td style="text-align:center;color:var(--red);font-weight:700">'+m.fueraTiempo+'</td>'
+      +'<td style="min-width:140px">'+barra+'</td>'
+      +'<td style="text-align:center">'+estadoTag+'</td>'
+      +'<td style="font-size:11px;max-width:250px">'+detalle+'</td>'
+      +'</tr>';
+  }).join('');
+
+  // Guardar data para exportar
+  window._indData={anio:anio,porMes:porMes,totalAnio:totalAnio,
+    totalConNec:totalConNec,totalEnTiempo:totalEnTiempo,totalFuera:totalFuera,pctAnual:pctAnual};
+}
+
+function pagosIndicadoresExcel(){
+  if(typeof XLSX==='undefined'){toast('Cargando...',true);return;}
+  var d=window._indData||{};
+  var anio=d.anio||2026;
+  var porMes=d.porMes||[];
+  var rows=[
+    ['INDICADORES DE GESTIÓN DE COMPRAS — FOR COM 03'],
+    ['Año: '+anio,'','','','Fecha exportación: '+new Date().toLocaleDateString('es-EC')],
+    [],
+    ['RESUMEN ANUAL'],
+    ['Total OC','Con Necesidad vinculada','En tiempo (≤30d)','Fuera de tiempo (>30d)','Índice Anual (%)','Meta'],
+    [d.totalAnio||0,d.totalConNec||0,d.totalEnTiempo||0,d.totalFuera||0,(d.pctAnual||0)+'%','≥90%'],
+    [],
+    ['DETALLE MENSUAL'],
+    ['Mes','OC Emitidas','Con Necesidad','En Tiempo (≤30d)','Fuera de Tiempo (>30d)','Sin Necesidad vinculada','Índice (%)','Estado']
+  ];
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  porMes.forEach(function(m){
+    var estado=m.pct===null?'Sin datos':m.pct>=90?'META':m.pct>=70?'BAJO':'CRÍTICO';
+    rows.push([m.mes,m.total,m.conNec,m.enTiempo,m.fueraTiempo,m.sinNec,
+      m.pct!==null?m.pct+'%':'—',estado]);
+  });
+  rows.push([]);
+  rows.push(['FÓRMULA: Cantidad de compras gestionadas en ≤30 días / Total OC con Necesidad vinculada × 100']);
+  rows.push(['Tiempo medido desde: Fecha Necesidad de Compra → Fecha Orden de Compra']);
+
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:16},{wch:12},{wch:16},{wch:16},{wch:18},{wch:22},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Indicadores '+anio);
+  XLSX.writeFile(wb,'Indicadores_Compras_'+anio+'.xlsx');
+  toast('✅ Excel de indicadores descargado');
+}
+
+function pagosGetRegistro(ocNum){
+  if(!db.pagos) db.pagos={};
+  if(!db.pagos[ocNum]) db.pagos[ocNum]={
+    estadoEntrega:'Pendiente',formaPago:'',fechaTentPago:'',
+    estadoPago:'Pendiente',numCheque:'',fechaPago:'',obs:''
+  };
+  return db.pagos[ocNum];
+}
+
+function pagosStatsRender(){
+  const el=document.getElementById('pagos-stats');if(!el)return;
+  const ocs=db.ordenesCompra||[];
+  const total=ocs.length;
+  const pendPago=ocs.filter(function(o){return (pagosGetRegistro(o.numero)||{}).estadoPago!=='Pagado';}).length;
+  const pagados=ocs.filter(function(o){return (pagosGetRegistro(o.numero)||{}).estadoPago==='Pagado';}).length;
+  const totalMonto=ocs.reduce(function(s,o){return s+(o.total||0);},0);
+  const montoPendiente=ocs.filter(function(o){return (pagosGetRegistro(o.numero)||{}).estadoPago!=='Pagado';})
+    .reduce(function(s,o){return s+(o.total||0);},0);
+  el.innerHTML='<div class="sc st"><div class="l">Total OC</div><div class="v">'+total+'</div></div>'
+    +'<div class="sc sa"><div class="l">Pago Pendiente</div><div class="v">'+pendPago+'</div><div class="s">$'+montoPendiente.toFixed(2)+'</div></div>'
+    +'<div class="sc st"><div class="l">Pagadas</div><div class="v" style="color:var(--teal)">'+pagados+'</div></div>'
+    +'<div class="sc st"><div class="l">Monto Total OC</div><div class="v" style="font-size:16px">$'+totalMonto.toFixed(2)+'</div></div>';
+}
+
+function pagosRender(){
+  pagosStatsRender();
+  var search=(document.getElementById('pagos-search')||{}).value?.toLowerCase()||'';
+  var filtroEnt=(document.getElementById('pagos-filtro-estado-entrega')||{}).value||'';
+  var filtroPago=(document.getElementById('pagos-filtro-estado-pago')||{}).value||'';
+  var ocs=db.ordenesCompra||[];
+
+  // Enriquecer con datos del acta de ingreso vinculada
+  var list=ocs.map(function(o){
+    var reg=pagosGetRegistro(o.numero);
+    // Buscar acta de ingreso vinculada
+    var actas=(db.actasIngreso||[]).filter(function(a){return a.ocId===o.numero;});
+    var docTipo=actas.length?actas[actas.length-1].docTipo||'':'';
+    var docNum=actas.length?actas[actas.length-1].docNum||'':'';
+    var docFecha=actas.length?actas[actas.length-1].docFecha||'':'';
+    var docMonto=actas.length?actas[actas.length-1].docMonto||0:0;
+    return {oc:o,reg:reg,docTipo:docTipo,docNum:docNum,docFecha:docFecha,docMonto:docMonto};
+  });
+
+  if(search) list=list.filter(function(r){
+    return (r.oc.proveedor||'').toLowerCase().includes(search)
+      ||(r.oc.numero||'').toLowerCase().includes(search)
+      ||(r.docNum||'').toLowerCase().includes(search);
+  });
+  if(filtroEnt) list=list.filter(function(r){return r.reg.estadoEntrega===filtroEnt;});
+  if(filtroPago) list=list.filter(function(r){return r.reg.estadoPago===filtroPago;});
+
+  var body=document.getElementById('pagos-body');if(!body)return;
+  if(!list.length){
+    body.innerHTML='<tr><td colspan="17" style="text-align:center;color:var(--muted);padding:20px">Sin registros</td></tr>';
+    return;
+  }
+
+  body.innerHTML=list.slice().reverse().map(function(r,i){
+    var o=r.oc, reg=r.reg;
+    var idx=db.ordenesCompra.findIndex(function(x){return x.numero===o.numero;});
+    var detalle=o.detalle||'—';
+    var categoria=o.tipo||'—';
+
+    // Colores de estado
+    var colEnt=reg.estadoEntrega==='Completo'?'tok':reg.estadoEntrega==='Parcial'?'twn':'ter';
+    var colPago=reg.estadoPago==='Pagado'?'tok':reg.estadoPago==='Programado'?'twn':'ter';
+
+    // Opciones selects
+    var optsEnt=['Pendiente','Parcial','Completo'].map(function(v){
+      return '<option value="'+v+'"'+(reg.estadoEntrega===v?' selected':'')+'>'+v+'</option>';
+    }).join('');
+    var optsPago=['Pendiente','Programado','Pagado'].map(function(v){
+      return '<option value="'+v+'"'+(reg.estadoPago===v?' selected':'')+'>'+v+'</option>';
+    }).join('');
+    var optsFpago=['','Cheque','Transferencia','Efectivo','Crédito'].map(function(v){
+      return '<option value="'+v+'"'+(reg.formaPago===v?' selected':'')+'>'+v+'</option>';
+    }).join('');
+
+    return '<tr>'
+      +'<td style="font-size:12px;font-weight:600">'+o.proveedor+'</td>'
+      +'<td><code style="color:var(--teal);font-size:11px">'+o.numero+'</code></td>'
+      +'<td style="font-size:11px">'+o.fecha+'</td>'
+      +'<td style="font-size:11px">'+categoria+'</td>'
+      +'<td style="font-size:11px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+detalle+'">'+detalle+'</td>'
+      +'<td style="text-align:right;font-weight:700;color:var(--teal)">$'+(o.total||0).toFixed(2)+'</td>'
+      // Documento del acta
+      +'<td style="font-size:11px">'+(r.docTipo||'<span style="color:var(--muted)">—</span>')+'</td>'
+      +'<td style="font-size:11px;color:var(--teal)">'+(r.docNum||'<span style="color:var(--muted)">—</span>')+'</td>'
+      +'<td style="font-size:11px">'+(r.docFecha||'—')+'</td>'
+      +'<td style="text-align:right;font-size:11px">'+(r.docMonto?'$'+r.docMonto.toFixed(2):'—')+'</td>'
+      // Estado entrega (editable)
+      +'<td style="text-align:center"><select data-oc="'+o.numero+'" data-campo="estadoEntrega" class="pagos-sel"'
+        +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsEnt+'</select></td>'
+      // Forma de pago
+      +'<td><select data-oc="'+o.numero+'" data-campo="formaPago" class="pagos-sel"'
+        +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsFpago+'</select></td>'
+      // Fecha tentativa pago
+      +'<td><input type="date" data-oc="'+o.numero+'" data-campo="fechaTentPago" class="pagos-inp"'
+        +' value="'+(reg.fechaTentPago||'')+'"'
+        +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
+      // Estado pago
+      +'<td style="text-align:center"><select data-oc="'+o.numero+'" data-campo="estadoPago" class="pagos-sel"'
+        +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsPago+'</select></td>'
+      // N° Cheque/Transferencia
+      +'<td><input type="text" data-oc="'+o.numero+'" data-campo="numCheque" class="pagos-inp"'
+        +' value="'+(reg.numCheque||'')+'" placeholder="Ej: CHQ-001"'
+        +' style="width:90px;padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
+      // Fecha pago real
+      +'<td><input type="date" data-oc="'+o.numero+'" data-campo="fechaPago" class="pagos-inp"'
+        +' value="'+(reg.fechaPago||'')+'"'
+        +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
+      +'<td style="text-align:center">'
+        +'<span class="tag '+colEnt+'" style="font-size:9px;display:block;margin-bottom:3px">'+reg.estadoEntrega+'</span>'
+        +'<span class="tag '+colPago+'" style="font-size:9px;display:block">'+reg.estadoPago+'</span>'
+      +'</td>'
+      +'</tr>';
+  }).join('');
+
+  // Event delegation
+  body.removeEventListener('change',pagosBodyChange);
+  body.removeEventListener('input',pagosBodyInput);
+  body.addEventListener('change',pagosBodyChange);
+  body.addEventListener('input',pagosBodyInput);
+}
+
+function pagosBodyChange(e){
+  var el=e.target;
+  if(!el.classList.contains('pagos-sel'))return;
+  pagosUpdateReg(el.dataset.oc,el.dataset.campo,el.value);
+}
+function pagosBodyInput(e){
+  var el=e.target;
+  if(!el.classList.contains('pagos-inp'))return;
+  pagosUpdateReg(el.dataset.oc,el.dataset.campo,el.value);
+}
+function pagosUpdateReg(ocNum,campo,valor){
+  var reg=pagosGetRegistro(ocNum);
+  reg[campo]=valor;
+  saveDB();
+  pagosStatsRender();
+}
+
+function pagosExportExcel(){
+  if(typeof XLSX==='undefined'){toast('Cargando...',true);return;}
+  var rows=[
+    ['REPORTE DE COMPRAS Y PAGOS A PROVEEDORES — FOR COM 03'],
+    ['Exportado: '+new Date().toLocaleDateString('es-EC')],
+    [],
+    ['Proveedor','N° OC','Fecha OC','Categoría','Detalle','Monto OC','Tipo Documento',
+     'N° Documento','Fecha Documento','Monto Documento','Estado Entrega',
+     'Forma Pago','Fecha Tent. Pago','Estado Pago','N° Cheque/Trans.','Fecha Pago']
+  ];
+  (db.ordenesCompra||[]).forEach(function(o){
+    var reg=pagosGetRegistro(o.numero);
+    var actas=(db.actasIngreso||[]).filter(function(a){return a.ocId===o.numero;});
+    var last=actas.length?actas[actas.length-1]:{};
+    rows.push([
+      o.proveedor,o.numero,o.fecha,o.tipo||'',o.detalle||'',o.total||0,
+      last.docTipo||'',last.docNum||'',last.docFecha||'',last.docMonto||0,
+      reg.estadoEntrega,reg.formaPago,reg.fechaTentPago,
+      reg.estadoPago,reg.numCheque,reg.fechaPago
+    ]);
+  });
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:25},{wch:12},{wch:12},{wch:12},{wch:20},{wch:12},{wch:16},
+    {wch:18},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Compras y Pagos');
+  XLSX.writeFile(wb,'ReporteCompras_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  toast('✅ Excel descargado');
+}
+
+// ═══════════════════════════════
 // PANEL HTML
 // ═══════════════════════════════
 function buildPanels(){
@@ -998,6 +1340,19 @@ function buildPanels(){
       <div class="fg">
         <div class="fi"><label>N° Orden de Compra</label><select id="ai-oc-ref" onchange="aiCargarOC()"><option value="">-- Sin OC / Ingreso manual --</option></select></div>
         <div class="fi"><label>Proveedor</label><input id="ai-proveedor" readonly></div>
+        <div class="fi"><label>Tipo de Documento</label>
+          <select id="ai-doc-tipo" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option value="">-- Sin documento --</option>
+            <option value="Factura">Factura</option>
+            <option value="Guía de Remisión">Guía de Remisión</option>
+            <option value="Guía de Entrega">Guía de Entrega</option>
+            <option value="Nota de Entrega">Nota de Entrega</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="fi"><label>N° Documento</label><input id="ai-doc-num" placeholder="Ej: 001-001-000123456"></div>
+        <div class="fi"><label>Fecha Documento</label><input id="ai-doc-fecha" type="date"></div>
+        <div class="fi"><label>Monto Documento ($)</label><input id="ai-doc-monto" type="number" min="0" step="0.01" placeholder="0.00"></div>
       </div>
       <div id="ai-oc-box" class="oc-box" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -1250,6 +1605,101 @@ function buildPanels(){
     </div>
   </div>
 </div>
+<!-- PAGOS PROVEEDORES -->
+<div class="panel" id="panel-pagos-proveedores">
+  <div class="ph">
+    <h2>Reporte de Compras y Pagos a Proveedores</h2>
+    <p>Control de órdenes de compra, facturas recibidas y estado de pagos.</p>
+    <span class="iso-code">FOR COM 03 · VER 01 (09 12 2024)</span>
+  </div>
+
+  <!-- Indicadores de gestión -->
+  <div class="card" id="pagos-indicadores-card" style="margin-bottom:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div>
+        <div class="card-title" style="margin:0">📈 Indicadores de Gestión de Compras</div>
+        <p style="font-size:12px;color:var(--muted);margin-top:3px">Índice de compras realizadas en tiempo (≤ 30 días desde la Requisición)</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="ind-anio" onchange="pagosIndicadores()" style="padding:7px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></select>
+        <button class="btn btn-s btn-sm" onclick="pagosIndicadoresExcel()">⬇️ Excel indicadores</button>
+      </div>
+    </div>
+    <!-- Tarjeta resumen anual -->
+    <div id="ind-resumen-anual" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:18px"></div>
+    <!-- Tabla mensual -->
+    <div class="tw">
+      <table id="ind-tabla">
+        <thead>
+          <tr>
+            <th>Mes</th>
+            <th style="text-align:center">OC Emitidas</th>
+            <th style="text-align:center">En Tiempo ≤30d</th>
+            <th style="text-align:center">Fuera de Tiempo >30d</th>
+            <th style="text-align:center">% Índice</th>
+            <th style="text-align:center">Estado</th>
+            <th>Detalle OC</th>
+          </tr>
+        </thead>
+        <tbody id="ind-body"></tbody>
+      </table>
+    </div>
+    <p style="font-size:10px;color:var(--muted);margin-top:10px">
+      * Tiempo calculado desde la fecha de la Necesidad de Compra hasta la fecha de la Orden de Compra · Meta: ≥90%
+    </p>
+  </div>
+
+  <!-- Stats generales -->
+  <div class="sg" id="pagos-stats"></div>
+
+  <!-- Filtros -->
+  <div class="sb" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <input id="pagos-search" placeholder="🔍 Buscar proveedor, N° OC, factura..." oninput="pagosRender()" style="flex:1;min-width:220px">
+    <select id="pagos-filtro-estado-entrega" onchange="pagosRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+      <option value="">Todos los estados entrega</option>
+      <option value="Pendiente">Pendiente entrega</option>
+      <option value="Parcial">Entrega parcial</option>
+      <option value="Completo">Entrega completa</option>
+    </select>
+    <select id="pagos-filtro-estado-pago" onchange="pagosRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+      <option value="">Todos los estados pago</option>
+      <option value="Pendiente">Pago pendiente</option>
+      <option value="Programado">Pago programado</option>
+      <option value="Pagado">Pagado</option>
+    </select>
+    <button class="btn btn-s btn-sm" onclick="pagosExportExcel()">⬇️ Excel</button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th>Proveedor</th>
+            <th>N° OC</th>
+            <th>Fecha OC</th>
+            <th>Categoría</th>
+            <th>Detalle</th>
+            <th style="text-align:right">Monto OC</th>
+            <th>Tipo Doc.</th>
+            <th>N° Documento</th>
+            <th>Fecha Doc.</th>
+            <th style="text-align:right">Monto Doc.</th>
+            <th style="text-align:center">Estado Entrega</th>
+            <th>Forma Pago</th>
+            <th>Fecha Tent. Pago</th>
+            <th style="text-align:center">Estado Pago</th>
+            <th>N° Cheque/Trans.</th>
+            <th>Fecha Pago</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pagos-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 <!-- HISTORIAL -->
 <div class="panel" id="panel-historial">
   <div class="ph"><h2>Historial de Registros</h2><p>Todos los documentos con sus vínculos</p></div>
@@ -1326,7 +1776,10 @@ function buildPanels(){
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin:0">📊 Consolidado por cliente <span class="badge" id="campo-count">0</span></div>
-      <button class="btn btn-a" onclick="campoGenerarRM()">⚡ Generar Requisición Mensual</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-s" onclick="campoPrintPDF()">🖨️ Imprimir todas las requisiciones</button>
+        <button class="btn btn-a" onclick="campoGenerarRM()">⚡ Generar Requisición Mensual</button>
+      </div>
     </div>
     <div id="campo-consolidado"></div>
   </div>
@@ -1428,7 +1881,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos};
   if(fns[name]) fns[name]();
 }
 
@@ -3026,6 +3479,7 @@ function aiGuardar(){
   const ocNum=document.getElementById('ai-oc-ref').value;
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
   const acta={numero:num,fecha,ciudad:g('ai-ciudad'),elaborado:elab,tipo,ocId:ocNum||null,proveedor:g('ai-proveedor'),
+    docTipo:g('ai-doc-tipo'),docNum:g('ai-doc-num'),docFecha:g('ai-doc-fecha'),docMonto:+g('ai-doc-monto')||0,
     devPersona:g('ai-dev-persona'),devCargo:g('ai-dev-cargo'),devDepto:g('ai-dev-depto'),
     items:JSON.parse(JSON.stringify(aiItems)),entNombre:g('ai-ent-nombre'),entCedula:g('ai-ent-cedula'),recNombre:g('ai-rec-nombre'),recCedula:g('ai-rec-cedula')};
   if(ai_editIdx!==null){
@@ -3061,6 +3515,8 @@ function aiEditar(idx){
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   s('ai-num',a.numero);s('ai-fecha',a.fecha);s('ai-ciudad',a.ciudad||'GUAYAQUIL');
   s('ai-elaborado',a.elaborado);s('ai-proveedor',a.proveedor);
+  s('ai-doc-tipo',a.docTipo||'');s('ai-doc-num',a.docNum||'');
+  s('ai-doc-fecha',a.docFecha||'');s('ai-doc-monto',a.docMonto||'');
   s('ai-dev-persona',a.devPersona);s('ai-dev-cargo',a.devCargo);s('ai-dev-depto',a.devDepto);
   s('ai-ent-nombre',a.entNombre);s('ai-ent-cedula',a.entCedula);
   s('ai-rec-nombre',a.recNombre);s('ai-rec-cedula',a.recCedula);
@@ -3115,7 +3571,7 @@ function aiLimpiar(){
   aiItems=[];aiOCRef=null;ai_editIdx=null;aiRenderItems();
   document.getElementById('ai-oc-box').style.display='none';
   document.getElementById('ai-edit-banner').style.display='none';
-  ['ai-elaborado','ai-ent-nombre','ai-ent-cedula','ai-rec-nombre','ai-rec-cedula','ai-dev-persona','ai-dev-cargo','ai-dev-depto','ai-proveedor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['ai-elaborado','ai-ent-nombre','ai-ent-cedula','ai-rec-nombre','ai-rec-cedula','ai-dev-persona','ai-dev-cargo','ai-dev-depto','ai-proveedor','ai-doc-tipo','ai-doc-num','ai-doc-fecha','ai-doc-monto'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const s=document.getElementById('ai-oc-ref');if(s)s.value='';
   const l=document.getElementById('ai-items-lbl');if(l)l.textContent='';
   setNums();
@@ -4185,6 +4641,157 @@ async function opPublishCatalog(){
 // REQUISICIONES DE CAMPO — ADMIN
 // ════════════════════════════════════════════
 let _campoReqs=[];
+function campoPrintPDF(){
+  const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
+  const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
+  const opF=(document.getElementById('campo-op-sel')||{}).value||'';
+
+  let reqs=_campoReqs;
+  if(periodo) reqs=reqs.filter(r=>r.periodo===periodo);
+  if(empresa) reqs=reqs.filter(r=>r.empresa===empresa);
+  if(opF)     reqs=reqs.filter(r=>r.operativo===opF);
+
+  if(!reqs.length){toast('No hay requisiciones para imprimir',true);return;}
+
+  // Consolidar por empresa → cliente
+  const consolMap={};
+  reqs.forEach(function(r){
+    const emp=r.empresa||'—', cli=r.cliente||'—';
+    if(!consolMap[emp]) consolMap[emp]={};
+    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set()};
+    const block=consolMap[emp][cli];
+    block.ops.add(r.operativo||'?');
+    block.periodos.add(r.periodo||'?');
+    (r.items||[]).forEach(function(it){
+      if(!it.qty||+it.qty===0) return;
+      const key=it.prod+'|'+it.unidad;
+      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0};
+      block.items[key].qty+=+it.qty;
+    });
+  });
+
+  // Calcular totales generales
+  var totalItems=0, totalEmpresas=Object.keys(consolMap).length;
+  Object.values(consolMap).forEach(function(clis){
+    Object.values(clis).forEach(function(data){
+      totalItems+=Object.values(data.items).filter(function(i){return i.qty>0;}).length;
+    });
+  });
+
+  // Construir bloques HTML por empresa/cliente
+  var bloques='';
+  var numReq=0;
+  Object.entries(consolMap).forEach(function(empEntry){
+    var emp=empEntry[0], clis=empEntry[1];
+    Object.entries(clis).forEach(function(cliEntry){
+      var cli=cliEntry[0], data=cliEntry[1];
+      numReq++;
+      var itemsArr=Object.values(data.items).filter(function(i){return i.qty>0;});
+      var grupos={};
+      itemsArr.forEach(function(it){
+        if(!grupos[it.grupo]) grupos[it.grupo]=[];
+        grupos[it.grupo].push(it);
+      });
+      var periodoStr=[...data.periodos].join(', ');
+      var opsStr=[...data.ops].join(', ');
+
+      // Filas de la tabla agrupadas por grupo
+      var filas='';
+      var rowNum=0;
+      Object.entries(grupos).forEach(function(gEntry){
+        var g=gEntry[0], its=gEntry[1];
+        // Encabezado de grupo
+        filas+='<tr style="background:#e8f0fe">'
+          +'<td colspan="5" style="padding:5px 8px;font-size:9px;font-weight:700;color:#1a56a0;text-transform:uppercase;letter-spacing:.8px">'+g+'</td>'
+          +'</tr>';
+        its.forEach(function(it){
+          rowNum++;
+          var bg=rowNum%2===0?'#fff':'#f8fafc';
+          filas+='<tr style="background:'+bg+'">'
+            +'<td style="padding:5px 8px;text-align:center;color:#888;font-size:10px">'+rowNum+'</td>'
+            +'<td style="padding:5px 8px;font-size:12px"><strong>'+it.prod+'</strong></td>'
+            +'<td style="padding:5px 8px;text-align:center;font-size:11px;color:#555">'+it.unidad+'</td>'
+            +'<td style="padding:5px 8px;text-align:center;font-weight:700;color:#c07a00;font-size:13px">'+it.qty+'</td>'
+            +'<td style="padding:5px 8px;border:1px solid #ccc;min-width:80px">&nbsp;</td>'
+            +'</tr>';
+        });
+      });
+
+      bloques+='<div class="req-block" style="margin-bottom:28px;page-break-inside:avoid">'
+        // Encabezado de cada requisición
+        +'<div style="background:#0a2e22;color:#fff;padding:10px 16px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center">'
+        +'<div>'
+        +'<div style="font-size:14px;font-weight:700;color:#00c9a7">'+emp+'</div>'
+        +'<div style="font-size:11px;color:#aaa;margin-top:2px">Cliente: <strong style="color:#fff">'+cli+'</strong></div>'
+        +'</div>'
+        +'<div style="text-align:right">'
+        +'<div style="font-size:10px;color:#aaa">Período: <strong style="color:#fff">'+periodoStr+'</strong></div>'
+        +'<div style="font-size:10px;color:#aaa;margin-top:2px">Operativos: <strong style="color:#fff">'+opsStr+'</strong></div>'
+        +'</div>'
+        +'</div>'
+        // Tabla
+        +'<table style="width:100%;border-collapse:collapse;border:1px solid #ddd">'
+        +'<thead><tr style="background:#f0f4f8">'
+        +'<th style="padding:6px 8px;text-align:center;border:1px solid #ddd;font-size:10px;width:30px">N°</th>'
+        +'<th style="padding:6px 8px;text-align:left;border:1px solid #ddd;font-size:10px">Producto / Ítem</th>'
+        +'<th style="padding:6px 8px;text-align:center;border:1px solid #ddd;font-size:10px;width:70px">Unidad</th>'
+        +'<th style="padding:6px 8px;text-align:center;border:1px solid #ddd;font-size:10px;width:70px">Cantidad</th>'
+        +'<th style="padding:6px 8px;text-align:center;border:1px solid #ddd;font-size:10px;width:90px">Cant. Entregada</th>'
+        +'</tr></thead>'
+        +'<tbody>'+filas+'</tbody>'
+        +'</table>'
+        // Pie de cada requisición
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:12px;padding-top:10px;border-top:1px solid #eee">'
+        +'<div style="font-size:10px;color:#555"><span style="display:block;font-size:9px;text-transform:uppercase;color:#888;margin-bottom:20px">Preparado por (Bodega)</span><div style="border-top:1px solid #999"></div></div>'
+        +'<div style="font-size:10px;color:#555"><span style="display:block;font-size:9px;text-transform:uppercase;color:#888;margin-bottom:20px">Recibido por (Operativo)</span><div style="border-top:1px solid #999"></div></div>'
+        +'<div style="font-size:10px;color:#555"><span style="display:block;font-size:9px;text-transform:uppercase;color:#888;margin-bottom:20px">Fecha de entrega</span><div style="border-top:1px solid #999"></div></div>'
+        +'</div>'
+        +'</div>';
+    });
+  });
+
+  var filtroLabel='';
+  if(periodo||empresa||opF){
+    filtroLabel='<div style="background:#fff8e1;border-left:3px solid #f5a623;padding:6px 12px;margin-bottom:16px;font-size:11px;color:#7a5000">'
+      +'Filtro aplicado: '+(periodo?'<strong>Período: '+periodo+'</strong> ':'')
+      +(empresa?'<strong>Empresa: '+empresa+'</strong> ':'')
+      +(opF?'<strong>Operativo: '+opF+'</strong>':'')
+      +'</div>';
+  }
+
+  var pdfHtml='<!DOCTYPE html><html><head><meta charset="utf-8">'
+    +'<title>Requisiciones de Campo</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:Arial,sans-serif;padding:20px;color:#222;font-size:12px}'
+    +'@page{margin:12mm;size:A4}'
+    +'@media print{.np{display:none!important}}'
+    +'.req-block{page-break-inside:avoid}'
+    +'</style></head><body>'
+    // Portada / encabezado general
+    +'<div style="text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #0a2e22">'
+    +'<div style="font-size:18px;font-weight:700;color:#0a2e22">CLEAN GROUP CONSORCIO</div>'
+    +'<div style="font-size:13px;color:#555;margin-top:4px">REQUISICIONES DE CAMPO — CONSOLIDADO PARA BODEGA</div>'
+    +'<div style="display:flex;justify-content:center;gap:24px;margin-top:10px;font-size:11px;color:#777">'
+    +'<span>📋 Total requisiciones: <strong>'+numReq+'</strong></span>'
+    +'<span>📦 Total ítems distintos: <strong>'+totalItems+'</strong></span>'
+    +'<span>📅 Impreso: <strong>'+new Date().toLocaleDateString('es-EC')+'</strong></span>'
+    +'</div></div>'
+    +filtroLabel
+    +bloques
+    +'<div class="np" style="margin-top:24px;padding:14px;background:#f0faf4;border:1px solid #c8e6c9;border-radius:8px;text-align:center">'
+    +'<p style="font-size:12px;color:#2e7d32;font-weight:600;margin-bottom:10px">Usa este documento para preparar los ítems en bodega y generar las Actas de Entrega</p>'
+    +'<button onclick="window.print()" style="padding:10px 24px;background:#0a2e22;color:#00c9a7;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>'
+    +'</div>'
+    +'</body></html>';
+
+  var win=window.open('','_blank');
+  if(!win){toast('Brave bloqueó la ventana — permite pop-ups para este sitio',true);return;}
+  win.document.write(pdfHtml);
+  win.document.close();
+  toast('📄 PDF generado — '+numReq+' requisiciones listas para imprimir');
+}
+
 async function campoReload(){
   if(!_sb){toast('Sin conexión',true);return;}
   const {data,error}=await _sb.from('campo_reqs').select('*').order('fecha_iso',{ascending:false}).limit(500);
