@@ -90,9 +90,43 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.err{background:var(--red);color:#fff}
 </style>
+<style>
+/* ── HOME MÓDULOS ── */
+.home-greeting{font-size:15px;font-weight:600;color:#fff;margin-bottom:4px}
+.home-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+.mod-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:14px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:16px;animation:fadeUp .3s ease}
+.mod-card:hover,.mod-card:active{border-color:var(--teal);background:rgba(0,201,167,.06);transform:translateY(-1px)}
+.mod-icon{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.mod-icon.teal{background:rgba(0,201,167,.15)}
+.mod-icon.amber{background:rgba(245,166,35,.15)}
+.mod-info{flex:1}
+.mod-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:3px}
+.mod-desc{font-size:11px;color:var(--muted);line-height:1.4}
+.mod-arrow{color:var(--muted);font-size:18px}
+.mod-steps{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.mod-step-tag{font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 8px;color:var(--muted)}
+/* ── MÓDULO TABS ── */
+.mod-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.btn-back{padding:6px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;flex-shrink:0;transition:all .2s}
+.btn-back:hover{border-color:var(--teal);color:var(--teal)}
+.mod-name{font-size:13px;font-weight:700;color:#fff}
+.mod-tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.mod-tab{flex:1;padding:10px 6px;text-align:center;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .2s;border-right:1px solid var(--border);user-select:none}
+.mod-tab:last-child{border-right:none}
+.mod-tab.active{background:rgba(0,201,167,.12);color:var(--teal)}
+.mod-tab.done{color:var(--teal);opacity:.6}
+/* ── FUNDAS ── */
+.funda-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.funda-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.funda-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.funda-input{padding:10px;border-radius:7px;background:var(--navy);border:1px solid var(--border);color:var(--teal);font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;text-align:center;outline:none;width:100%;transition:border .15s}
+.funda-input:focus{border-color:var(--teal)}
+.tipo-btn{flex:1;padding:11px 8px;border-radius:9px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px}
+.tipo-btn.inv{border-color:var(--teal);color:var(--teal);background:rgba(0,201,167,.08)}
+.tipo-btn.req{border-color:var(--amber);color:var(--amber);background:rgba(245,166,35,.08)}
+</style>
 </head>
 <body>
-
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">
@@ -113,7 +147,7 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
   </div>
 </div>
 
-<div id="app">
+<div id="app" style="display:none;flex-direction:column;min-height:100vh">
   <div class="topbar">
     <div class="topbar-brand">🧹 Portal de Campo</div>
     <div class="topbar-r">
@@ -123,14 +157,54 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
     </div>
   </div>
   <div class="main">
-    <div class="step-tabs">
-      <div class="step-tab active" id="tab-1" onclick="goStep(1)">📅 Período</div>
-      <div class="step-tab" id="tab-2" onclick="goStep(2)">👤 Cliente</div>
-      <div class="step-tab" id="tab-3" onclick="goStep(3)">📋 Materiales</div>
-      <div class="step-tab" id="tab-4" onclick="goStep(4)">📤 Historial</div>
+
+    <!-- ══ HOME ══ -->
+    <div id="home-screen" style="display:none">
+      <div class="home-greeting" id="home-greeting">Bienvenido</div>
+      <div class="home-sub">¿Qué deseas registrar hoy?</div>
+
+      <div class="mod-card" onclick="showModule('req')">
+        <div class="mod-icon teal">📋</div>
+        <div class="mod-info">
+          <div class="mod-title">Requisición Mensual</div>
+          <div class="mod-desc">Registra los materiales que necesitas para tu punto de trabajo cada mes.</div>
+          <div class="mod-steps">
+            <span class="mod-step-tag">📅 Período</span>
+            <span class="mod-step-tag">👤 Cliente</span>
+            <span class="mod-step-tag">📦 Materiales</span>
+            <span class="mod-step-tag">📤 Historial</span>
+          </div>
+        </div>
+        <div class="mod-arrow">›</div>
+      </div>
+
+      <div class="mod-card" onclick="showModule('fn')">
+        <div class="mod-icon amber">🛍️</div>
+        <div class="mod-info">
+          <div class="mod-title">Control de Fundas</div>
+          <div class="mod-desc">Registra el inventario o requisición de fundas en tu punto.</div>
+          <div class="mod-steps">
+            <span class="mod-step-tag">🛍️ Fundas</span>
+            <span class="mod-step-tag">📊 Historial</span>
+          </div>
+        </div>
+        <div class="mod-arrow">›</div>
+      </div>
     </div>
 
-    <div id="step-1">
+    <!-- ══ MÓDULO 1: REQUISICIONES ══ -->
+    <div id="mod-req" style="display:none">
+      <div class="mod-header">
+        <button class="btn-back" onclick="backHome()">‹ Inicio</button>
+        <div class="mod-name">📋 Requisición Mensual</div>
+      </div>
+      <div class="mod-tabs">
+        <div class="mod-tab active" id="tab-r-1" onclick="goStep(1)">📅 Período</div>
+        <div class="mod-tab"        id="tab-r-2" onclick="goStep(2)">👤 Cliente</div>
+        <div class="mod-tab"        id="tab-r-3" onclick="goStep(3)">📦 Materiales</div>
+        <div class="mod-tab"        id="tab-r-4" onclick="goStep(4)">📤 Historial</div>
+      </div>
+      <div id="step-1">
       <div class="card">
         <div class="card-title">📅 ¿Para qué período es esta requisición?</div>
         <div class="fi">
@@ -186,8 +260,99 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
         <div id="po-historial"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
       </div>
     </div>
-  </div>
-</div>
+    </div>
+
+    <!-- ══ MÓDULO 2: CONTROL DE FUNDAS ══ -->
+    <div id="mod-fn" style="display:none">
+      <div class="mod-header">
+        <button class="btn-back" onclick="backHome()">‹ Inicio</button>
+        <div class="mod-name">🛍️ Control de Fundas</div>
+      </div>
+      <div class="mod-tabs">
+        <div class="mod-tab active" id="tab-f-1" onclick="goFn(1)">🛍️ Registro</div>
+        <div class="mod-tab"        id="tab-f-2" onclick="goFn(2)">📊 Historial</div>
+      </div>
+
+      <!-- FN STEP 1: FORMULARIO -->
+      <div id="fn-step-1">
+        <div class="card">
+          <div class="card-title">🛍️ Registro de Fundas</div>
+
+          <div class="fi">
+            <label>Lugar de trabajo</label>
+            <select id="fn-lugar" style="padding:9px 12px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;width:100%">
+              <option value="">— Selecciona tu punto —</option>
+            </select>
+          </div>
+
+          <div class="fi">
+            <label>Tipo de registro</label>
+            <div style="display:flex;gap:10px;margin-top:2px">
+              <label class="tipo-btn" id="fn-lbl-inv" onclick="document.getElementById('fn-inv').checked=true;fnTipoChange()">
+                <input type="radio" name="fn-tipo" value="Inventario" id="fn-inv" style="display:none"> 📦 Inventario
+              </label>
+              <label class="tipo-btn" id="fn-lbl-req" onclick="document.getElementById('fn-req').checked=true;fnTipoChange()">
+                <input type="radio" name="fn-tipo" value="Requisición" id="fn-req" style="display:none"> 🛍️ Requisición
+              </label>
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Cantidades</div>
+            <div class="funda-grid">
+              <div class="funda-item">
+                <div class="funda-label">18×22 BLANCAS</div>
+                <input id="fn-1822b" type="number" min="0" placeholder="0" class="funda-input">
+              </div>
+              <div class="funda-item">
+                <div class="funda-label">18×22 NEGRAS</div>
+                <input id="fn-1822n" type="number" min="0" placeholder="0" class="funda-input" style="color:var(--text)">
+              </div>
+              <div class="funda-item">
+                <div class="funda-label">23×28</div>
+                <input id="fn-2328" type="number" min="0" placeholder="0" class="funda-input" style="color:var(--text)">
+              </div>
+              <div class="funda-item">
+                <div class="funda-label">30×36</div>
+                <input id="fn-3036" type="number" min="0" placeholder="0" class="funda-input" style="color:var(--text)">
+              </div>
+              <div class="funda-item">
+                <div class="funda-label">39×55</div>
+                <input id="fn-3955" type="number" min="0" placeholder="0" class="funda-input" style="color:var(--text)">
+              </div>
+              <div class="funda-item">
+                <div class="funda-label">36×40</div>
+                <input id="fn-3640" type="number" min="0" placeholder="0" class="funda-input" style="color:var(--text)">
+              </div>
+            </div>
+          </div>
+
+          <div class="fi">
+            <label>Observaciones</label>
+            <textarea id="fn-obs" placeholder="Ej: Saldo del inventario, novedades..."
+              style="padding:10px 12px;border-radius:8px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;min-height:65px;width:100%"></textarea>
+          </div>
+
+          <button class="btn-primary" onclick="fnGuardar()" id="fn-btn-save">
+            💾 Enviar Control de Fundas
+          </button>
+        </div>
+      </div>
+
+      <!-- FN STEP 2: HISTORIAL -->
+      <div id="fn-step-2" style="display:none">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="card-title" style="margin:0">📊 Mis registros de fundas</div>
+            <button class="btn-out" style="font-size:11px" onclick="fnLoadHistorial()">🔄 Actualizar</button>
+          </div>
+          <div id="fn-historial"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
 
 <div class="save-bar" id="save-bar">
   <div class="save-bar-inner">
@@ -195,12 +360,14 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="toast" id="toast"></div>
 
 <script>
+
 const SB_URL='https://qrdfxksbaoosguxdtolk.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZGZ4a3NiYW9vc2d1eGR0b2xrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODE0MzcsImV4cCI6MjA5MDQ1NzQzN30.LlnuNX4VMQR7EZ00zSGRzJ8PzUHR8bq0yGVoXOvxKg0';
 let _sb=null,_ready=false,currentUser=null,po_cliente='',po_data={},po_catalog={},po_extras={};
-const MASTER_USER='admin',MASTER_PASS='cleangroup2025';
+const MASTER_USER='admin',MASTER_PASS='1234';
 let isMaster=false;
 
 function initSB(){if(typeof supabase==='undefined'){setTimeout(initSB,100);return;}_sb=supabase.createClient(SB_URL,SB_KEY);_ready=true;setCloud('☁️ En línea','var(--teal)');}
@@ -246,7 +413,12 @@ function showApp(){
   document.getElementById('user-label').innerHTML='👤 '+currentUser.nombre+badge;
   const meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
   document.getElementById('po-periodo').value=meses[new Date().getMonth()]+' '+new Date().getFullYear();
-  renderClientesBtns();goStep(1);
+  window._poUser = currentUser.nombre || '';
+  window._poEmpresa = currentUser.empresa || '';
+  window._poClientes = currentUser.clientes || [];
+  renderClientesBtns();
+  backHome();
+  document.getElementById('home-screen').style.display='block';
 }
 
 function doLogout(){
@@ -264,12 +436,38 @@ async function loadCatalog(){
 
 function goStep(n){
   [1,2,3,4].forEach(i=>{
-    document.getElementById('step-'+i).style.display=i===n?'block':'none';
-    const t=document.getElementById('tab-'+i);
-    t.className='step-tab'+(i===n?' active':i<n?' done':'');
+    const s=document.getElementById('step-'+i);
+    if(s) s.style.display=i===n?'block':'none';
+    const t=document.getElementById('tab-r-'+i);
+    if(t) t.className='mod-tab'+(i===n?' active':i<n?' done':'');
   });
   document.getElementById('save-bar').style.display=n===3?'block':'none';
-  if(n===4)loadHistorial();
+  if(n===4) loadHistorial();
+}
+
+function goFn(n){
+  [1,2].forEach(i=>{
+    const s=document.getElementById('fn-step-'+i);
+    if(s) s.style.display=i===n?'block':'none';
+    const t=document.getElementById('tab-f-'+i);
+    if(t) t.className='mod-tab'+(i===n?' active':'');
+  });
+  if(n===2) fnLoadHistorial();
+}
+
+function showModule(mod){
+  document.getElementById('home-screen').style.display='none';
+  document.getElementById('mod-req').style.display  = mod==='req'  ? 'block':'none';
+  document.getElementById('mod-fn').style.display   = mod==='fn'   ? 'block':'none';
+  if(mod==='req') goStep(1);
+  if(mod==='fn')  { fnInitLugares(); goFn(1); }
+}
+
+function backHome(){
+  document.getElementById('home-screen').style.display='block';
+  document.getElementById('mod-req').style.display='none';
+  document.getElementById('mod-fn').style.display='none';
+  document.getElementById('save-bar').style.display='none';
 }
 
 function poAplicarMes(){const mes=document.getElementById('po-mes').value;if(!mes)return;document.getElementById('po-periodo').value=mes+' '+new Date().getFullYear();}
@@ -570,6 +768,261 @@ async function histEditar(id){
 
 function toast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');clearTimeout(window._tt);window._tt=setTimeout(()=>el.className='toast',3200);}
 function setCloud(msg,color){const el=document.getElementById('cloud-status');if(el){el.textContent=msg;el.style.color=color;el.style.background=color==='var(--teal)'?'rgba(0,201,167,.12)':'rgba(245,166,35,.12)';}}
+
+
+// ════════════════════════════════════════
+// MÓDULO CONTROL DE FUNDAS
+// ════════════════════════════════════════
+let fn_currentUser = null;
+
+// Inicializar sugerencias de lugares cuando se carga el catálogo
+
+
+function fnTipoChange(){
+  const inv = document.getElementById('fn-inv').checked;
+  const lblInv = document.getElementById('fn-lbl-inv');
+  const lblReq = document.getElementById('fn-lbl-req');
+  if(lblInv) { lblInv.style.borderColor = inv ? 'var(--teal)' : 'var(--border)'; lblInv.style.color = inv ? 'var(--teal)' : 'var(--text)'; }
+  if(lblReq) { lblReq.style.borderColor = !inv ? 'var(--amber)' : 'var(--border)'; lblReq.style.color = !inv ? 'var(--amber)' : 'var(--text)'; }
+}
+
+async function fnGuardar(){
+  const lugar  = (document.getElementById('fn-lugar').value||'').trim();
+  const tipoEl = document.querySelector('input[name="fn-tipo"]:checked');
+  const tipo   = tipoEl ? tipoEl.value : '';
+
+  if(!lugar){ toast('Ingresa el lugar de trabajo', true); return; }
+  if(!tipo) { toast('Selecciona Inventario o Requisición', true); return; }
+
+  const vals = {
+    f1822b: parseFloat(document.getElementById('fn-1822b').value)||0,
+    f1822n: parseFloat(document.getElementById('fn-1822n').value)||0,
+    f2328:  parseFloat(document.getElementById('fn-2328').value)||0,
+    f3036:  parseFloat(document.getElementById('fn-3036').value)||0,
+    f3955:  parseFloat(document.getElementById('fn-3955').value)||0,
+    f3640:  parseFloat(document.getElementById('fn-3640').value)||0,
+  };
+  const obs = (document.getElementById('fn-obs').value||'').trim();
+
+  const total = Object.values(vals).reduce((s,v)=>s+v, 0);
+  if(total === 0){ toast('Ingresa al menos una cantidad', true); return; }
+
+  const btn = document.getElementById('fn-btn-save');
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+
+  try {
+    if(!_sb) throw new Error('Sin conexión a Supabase');
+    const payload = {
+      operativo:   window._poUser || '',
+      empresa:     window._poEmpresa || '',
+      lugar:       lugar,
+      tipo:        tipo,
+      f18_22_b:    vals.f1822b,
+      f18_22_n:    vals.f1822n,
+      f23_28:      vals.f2328,
+      f30_36:      vals.f3036,
+      f39_55:      vals.f3955,
+      f36_40:      vals.f3640,
+      observaciones: obs,
+      fecha_iso:   new Date().toISOString(),
+    };
+    const { error } = await _sb.from('fundas_registros').insert(payload);
+    if(error) throw error;
+
+    toast('✅ Control de fundas enviado correctamente');
+    // Limpiar formulario
+    document.getElementById('fn-lugar').value = '';
+    document.querySelectorAll('input[name="fn-tipo"]').forEach(r => r.checked = false);
+    fnTipoChange();
+    ['fn-1822b','fn-1822n','fn-2328','fn-3036','fn-3955','fn-3640','fn-obs'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.value = '';
+    });
+    // Ir al historial de fundas
+    setTimeout(() => goStep(6), 800);
+  } catch(e){
+    toast('Error: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Enviar Control de Fundas';
+  }
+}
+
+async function fnLoadHistorial(){
+  const el = document.getElementById('fn-historial');
+  if(!el) return;
+  el.innerHTML = '<p style="color:var(--muted);font-size:13px">Cargando...</p>';
+  try {
+    if(!_sb) throw new Error('Sin conexión');
+    const usuario = window._poUser || '';
+    const { data, error } = await _sb
+      .from('fundas_registros')
+      .select('*')
+      .eq('operativo', usuario)
+      .order('fecha_iso', { ascending: false })
+      .limit(50);
+    if(error) throw error;
+    if(!data || !data.length){
+      el.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay registros aún.</p>';
+      return;
+    }
+    el.innerHTML = data.map(r => {
+      const fecha = new Date(r.fecha_iso);
+      const fechaStr = fecha.toLocaleDateString('es-EC', {day:'2-digit',month:'2-digit',year:'numeric'}) +
+                       ' ' + fecha.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
+      const colorTipo = r.tipo === 'Inventario' ? 'var(--teal)' : 'var(--amber)';
+      const items = [
+        r.f18_22_b > 0 ? `18×22B: <strong>${r.f18_22_b}</strong>` : null,
+        r.f18_22_n > 0 ? `18×22N: <strong>${r.f18_22_n}</strong>` : null,
+        r.f23_28   > 0 ? `23×28: <strong>${r.f23_28}</strong>` : null,
+        r.f30_36   > 0 ? `30×36: <strong>${r.f30_36}</strong>` : null,
+        r.f39_55   > 0 ? `39×55: <strong>${r.f39_55}</strong>` : null,
+        r.f36_40   > 0 ? `36×40: <strong>${r.f36_40}</strong>` : null,
+      ].filter(Boolean).join(' · ');
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <div>
+            <span style="font-weight:700;font-size:13px">${r.lugar}</span>
+            <span style="margin-left:8px;font-size:11px;font-weight:700;color:${colorTipo};background:${colorTipo}22;border-radius:20px;padding:2px 8px">${r.tipo}</span>
+          </div>
+          <span style="font-size:10px;color:var(--muted)">${fechaStr}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text);margin-bottom:${r.observaciones?'6px':'0'}">${items}</div>
+        ${r.observaciones ? `<div style="font-size:11px;color:var(--muted);font-style:italic">${r.observaciones}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e){
+    el.innerHTML = `<p style="color:var(--red);font-size:13px">Error: ${e.message}</p>`;
+  }
+}
+
+// Enganchar initFundas cuando se activa step-5 o step-6
+
+
+
+// ═══════════════════════════════════════════
+// MÓDULO CONTROL DE FUNDAS
+// ═══════════════════════════════════════════
+
+function fnInitLugares(){
+  const el = document.getElementById('fn-lugar');
+  if(!el) return;
+  const clientes = (window._poClientes || []).slice().sort();
+  // Preservar selección actual
+  const cur = el.value;
+  el.innerHTML = '<option value="">— Selecciona tu punto —</option>'
+    + clientes.map(c => '<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>').join('');
+}
+
+function fnTipoChange(){
+  const inv = document.getElementById('fn-inv') && document.getElementById('fn-inv').checked;
+  const req = document.getElementById('fn-req') && document.getElementById('fn-req').checked;
+  const lblInv = document.getElementById('fn-lbl-inv');
+  const lblReq = document.getElementById('fn-lbl-req');
+  if(lblInv){
+    lblInv.style.borderColor = inv ? 'var(--teal)' : 'var(--border)';
+    lblInv.style.color = inv ? 'var(--teal)' : 'var(--text)';
+    lblInv.style.background = inv ? 'rgba(0,201,167,.08)' : '';
+  }
+  if(lblReq){
+    lblReq.style.borderColor = req ? 'var(--amber)' : 'var(--border)';
+    lblReq.style.color = req ? 'var(--amber)' : 'var(--text)';
+    lblReq.style.background = req ? 'rgba(245,166,35,.08)' : '';
+  }
+}
+
+async function fnGuardar(){
+  const lugar  = (document.getElementById('fn-lugar').value||'').trim().toUpperCase();
+  const tipoEl = document.querySelector('input[name="fn-tipo"]:checked');
+  const tipo   = tipoEl ? tipoEl.value : '';
+  if(!lugar){ toast('Ingresa el lugar de trabajo', true); return; }
+  if(!tipo) { toast('Selecciona Inventario o Requisición', true); return; }
+  const vals = {
+    f1822b: parseFloat(document.getElementById('fn-1822b').value)||0,
+    f1822n: parseFloat(document.getElementById('fn-1822n').value)||0,
+    f2328:  parseFloat(document.getElementById('fn-2328').value)||0,
+    f3036:  parseFloat(document.getElementById('fn-3036').value)||0,
+    f3955:  parseFloat(document.getElementById('fn-3955').value)||0,
+    f3640:  parseFloat(document.getElementById('fn-3640').value)||0,
+  };
+  const obs = (document.getElementById('fn-obs').value||'').trim();
+  const total = Object.values(vals).reduce((s,v)=>s+v, 0);
+  if(total===0){ toast('Ingresa al menos una cantidad', true); return; }
+  const btn = document.getElementById('fn-btn-save');
+  btn.disabled=true; btn.textContent='⏳ Enviando...';
+  try{
+    if(!_sb) throw new Error('Sin conexión a Supabase');
+    const {error} = await _sb.from('fundas_registros').insert({
+      operativo:    window._poUser||'',
+      empresa:      window._poEmpresa||'',
+      lugar:        lugar,
+      tipo:         tipo,
+      f18_22_b:     vals.f1822b,
+      f18_22_n:     vals.f1822n,
+      f23_28:       vals.f2328,
+      f30_36:       vals.f3036,
+      f39_55:       vals.f3955,
+      f36_40:       vals.f3640,
+      observaciones:obs,
+      fecha_iso:    new Date().toISOString(),
+    });
+    if(error) throw error;
+    toast('✅ Control de fundas enviado');
+    // Limpiar
+    document.getElementById('fn-lugar').value='';
+    document.querySelectorAll('input[name="fn-tipo"]').forEach(r=>r.checked=false);
+    fnTipoChange();
+    ['fn-1822b','fn-1822n','fn-2328','fn-3036','fn-3955','fn-3640','fn-obs']
+      .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    setTimeout(()=>goFn(2), 600);
+  }catch(e){
+    toast('Error: '+e.message, true);
+  }finally{
+    btn.disabled=false; btn.textContent='💾 Enviar Control de Fundas';
+  }
+}
+
+async function fnLoadHistorial(){
+  const el=document.getElementById('fn-historial');
+  if(!el) return;
+  el.innerHTML='<p style="color:var(--muted);font-size:13px">Cargando...</p>';
+  try{
+    if(!_sb) throw new Error('Sin conexión');
+    const {data,error}=await _sb.from('fundas_registros')
+      .select('*').eq('operativo',window._poUser||'')
+      .order('fecha_iso',{ascending:false}).limit(60);
+    if(error) throw error;
+    if(!data||!data.length){
+      el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay registros aún.</p>';
+      return;
+    }
+    el.innerHTML=data.map(r=>{
+      const fecha=new Date(r.fecha_iso);
+      const fd=fecha.toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'})
+               +' '+fecha.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
+      const colorTipo=r.tipo==='Inventario'?'var(--teal)':'var(--amber)';
+      const items=[
+        r.f18_22_b>0?'18×22B: <strong>'+r.f18_22_b+'</strong>':null,
+        r.f18_22_n>0?'18×22N: <strong>'+r.f18_22_n+'</strong>':null,
+        r.f23_28>0?'23×28: <strong>'+r.f23_28+'</strong>':null,
+        r.f30_36>0?'30×36: <strong>'+r.f30_36+'</strong>':null,
+        r.f39_55>0?'39×55: <strong>'+r.f39_55+'</strong>':null,
+        r.f36_40>0?'36×40: <strong>'+r.f36_40+'</strong>':null,
+      ].filter(Boolean).join(' · ');
+      return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+        +'<div><span style="font-weight:700;font-size:13px">'+r.lugar+'</span>'
+        +'<span style="margin-left:8px;font-size:11px;font-weight:700;color:'+colorTipo+';background:'+colorTipo+'22;border-radius:20px;padding:2px 8px">'+r.tipo+'</span></div>'
+        +'<span style="font-size:10px;color:var(--muted)">'+fd+'</span></div>'
+        +'<div style="font-size:12px;color:var(--text);line-height:1.8">'+items+'</div>'
+        +(r.observaciones?'<div style="font-size:11px;color:var(--muted);margin-top:4px;font-style:italic">'+r.observaciones+'</div>':'')
+        +'</div>';
+    }).join('');
+  }catch(e){
+    el.innerHTML='<p style="color:var(--red);font-size:13px">Error: '+e.message+'</p>';
+  }
+}
+
 </script>
 </body>
 </html>
