@@ -256,7 +256,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
       <div class="sb-sec">Cobranzas</div>
       <button class="nav-item" onclick="nav('cobranzas')"><span class="nav-icon">&#128181;</span>Facturación &amp; Cobros</button>      <div class="sb-sec">Operativos</div>
-      <button class="nav-item" onclick="nav('operativos')"><span class="nav-icon">👥</span>Usuarios de Campo</button>
+
+      <button class="nav-item" onclick="nav('fundas')"><span class="nav-icon">&#128717;</span>Control de Fundas</button>      <button class="nav-item" onclick="nav('operativos')"><span class="nav-icon">👥</span>Usuarios de Campo</button>
       <button class="nav-item" onclick="nav('campo')"><span class="nav-icon">📥</span>Req. de Campo</button>
       <button class="nav-item" onclick="nav('catalogo')"><span class="nav-icon">🗂️</span>Editor de Catálogo</button>
     </nav>
@@ -2050,6 +2051,127 @@ function buildPanels(){
   </div>
 </div>
 <!-- FIN PANEL COBRANZAS -->
+
+<!-- PANEL CONTROL DE FUNDAS — CONSOLIDADO ADMIN -->
+<div class="panel" id="panel-fundas">
+  <div class="ph">
+    <h2>&#128717; Control de Fundas</h2>
+    <p>Consolidado de inventarios y requisiciones de fundas enviados desde el portal de campo.</p>
+    <span class="iso-code">FOR PLA 04 &#183; VER 01</span>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card">
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;justify-content:space-between">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fi">
+          <label>Tipo</label>
+          <select id="fn-filtro-tipo" onchange="fnAdminRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option value="">Todos</option>
+            <option value="Inventario">Inventario</option>
+            <option value="Requisicion">Requisici&#243;n</option>
+          </select>
+        </div>
+        <div class="fi">
+          <label>Empresa</label>
+          <select id="fn-filtro-empresa" onchange="fnAdminRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option value="">Todas</option>
+            <option value="NOVACLEAN">NOVACLEAN</option>
+            <option value="HOMECLEAN">HOMECLEAN</option>
+            <option value="INMOCLEAN">INMOCLEAN</option>
+          </select>
+        </div>
+        <div class="fi">
+          <label>Operativo</label>
+          <select id="fn-filtro-op" onchange="fnAdminRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;min-width:160px">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="fi">
+          <label>Fecha desde</label>
+          <input id="fn-filtro-desde" type="date" onchange="fnAdminRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        </div>
+        <div class="fi">
+          <label>Fecha hasta</label>
+          <input id="fn-filtro-hasta" type="date" onchange="fnAdminRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="fnAdminReload()">&#128260; Actualizar</button>
+        <button class="btn btn-s btn-sm" onclick="fnAdminExcel()">&#8659; Excel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="sg" id="fn-admin-stats"></div>
+
+  <!-- Tabs -->
+  <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--border)">
+    <button id="fn-tab-consolidado" class="cat-tab active" onclick="fnAdminTab('consolidado')">&#128202; Consolidado por Lugar</button>
+    <button id="fn-tab-registros"   class="cat-tab"        onclick="fnAdminTab('registros')">&#128203; Registros Individuales</button>
+  </div>
+
+  <!-- TAB CONSOLIDADO -->
+  <div id="fn-pane-consolidado">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0">Stock por Lugar de Trabajo <span class="badge" id="fn-cons-count">0</span></div>
+        <div style="font-size:11px;color:var(--muted)">Suma de cantidades por punto y tipo de funda</div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>Lugar</th>
+            <th>Empresa</th>
+            <th>Tipo</th>
+            <th style="text-align:center">18x22<br><span style="font-size:9px;color:var(--teal)">BLANCAS</span></th>
+            <th style="text-align:center">18x22<br><span style="font-size:9px;color:var(--muted)">NEGRAS</span></th>
+            <th style="text-align:center">23x28</th>
+            <th style="text-align:center">30x36</th>
+            <th style="text-align:center">39x55</th>
+            <th style="text-align:center">36x40</th>
+            <th style="text-align:center">Total</th>
+            <th>&#218;ltimo registro</th>
+          </tr></thead>
+          <tbody id="fn-cons-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB REGISTROS INDIVIDUALES -->
+  <div id="fn-pane-registros" style="display:none">
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0">Registros Individuales <span class="badge" id="fn-reg-count">0</span></div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>Fecha</th>
+            <th>Operativo</th>
+            <th>Empresa</th>
+            <th>Lugar</th>
+            <th>Tipo</th>
+            <th style="text-align:center">18x22B</th>
+            <th style="text-align:center">18x22N</th>
+            <th style="text-align:center">23x28</th>
+            <th style="text-align:center">30x36</th>
+            <th style="text-align:center">39x55</th>
+            <th style="text-align:center">36x40</th>
+            <th style="text-align:center">Total</th>
+            <th>Observaciones</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="fn-reg-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- FIN PANEL FUNDAS -->
   `;
 }
 
@@ -2062,7 +2184,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas};
   if(fns[name]) fns[name]();
 }
 
@@ -5436,6 +5558,217 @@ function cobRenderResumenCliente(){
   };
 })();
 </script>
+<script>
+
+// ═══════════════════════════════════════════════════
+// PANEL ADMIN — CONTROL DE FUNDAS
+// ═══════════════════════════════════════════════════
+var _fnData = [];   // datos cargados de Supabase
+var _fnTab  = 'consolidado';
+
+async function initFundasAdmin(){
+  await fnAdminReload();
+}
+
+async function fnAdminReload(){
+  if(!_sb){ setCloudStatus('Sin conexion','var(--red)'); return; }
+  try{
+    setCloudStatus('&#128260; Cargando fundas...','var(--muted)');
+    var res = await _sb.from('fundas_registros').select('*').order('fecha_iso',{ascending:false}).limit(1000);
+    if(res.error) throw res.error;
+    _fnData = res.data || [];
+    fnAdminPoblarOperativos();
+    fnAdminRender();
+    setCloudStatus('&#9729;&#65039; En linea','var(--teal)');
+    toast('&#10003; ' + _fnData.length + ' registros de fundas cargados');
+  }catch(e){
+    setCloudStatus('Error','var(--red)');
+    toast('Error cargando fundas: ' + e.message, true);
+  }
+}
+
+function fnAdminPoblarOperativos(){
+  var sel = document.getElementById('fn-filtro-op');
+  if(!sel) return;
+  var ops = [...new Set(_fnData.map(function(r){return r.operativo||'';}).filter(Boolean))].sort();
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>'
+    + ops.map(function(o){ return '<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>'; }).join('');
+}
+
+function fnAdminFiltrar(){
+  var tipo    = (document.getElementById('fn-filtro-tipo')||{}).value||'';
+  var empresa = (document.getElementById('fn-filtro-empresa')||{}).value||'';
+  var op      = (document.getElementById('fn-filtro-op')||{}).value||'';
+  var desde   = (document.getElementById('fn-filtro-desde')||{}).value||'';
+  var hasta   = (document.getElementById('fn-filtro-hasta')||{}).value||'';
+  return _fnData.filter(function(r){
+    if(tipo    && r.tipo    !== tipo)    return false;
+    if(empresa && !(r.empresa||'').toUpperCase().includes(empresa)) return false;
+    if(op      && r.operativo !== op)   return false;
+    if(desde   && r.fecha_iso < desde)  return false;
+    if(hasta   && r.fecha_iso.slice(0,10) > hasta) return false;
+    return true;
+  });
+}
+
+function fnAdminRender(){
+  var lista = fnAdminFiltrar();
+  fnAdminStats(lista);
+  if(_fnTab === 'consolidado') fnRenderConsolidado(lista);
+  else                         fnRenderRegistros(lista);
+}
+
+function fnAdminStats(lista){
+  var el = document.getElementById('fn-admin-stats');
+  if(!el) return;
+  var total  = lista.length;
+  var inv    = lista.filter(function(r){return r.tipo==='Inventario';}).length;
+  var req    = lista.filter(function(r){return r.tipo==='Requisicion'||r.tipo==='Requisición';}).length;
+  var lugares= new Set(lista.map(function(r){return r.lugar;})).size;
+  var totalFundas = lista.reduce(function(s,r){
+    return s+(+r.f18_22_b||0)+(+r.f18_22_n||0)+(+r.f23_28||0)+(+r.f30_36||0)+(+r.f39_55||0)+(+r.f36_40||0);
+  },0);
+  el.innerHTML =
+    '<div class="sc st"><div class="l">Registros</div><div class="v">'+total+'</div></div>'
+   +'<div class="sc st"><div class="l">Inventarios</div><div class="v" style="color:var(--teal)">'+inv+'</div></div>'
+   +'<div class="sc sa"><div class="l">Requisiciones</div><div class="v">'+req+'</div></div>'
+   +'<div class="sc st"><div class="l">Lugares</div><div class="v">'+lugares+'</div></div>'
+   +'<div class="sc st"><div class="l">Total Fundas</div><div class="v" style="font-size:18px">'+totalFundas.toLocaleString()+'</div></div>';
+}
+
+function fnRenderConsolidado(lista){
+  var body = document.getElementById('fn-cons-body');
+  var countEl = document.getElementById('fn-cons-count');
+  if(!body) return;
+
+  // Agrupar por lugar + tipo (mostrar ultimo registro de cada combo)
+  var mapa = {};
+  lista.forEach(function(r){
+    var key = (r.lugar||'—') + '||' + (r.tipo||'');
+    if(!mapa[key]){
+      mapa[key] = {
+        lugar: r.lugar||'—', empresa: r.empresa||'—', tipo: r.tipo||'—',
+        b:0, n:0, f2328:0, f3036:0, f3955:0, f3640:0, ultima:'', registros:0
+      };
+    }
+    var m = mapa[key];
+    m.b      += +r.f18_22_b||0;
+    m.n      += +r.f18_22_n||0;
+    m.f2328  += +r.f23_28||0;
+    m.f3036  += +r.f30_36||0;
+    m.f3955  += +r.f39_55||0;
+    m.f3640  += +r.f36_40||0;
+    m.registros++;
+    if(!m.ultima || r.fecha_iso > m.ultima) m.ultima = r.fecha_iso;
+  });
+
+  var filas = Object.values(mapa).sort(function(a,b){
+    return (a.lugar+a.tipo).localeCompare(b.lugar+b.tipo);
+  });
+
+  if(countEl) countEl.textContent = filas.length;
+
+  if(!filas.length){
+    body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">Sin registros para el filtro seleccionado</td></tr>';
+    return;
+  }
+
+  body.innerHTML = filas.map(function(r){
+    var total = r.b+r.n+r.f2328+r.f3036+r.f3955+r.f3640;
+    var colorTipo = r.tipo==='Inventario' ? 'tok' : 'twn';
+    var fecha = r.ultima ? new Date(r.ultima).toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+    var cell = function(v){ return '<td style="text-align:center;font-family:monospace,monospace;font-weight:'+(v>0?'700':'400')+';color:'+(v>0?'var(--text)':'var(--muted)')+'">'+v+'</td>'; };
+    return '<tr>'
+      +'<td style="font-weight:600">'+r.lugar+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+r.empresa+'</td>'
+      +'<td><span class="tag '+colorTipo+'" style="font-size:10px">'+r.tipo+'</span></td>'
+      +cell(r.b)+cell(r.n)+cell(r.f2328)+cell(r.f3036)+cell(r.f3955)+cell(r.f3640)
+      +'<td style="text-align:center;font-weight:700;color:var(--teal);font-family:monospace,monospace">'+total+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+fecha+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function fnRenderRegistros(lista){
+  var body   = document.getElementById('fn-reg-body');
+  var countEl= document.getElementById('fn-reg-count');
+  if(!body) return;
+  if(countEl) countEl.textContent = lista.length;
+  if(!lista.length){
+    body.innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">Sin registros</td></tr>';
+    return;
+  }
+  body.innerHTML = lista.map(function(r){
+    var fecha = r.fecha_iso ? new Date(r.fecha_iso).toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+new Date(r.fecha_iso).toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}) : '—';
+    var total = (+r.f18_22_b||0)+(+r.f18_22_n||0)+(+r.f23_28||0)+(+r.f30_36||0)+(+r.f39_55||0)+(+r.f36_40||0);
+    var colorTipo = r.tipo==='Inventario'?'tok':'twn';
+    var cell = function(v){ return '<td style="text-align:center;font-family:monospace,monospace;font-size:12px;color:'+(v>0?'var(--text)':'var(--muted)')+'">'+v+'</td>'; };
+    return '<tr>'
+      +'<td style="font-size:11px;white-space:nowrap">'+fecha+'</td>'
+      +'<td style="font-size:12px;font-weight:600">'+( r.operativo||'—')+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+( r.empresa||'—')+'</td>'
+      +'<td style="font-size:12px">'+( r.lugar||'—')+'</td>'
+      +'<td><span class="tag '+colorTipo+'" style="font-size:10px">'+( r.tipo||'—')+'</span></td>'
+      +cell(+r.f18_22_b||0)+cell(+r.f18_22_n||0)+cell(+r.f23_28||0)+cell(+r.f30_36||0)+cell(+r.f39_55||0)+cell(+r.f36_40||0)
+      +'<td style="text-align:center;font-weight:700;color:var(--teal);font-family:monospace,monospace;font-size:12px">'+total+'</td>'
+      +'<td style="font-size:11px;color:var(--muted);max-width:180px">'+( r.observaciones||'—')+'</td>'
+      +'<td><button class="btn btn-d btn-sm" onclick="fnAdminEliminar('+r.id+')">&#10005;</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function fnAdminTab(tab){
+  _fnTab = tab;
+  ['consolidado','registros'].forEach(function(t){
+    var tb = document.getElementById('fn-tab-'+t);
+    var pn = document.getElementById('fn-pane-'+t);
+    if(tb) tb.classList.toggle('active', t===tab);
+    if(pn) pn.style.display = t===tab ? '' : 'none';
+  });
+  fnAdminRender();
+}
+
+async function fnAdminEliminar(id){
+  if(!confirm('&#191;Eliminar este registro de fundas?')) return;
+  try{
+    var res = await _sb.from('fundas_registros').delete().eq('id',id);
+    if(res.error) throw res.error;
+    _fnData = _fnData.filter(function(r){return r.id!==id;});
+    fnAdminRender();
+    toast('Registro eliminado');
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+
+function fnAdminExcel(){
+  if(typeof XLSX==='undefined'){toast('Cargando Excel...',true);return;}
+  var lista = fnAdminFiltrar();
+  if(!lista.length){toast('Sin registros para exportar',true);return;}
+  var rows = [
+    ['CONTROL DE FUNDAS — FOR PLA 04'],
+    ['Exportado: '+new Date().toLocaleDateString('es-EC')],
+    [],
+    ['Fecha','Operativo','Empresa','Lugar','Tipo','18x22 BLANCAS','18x22 NEGRAS','23x28','30x36','39x55','36x40','Total','Observaciones']
+  ];
+  lista.forEach(function(r){
+    var total=(+r.f18_22_b||0)+(+r.f18_22_n||0)+(+r.f23_28||0)+(+r.f30_36||0)+(+r.f39_55||0)+(+r.f36_40||0);
+    rows.push([
+      r.fecha_iso?new Date(r.fecha_iso).toLocaleDateString('es-EC'):'',
+      r.operativo||'',r.empresa||'',r.lugar||'',r.tipo||'',
+      +r.f18_22_b||0,+r.f18_22_n||0,+r.f23_28||0,+r.f30_36||0,+r.f39_55||0,+r.f36_40||0,
+      total,r.observaciones||''
+    ]);
+  });
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:16},{wch:12},{wch:22},{wch:12},{wch:10},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,ws,'Fundas');
+  XLSX.writeFile(wb,'Control_Fundas_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  toast('&#10003; Excel descargado');
+}
+
+</script>
+
 <script>
 (function initSupabase(){
   if(typeof supabase==='undefined'){ setTimeout(initSupabase,100); return; }
