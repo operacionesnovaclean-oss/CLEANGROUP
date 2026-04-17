@@ -2055,9 +2055,9 @@ function buildPanels(){
 <!-- PANEL CONTROL DE FUNDAS — CONSOLIDADO ADMIN -->
 <div class="panel" id="panel-fundas">
   <div class="ph">
-    <h2>&#128717; Control de Fundas</h2>
+    <h2>🛍️ Control de Fundas</h2>
     <p>Consolidado de inventarios y requisiciones de fundas enviados desde el portal de campo.</p>
-    <span class="iso-code">FOR PLA 04 &#183; VER 01</span>
+    <span class="iso-code">FOR PLA 04 · VER 01</span>
   </div>
 
   <!-- Filtros -->
@@ -2097,8 +2097,8 @@ function buildPanels(){
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-s btn-sm" onclick="fnAdminReload()">&#128260; Actualizar</button>
-        <button class="btn btn-s btn-sm" onclick="fnAdminExcel()">&#8659; Excel</button>
+        <button class="btn btn-s btn-sm" onclick="fnAdminReload()">↺ Actualizar</button>
+        <button class="btn btn-s btn-sm" onclick="fnAdminExcel()">↓ Excel</button>
       </div>
     </div>
   </div>
@@ -2108,8 +2108,8 @@ function buildPanels(){
 
   <!-- Tabs -->
   <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--border)">
-    <button id="fn-tab-consolidado" class="cat-tab active" onclick="fnAdminTab('consolidado')">&#128202; Consolidado por Lugar</button>
-    <button id="fn-tab-registros"   class="cat-tab"        onclick="fnAdminTab('registros')">&#128203; Registros Individuales</button>
+    <button id="fn-tab-consolidado" class="cat-tab active" onclick="fnAdminTab('consolidado')">📊 Consolidado por Lugar</button>
+    <button id="fn-tab-registros"   class="cat-tab"        onclick="fnAdminTab('registros')">📋 Registros Individuales</button>
   </div>
 
   <!-- TAB CONSOLIDADO -->
@@ -2132,7 +2132,7 @@ function buildPanels(){
             <th style="text-align:center">39x55</th>
             <th style="text-align:center">36x40</th>
             <th style="text-align:center">Total</th>
-            <th>&#218;ltimo registro</th>
+            <th>Último registro</th>
           </tr></thead>
           <tbody id="fn-cons-body"></tbody>
         </table>
@@ -2171,7 +2171,7 @@ function buildPanels(){
   </div>
 
 </div>
-<!-- FIN PANEL FUNDAS -->
+
   `;
 }
 
@@ -5573,14 +5573,14 @@ async function initFundasAdmin(){
 async function fnAdminReload(){
   if(!_sb){ setCloudStatus('Sin conexion','var(--red)'); return; }
   try{
-    setCloudStatus('&#128260; Cargando fundas...','var(--muted)');
+    setCloudStatus('↺ Cargando fundas...','var(--muted)');
     var res = await _sb.from('fundas_registros').select('*').order('fecha_iso',{ascending:false}).limit(1000);
     if(res.error) throw res.error;
     _fnData = res.data || [];
     fnAdminPoblarOperativos();
     fnAdminRender();
-    setCloudStatus('&#9729;&#65039; En linea','var(--teal)');
-    toast('&#10003; ' + _fnData.length + ' registros de fundas cargados');
+    setCloudStatus('☁️ En línea','var(--teal)');
+    toast('✓ ' + _fnData.length + ' registros de fundas cargados');
   }catch(e){
     setCloudStatus('Error','var(--red)');
     toast('Error cargando fundas: ' + e.message, true);
@@ -5713,7 +5713,7 @@ function fnRenderRegistros(lista){
       +cell(+r.f18_22_b||0)+cell(+r.f18_22_n||0)+cell(+r.f23_28||0)+cell(+r.f30_36||0)+cell(+r.f39_55||0)+cell(+r.f36_40||0)
       +'<td style="text-align:center;font-weight:700;color:var(--teal);font-family:monospace,monospace;font-size:12px">'+total+'</td>'
       +'<td style="font-size:11px;color:var(--muted);max-width:180px">'+( r.observaciones||'—')+'</td>'
-      +'<td><button class="btn btn-d btn-sm" onclick="fnAdminEliminar('+r.id+')">&#10005;</button></td>'
+      +'<td><button class="btn btn-d btn-sm" onclick="fnAdminEliminar('+r.id+')">✕</button></td>'
       +'</tr>';
   }).join('');
 }
@@ -5730,7 +5730,7 @@ function fnAdminTab(tab){
 }
 
 async function fnAdminEliminar(id){
-  if(!confirm('&#191;Eliminar este registro de fundas?')) return;
+  if(!confirm('¿Eliminar este registro de fundas?')) return;
   try{
     var res = await _sb.from('fundas_registros').delete().eq('id',id);
     if(res.error) throw res.error;
@@ -5764,7 +5764,7 @@ function fnAdminExcel(){
   ws['!cols']=[{wch:14},{wch:16},{wch:12},{wch:22},{wch:12},{wch:10},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:30}];
   XLSX.utils.book_append_sheet(wb,ws,'Fundas');
   XLSX.writeFile(wb,'Control_Fundas_'+new Date().toISOString().split('T')[0]+'.xlsx');
-  toast('&#10003; Excel descargado');
+  toast('✓ Excel descargado');
 }
 
 </script>
