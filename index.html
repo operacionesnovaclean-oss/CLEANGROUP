@@ -1447,7 +1447,7 @@ function buildPanels(){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="card-title" style="margin:0">📦 Ítems <span id="ae-badge" style="display:none" class="tag tok"></span></div>
     </div>
-    <div class="tw"><table class="it"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>Observación</th><th></th></tr></thead><tbody id="ae-items-body"></tbody></table></div>
+    <div class="tw"><table class="it"><thead><tr><th>Cant.</th><th>Código</th><th>Descripción</th><th>Unidad</th><th>Observación</th><th></th></tr></thead><tbody id="ae-items-body"></tbody></table></div>
     <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="aeAddItem()">+ Agregar ítem</button>
     <div class="divider"></div>
     <div class="fg">
@@ -2194,7 +2194,7 @@ function initApp(){
   // Proveedores
   const ps=document.getElementById('oc-prov-sel');
   if(ps) PROVEEDORES.forEach(p=>{const o=document.createElement('option');o.value=p.cod;o.textContent=p.nom;ps.appendChild(o);});
-  // Clientes — poblar datalist para el input ae-cliente
+  // Clientes — datalist para input ae-cliente
   const dl=document.getElementById('ae-cliente-list');
   if(dl){CLIENTES_LIST.forEach(c=>{const o=document.createElement('option');o.value=c;dl.appendChild(o);});}
   // Responsables
@@ -2591,12 +2591,25 @@ function rmRenderList(){
       <td style="font-size:11px">${necs?`<span class="tag tok">✓ ${necs} Nec.</span>`:'<span class="tag twn">⏳ Sin Nec.</span>'} ${ocs?`<span class="tag tok" style="margin-left:3px">✓ ${ocs} OC</span>`:''} ${aes?`<span class="tag tok" style="margin-left:3px">✓ ${aes} Actas</span>`:''}</td>
       <td>
         <button class="btn btn-s btn-sm" onclick="rmEditar(${idx})">✏️ Editar</button>
+        <button class="btn btn-s btn-sm" title="Corregir solo el nombre del período" onclick="rmCorregirPeriodo(${idx})" style="color:var(--amber);border-color:var(--amber)">🗓️ Período</button>
         <button class="btn btn-s btn-sm" onclick="rmCargar(${idx})">📂 Ver/Cargar</button>
         <button class="btn btn-a btn-sm" onclick="nav('necesidad')">→ Nec.</button>
         <button class="btn btn-d btn-sm" onclick="rmEliminar(${idx})">✕</button>
       </td>
     </tr>`;
   }).join(''):'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:18px">Sin registros</td></tr>';
+}
+
+function rmCorregirPeriodo(idx){
+  const r=db.reqMensuales[idx];
+  const nuevo=prompt(`Corregir período de Req. ${r.numero}\nActual: "${r.periodo}"\n\nNuevo nombre:`,r.periodo);
+  if(nuevo===null)return;
+  const limpio=(nuevo||'').trim();
+  if(!limpio){toast('El período no puede quedar vacío',true);return;}
+  if(limpio===r.periodo){toast('Sin cambios');return;}
+  db.reqMensuales[idx].periodo=limpio;
+  saveDB();rmRenderList();
+  toast(`✅ Período actualizado a "${limpio}" — vínculos intactos`);
 }
 
 function rmEditar(idx){
@@ -3949,7 +3962,6 @@ function aeCargarCliente(){
   const cd=aeRMRef.data?.[empresa]?.[cliente];if(!cd)return;
   const items=Object.values(cd).filter(v=>(+v.qty||0)>0);
   aeItems=items.map(it=>{const match=CATALOG.find(c=>c.desc.toUpperCase()===it.prod.toUpperCase()||c.desc.toUpperCase().includes(it.prod.toUpperCase().split(' ').slice(0,2).join(' '))||it.prod.toUpperCase().includes(c.desc.toUpperCase().split(' ').slice(0,2).join(' ')));return {cant:it.qty,cod:match?match.cod:'',desc:it.prod,unidad:it.unidad,obs:`Período: ${aeRMRef.periodo}`,fromRM:true};});
-  // Escribir cliente directamente en el input (acepta cualquier texto)
   const ceInput=document.getElementById('ae-cliente');
   if(ceInput) ceInput.value=cliente;
   const badge=document.getElementById('ae-badge');
@@ -3958,7 +3970,7 @@ function aeCargarCliente(){
   toast(`${items.length} ítems cargados para ${cliente}`);
 }
 
-function aeAddItem(){aeItems.push({cant:1,cod:'',desc:'',obs:'',fromRM:false});aeRenderItems();}
+function aeAddItem(){aeItems.push({cant:1,cod:'',desc:'',unidad:'',obs:'',fromRM:false});aeRenderItems();}
 
 function aeRenderItems(){
   const body=document.getElementById('ae-items-body');if(!body)return;
@@ -3968,16 +3980,19 @@ function aeRenderItems(){
         <td><input type="number" min="0" value="${it.cant}" onchange="aeItems[${i}].cant=+this.value" style="width:60px"></td>
         <td><code style="font-size:11px;color:var(--teal)">${it.cod||'—'}</code></td>
         <td><span style="font-size:12px">${it.desc}</span></td>
+        <td><span style="font-size:12px;color:var(--teal);font-weight:600">${it.unidad||'—'}</span></td>
         <td><input value="${it.obs||''}" onchange="aeItems[${i}].obs=this.value" placeholder="Obs..." style="min-width:120px"></td>
         <td><button class="btn btn-d btn-sm" onclick="aeItems.splice(${i},1);aeRenderItems()">✕</button></td>
       </tr>`;
     }
+    // unidad se llena automáticamente al elegir del catálogo, o se puede escribir
+    const uVal=it.unidad||'';
     return `<tr>
       <td><input type="number" min="0" value="${it.cant}" onchange="aeItems[${i}].cant=+this.value" style="width:60px"></td>
       <td><code style="font-size:11px;color:var(--teal);min-width:90px;display:block">${it.cod||'—'}</code></td>
-      <td style="position:relative;min-width:240px">
+      <td style="position:relative;min-width:220px">
         <input id="ae-ac-${i}" value="${it.desc.replace(/"/g,'&quot;')}"
-          placeholder="Escribe nombre o código..."
+          placeholder="Buscar por nombre o código..."
           autocomplete="off"
           oninput="aeAcSearch(${i},this.value)"
           onfocus="aeAcSearch(${i},this.value)"
@@ -3985,10 +4000,12 @@ function aeRenderItems(){
           style="width:100%;padding:4px 8px;background:var(--navy);border:1px solid ${it.cod?'var(--teal)':'var(--border)'};border-radius:5px;color:var(--text);font-size:12px">
         <div id="ae-ac-list-${i}" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:9999;background:var(--surface);border:1px solid var(--teal);border-radius:7px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)"></div>
       </td>
+      <td><input value="${uVal}" onchange="aeItems[${i}].unidad=this.value"
+          placeholder="Unidad..." style="width:90px;padding:4px 8px;background:var(--navy);border:1px solid var(--border);border-radius:5px;color:var(--teal);font-size:12px;font-weight:600"></td>
       <td><input value="${it.obs||''}" onchange="aeItems[${i}].obs=this.value" placeholder="Obs..." style="min-width:120px"></td>
       <td><button class="btn btn-d btn-sm" onclick="aeItems.splice(${i},1);aeRenderItems()">✕</button></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:14px">Sin ítems.</td></tr>';
+  }).join('')||'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:14px">Sin ítems.</td></tr>';
 }
 function aeAcSearch(i,q){
   const list=document.getElementById('ae-ac-list-'+i);if(!list)return;
@@ -4007,11 +4024,13 @@ function aeAcSearch(i,q){
 }
 function aeAcPick(i,cod){
   const c=CATALOG.find(x=>x.cod===cod);if(!c)return;
-  aeItems[i].cod=c.cod;aeItems[i].desc=c.desc;
+  aeItems[i].cod=c.cod;
+  aeItems[i].desc=c.desc;
+  aeItems[i].unidad=c.u;
   aeRenderItems();
 }
 function aeAcHide(i){const l=document.getElementById('ae-ac-list-'+i);if(l)l.style.display='none';}
-function aePickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){aeItems[i].cod=c.cod;aeItems[i].desc=c.desc;}aeRenderItems();}
+function aePickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){aeItems[i].cod=c.cod;aeItems[i].desc=c.desc;aeItems[i].unidad=c.u;}aeRenderItems();}
 
 function aeGuardar(){
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
@@ -4055,7 +4074,6 @@ function aeEditar(idx){
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   s('ae-num',a.numero);s('ae-fecha',a.fecha);s('ae-ciudad',a.ciudad||'GUAYAQUIL');
   s('ae-elaborado',a.elaborado);s('ae-tipo',a.tipoDesp);
-  // ae-cliente es ahora un input de texto, asignar directamente
   const ceEl=document.getElementById('ae-cliente');if(ceEl)ceEl.value=a.cliente||'';
   s('ae-depto',a.depto);s('ae-solicitante',a.solicitante);s('ae-entregado-a',a.entregadoA);
   s('ae-depto-recibe',a.deptoRecibe);s('ae-verif-nombre',a.verifNombre);s('ae-verif-cedula',a.verifCedula);
@@ -4074,7 +4092,7 @@ function aeLimpiar(){
   aeItems=[];ae_editIdx=null;aeRenderItems();
   document.getElementById('ae-edit-banner').style.display='none';
   ['ae-solicitante','ae-depto-recibe','ae-verif-nombre','ae-verif-cedula','ae-rec-nombre','ae-rec-cedula'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const c=document.getElementById('ae-cliente');if(c)c.value=''; // input text, clear directly
+  const c=document.getElementById('ae-cliente');if(c)c.value='';
   const e=document.getElementById('ae-entregado-a');if(e)e.value='';
   const b=document.getElementById('ae-badge');if(b)b.style.display='none';
   const s=document.getElementById('ae-cli-sel');if(s)s.value='';
