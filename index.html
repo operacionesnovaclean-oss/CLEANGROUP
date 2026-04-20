@@ -2194,7 +2194,7 @@ function initApp(){
   // Proveedores
   const ps=document.getElementById('oc-prov-sel');
   if(ps) PROVEEDORES.forEach(p=>{const o=document.createElement('option');o.value=p.cod;o.textContent=p.nom;ps.appendChild(o);});
-  // Clientes — datalist para input ae-cliente
+  // Clientes — datalist
   const dl=document.getElementById('ae-cliente-list');
   if(dl){CLIENTES_LIST.forEach(c=>{const o=document.createElement('option');o.value=c;dl.appendChild(o);});}
   // Responsables
@@ -3985,8 +3985,6 @@ function aeRenderItems(){
         <td><button class="btn btn-d btn-sm" onclick="aeItems.splice(${i},1);aeRenderItems()">✕</button></td>
       </tr>`;
     }
-    // unidad se llena automáticamente al elegir del catálogo, o se puede escribir
-    const uVal=it.unidad||'';
     return `<tr>
       <td><input type="number" min="0" value="${it.cant}" onchange="aeItems[${i}].cant=+this.value" style="width:60px"></td>
       <td><code style="font-size:11px;color:var(--teal);min-width:90px;display:block">${it.cod||'—'}</code></td>
@@ -4000,7 +3998,7 @@ function aeRenderItems(){
           style="width:100%;padding:4px 8px;background:var(--navy);border:1px solid ${it.cod?'var(--teal)':'var(--border)'};border-radius:5px;color:var(--text);font-size:12px">
         <div id="ae-ac-list-${i}" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:9999;background:var(--surface);border:1px solid var(--teal);border-radius:7px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)"></div>
       </td>
-      <td><input value="${uVal}" onchange="aeItems[${i}].unidad=this.value"
+      <td><input value="${it.unidad||''}" onchange="aeItems[${i}].unidad=this.value"
           placeholder="Unidad..." style="width:90px;padding:4px 8px;background:var(--navy);border:1px solid var(--border);border-radius:5px;color:var(--teal);font-size:12px;font-weight:600"></td>
       <td><input value="${it.obs||''}" onchange="aeItems[${i}].obs=this.value" placeholder="Obs..." style="min-width:120px"></td>
       <td><button class="btn btn-d btn-sm" onclick="aeItems.splice(${i},1);aeRenderItems()">✕</button></td>
@@ -4145,8 +4143,8 @@ function aePreviewData(a){
       <div class="dmi"><strong>Req. Mensual</strong>${a.rmId||'—'}${a.rmId?'<span class="dlb">VINCULADO</span>':''}</div>
     </div>
     <p style="font-size:11px;color:#555;margin:14px 0 8px">Por medio de la presente, dejo constancia de la entrega de los siguientes ítems:</p>
-    <table class="dt"><thead><tr><th>Cantidad</th><th>Código</th><th>Descripción</th><th>Observación</th></tr></thead>
-    <tbody>${a.items.map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
+    <table class="dt"><thead><tr><th>Cantidad</th><th>Código</th><th>Descripción</th><th>Unidad</th><th>Observación</th></tr></thead>
+    <tbody>${a.items.map(it=>`<tr><td>${it.cant}</td><td>${it.cod||'—'}</td><td>${it.desc}</td><td>${it.unidad||'—'}</td><td>${it.obs||'—'}</td></tr>`).join('')}</tbody></table>
     <div class="dsig">
       <div class="dsb"><strong>Verificado por Logística</strong>${a.verifNombre||'_____________'}<br>Cédula: ${a.verifCedula||'_____________'}<br><br>_______________________</div>
       <div class="dsb"><strong>Recibido por</strong>${a.recNombre||'_____________'}<br>Cédula: ${a.recCedula||'_____________'}<br><br>_______________________</div>
