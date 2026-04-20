@@ -1437,7 +1437,9 @@ function buildPanels(){
       <div class="fi"><label>Fecha</label><input id="ae-fecha" type="date"></div>
       <div class="fi"><label>Elaborado por</label><input id="ae-elaborado"></div>
       <div class="fi"><label>Tipo de Despacho</label><select id="ae-tipo"><option value="total">Despacho Total</option><option value="parcial">Despacho Parcial</option></select></div>
-      <div class="fi"><label>Punto / Cliente</label><select id="ae-cliente"><option value="">-- Seleccionar --</option></select></div>
+      <div class="fi"><label>Punto / Cliente</label><select id="ae-cliente" onchange="aeClienteChange()"><option value="">-- Seleccionar --</option></select>
+        <input id="ae-cliente-manual" placeholder="Escribe el nombre del cliente..." style="display:none;margin-top:6px;padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--teal);color:var(--text);font-family:inherit;font-size:13px;outline:none;width:100%" oninput="aeClienteManualChange()">
+      </div>
       <div class="fi"><label>Dpto. Solicitante</label><select id="ae-depto"><option>ADMINISTRATIVO</option><option>LOGISTICA</option><option>OPERATIVO</option><option>GERENCIA GENERAL</option></select></div>
       <div class="fi"><label>Nombre Solicitante</label><input id="ae-solicitante"></div>
       <div class="fi"><label>Entregado a</label><select id="ae-entregado-a"><option value="">-- Seleccionar --</option></select></div>
@@ -2196,7 +2198,10 @@ function initApp(){
   if(ps) PROVEEDORES.forEach(p=>{const o=document.createElement('option');o.value=p.cod;o.textContent=p.nom;ps.appendChild(o);});
   // Clientes
   const cs=document.getElementById('ae-cliente');
-  if(cs) CLIENTES_LIST.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cs.appendChild(o);});
+  if(cs) {
+    CLIENTES_LIST.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cs.appendChild(o);});
+    const oManual=document.createElement('option');oManual.value='__manual__';oManual.textContent='✏️ Escribir cliente no listado...';cs.appendChild(oManual);
+  }
   // Responsables
   const rs=document.getElementById('ae-entregado-a');
   if(rs) RESPONSABLES.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;rs.appendChild(o);});
@@ -3912,6 +3917,27 @@ function aeRefreshSelects(){
   db.reqMensuales.forEach(r=>{const o=document.createElement('option');o.value=r.numero;o.textContent=`${r.numero} — ${r.periodo}`;sel.appendChild(o);});
 }
 
+function aeClienteChange(){
+  const sel=document.getElementById('ae-cliente');
+  const manual=document.getElementById('ae-cliente-manual');
+  if(sel.value==='__manual__'){
+    manual.style.display='block';
+    manual.focus();
+  } else {
+    manual.style.display='none';
+    manual.value='';
+  }
+}
+function aeClienteManualChange(){
+  // keep the select showing __manual__ while user types
+}
+function aeGetCliente(){
+  const sel=document.getElementById('ae-cliente');
+  if(sel.value==='__manual__'){
+    return (document.getElementById('ae-cliente-manual').value||'').trim();
+  }
+  return sel.value;
+}
 function initAE(){aeRefreshSelects();aeRenderList();setNums();}
 
 function aeCargarRM(){
@@ -3975,7 +4001,7 @@ function aePickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){aeIte
 
 function aeGuardar(){
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
-  const num=g('ae-num'),fecha=g('ae-fecha'),elab=g('ae-elaborado'),cliente=g('ae-cliente');
+  const num=g('ae-num'),fecha=g('ae-fecha'),elab=g('ae-elaborado'),cliente=aeGetCliente();
   if(!fecha||!elab||!cliente){toast('Completa fecha, elaborado por y cliente',true);return;}
   if(!aeItems.length){toast('Agrega al menos un ítem',true);return;}
   const acta={numero:num,fecha,ciudad:g('ae-ciudad'),elaborado:elab,tipoDesp:g('ae-tipo'),cliente,
@@ -4014,7 +4040,21 @@ function aeEditar(idx){
   aeRMRef=a.rmId?db.reqMensuales.find(r=>r.numero===a.rmId)||null:null;
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   s('ae-num',a.numero);s('ae-fecha',a.fecha);s('ae-ciudad',a.ciudad||'GUAYAQUIL');
-  s('ae-elaborado',a.elaborado);s('ae-tipo',a.tipoDesp);s('ae-cliente',a.cliente);
+  s('ae-elaborado',a.elaborado);s('ae-tipo',a.tipoDesp);
+  // Handle client: if not in select options, use manual input
+  const csel=document.getElementById('ae-cliente');
+  const cman=document.getElementById('ae-cliente-manual');
+  if(csel&&cman){
+    const opts=Array.from(csel.options).map(o=>o.value);
+    if(a.cliente&&!opts.includes(a.cliente)){
+      csel.value='__manual__';
+      cman.value=a.cliente;
+      cman.style.display='block';
+    } else {
+      s('ae-cliente',a.cliente);
+      cman.value='';cman.style.display='none';
+    }
+  }
   s('ae-depto',a.depto);s('ae-solicitante',a.solicitante);s('ae-entregado-a',a.entregadoA);
   s('ae-depto-recibe',a.deptoRecibe);s('ae-verif-nombre',a.verifNombre);s('ae-verif-cedula',a.verifCedula);
   s('ae-rec-nombre',a.recNombre);s('ae-rec-cedula',a.recCedula);
@@ -4033,6 +4073,7 @@ function aeLimpiar(){
   document.getElementById('ae-edit-banner').style.display='none';
   ['ae-solicitante','ae-depto-recibe','ae-verif-nombre','ae-verif-cedula','ae-rec-nombre','ae-rec-cedula'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const c=document.getElementById('ae-cliente');if(c)c.value='';
+  const cm=document.getElementById('ae-cliente-manual');if(cm){cm.value='';cm.style.display='none';}
   const e=document.getElementById('ae-entregado-a');if(e)e.value='';
   const b=document.getElementById('ae-badge');if(b)b.style.display='none';
   const s=document.getElementById('ae-cli-sel');if(s)s.value='';
@@ -4067,7 +4108,7 @@ function aeGenerarTodas(){
 function aePreview(){
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
   aePreviewData({numero:g('ae-num'),fecha:g('ae-fecha'),ciudad:g('ae-ciudad'),elaborado:g('ae-elaborado'),
-    tipoDesp:g('ae-tipo'),cliente:g('ae-cliente'),depto:g('ae-depto'),solicitante:g('ae-solicitante'),
+    tipoDesp:g('ae-tipo'),cliente:aeGetCliente(),depto:g('ae-depto'),solicitante:g('ae-solicitante'),
     entregadoA:g('ae-entregado-a'),deptoRecibe:g('ae-depto-recibe'),items:aeItems,
     verifNombre:g('ae-verif-nombre'),verifCedula:g('ae-verif-cedula'),recNombre:g('ae-rec-nombre'),recCedula:g('ae-rec-cedula'),rmId:aeRMRef?.numero||null});
 }
