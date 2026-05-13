@@ -782,28 +782,47 @@ function pagosIndicadores(){
     if(!nec||!nec.fecha||!oc.fecha) return null;
     var d1=new Date(nec.fecha), d2=new Date(oc.fecha);
     if(isNaN(d1)||isNaN(d2)) return null;
-    return Math.round((d2-d1)/(1000*60*60*24));
+    // Usar valor absoluto: si la OC se registró con fecha anterior a la necesidad
+    // (error de captura), aún contabilizar los días correctamente
+    return Math.abs(Math.round((d2-d1)/(1000*60*60*24)));
   }
 
-  // Agrupar por mes del año seleccionado
+  // Agrupar por mes del año seleccionado.
+  // Se usa el mes de la Necesidad vinculada (si existe), o la fecha de la OC como fallback.
+  // Así, una OC ingresada tarde en otro mes pero cuya necesidad es de abril, cuenta en abril.
+  function mesReferencia(o){
+    if(o.necId){
+      var nec=necs.find(function(n){return n.numero===o.necId;});
+      if(nec&&nec.fecha){var dn=new Date(nec.fecha);if(!isNaN(dn))return{anio:dn.getFullYear(),mes:dn.getMonth()+1};}
+    }
+    if(!o.fecha) return null;
+    var d=new Date(o.fecha);
+    if(isNaN(d)) return null;
+    return {anio:d.getFullYear(),mes:d.getMonth()+1};
+  }
   var porMes=meses.map(function(mes,mi){
     var mesNum=mi+1;
     var ocsMes=ocs.filter(function(o){
-      if(!o.fecha) return false;
-      var d=new Date(o.fecha);
-      return d.getFullYear()===anio && d.getMonth()+1===mesNum;
+      var ref=mesReferencia(o);
+      if(!ref) return false;
+      return ref.anio===anio && ref.mes===mesNum;
     });
     var conNec=ocsMes.filter(function(o){return o.necId;});
-    var enTiempo=conNec.filter(function(o){
+    var manuales=ocsMes.filter(function(o){return !o.necId;});
+    // OC con necesidad: en tiempo si diasGestion <= 30
+    var enTiempoNec=conNec.filter(function(o){
       var d=diasGestion(o); return d!==null&&d<=30;
     });
-    var fueraTiempo=conNec.filter(function(o){
+    var fueraTiempoNec=conNec.filter(function(o){
       var d=diasGestion(o); return d!==null&&d>30;
     });
-    var sinNec=ocsMes.filter(function(o){return !o.necId;});
-    var pct=conNec.length>0?Math.round((enTiempo.length/conNec.length)*100):null;
+    // OC manuales: siempre cuentan como "en tiempo" (no tienen necesidad previa que medir)
+    var enTiempo=enTiempoNec.length+manuales.length;
+    var fueraTiempo=fueraTiempoNec.length;
+    var totalContar=ocsMes.length; // todas las OC del mes cuentan
+    var pct=totalContar>0?Math.round((enTiempo/totalContar)*100):null;
     return {mes:mes,mesNum:mesNum,total:ocsMes.length,conNec:conNec.length,
-      enTiempo:enTiempo.length,fueraTiempo:fueraTiempo.length,sinNec:sinNec.length,
+      enTiempo:enTiempo,fueraTiempo:fueraTiempo,sinNec:manuales.length,
       pct:pct,ocs:ocsMes,conNecOcs:conNec};
   });
 
@@ -812,7 +831,8 @@ function pagosIndicadores(){
   var totalConNec=porMes.reduce(function(s,m){return s+m.conNec;},0);
   var totalEnTiempo=porMes.reduce(function(s,m){return s+m.enTiempo;},0);
   var totalFuera=porMes.reduce(function(s,m){return s+m.fueraTiempo;},0);
-  var pctAnual=totalConNec>0?Math.round((totalEnTiempo/totalConNec)*100):0;
+  // El índice anual ahora usa el total de OC (incluye manuales)
+  var pctAnual=totalAnio>0?Math.round((totalEnTiempo/totalAnio)*100):0;
   var colAnual=pctAnual>=90?'var(--teal)':pctAnual>=70?'var(--amber)':'var(--red)';
 
   var resEl=document.getElementById('ind-resumen-anual');
@@ -858,9 +878,12 @@ function pagosIndicadores(){
     // Detalle OC del mes (mini lista)
     var detalle=m.ocs.length?m.ocs.map(function(o){
       var dias=diasGestion(o);
-      var dColor=dias===null?'var(--muted)':dias<=30?'var(--teal)':'var(--red)';
-      return '<span class="tag" style="font-size:9px;margin:1px;background:var(--surface2);color:'+dColor+'" title="'+(dias!==null?dias+' días':'Sin necesidad vinculada')+'">'
-        +o.numero+(dias!==null?' ('+dias+'d)':' (—)')+'</span>';
+      var esManual=!o.necId;
+      var dColor=esManual?'var(--teal)':dias===null?'var(--muted)':dias<=30?'var(--teal)':'var(--red)';
+      var label=esManual?'Manual':dias!==null?dias+'d':'—';
+      var tooltip=esManual?'OC manual — cuenta como en tiempo':dias!==null?dias+' días':'Sin necesidad vinculada';
+      return '<span class="tag" style="font-size:9px;margin:1px;background:var(--surface2);color:'+dColor+'" title="'+tooltip+'">'
+        +o.numero+' ('+label+')</span>';
     }).join(''):'—';
     return '<tr>'
       +'<td style="font-weight:700;min-width:100px">'+m.mes+'</td>'
