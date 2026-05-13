@@ -329,7 +329,17 @@ let _sb = null;  // Supabase client — se inicializa al cargar el SDK
 // ═══════════════════════════════
 // AUTH
 // ═══════════════════════════════
-const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'1234'};
+const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'1234',gerencia:'gerencia2024'};
+
+// Módulos permitidos por rol. 'all' = acceso total.
+const USER_ROLES={
+  admin:'all',
+  compras:'all',
+  bodega:'all',
+  supervisor:'all',
+  gerente:'all',
+  gerencia:['dashboard','pagos-proveedores','inventario','cobranzas']
+};
 let currentUser=null;
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function doLogin(){
@@ -340,6 +350,7 @@ function doLogin(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('udisp').textContent=u.toUpperCase();
+    applyRoleAccess(u);
     loadDB();
   } else {
     document.getElementById('lerr').textContent='Usuario o contraseña incorrectos.';
@@ -348,6 +359,8 @@ function doLogin(){
 }
 function doLogout(){
   currentUser=null;
+  // Restaurar visibilidad de todos los nav items al salir
+  document.querySelectorAll('.nav-item,.sb-sec').forEach(function(el){el.style.display='';});
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('lu').value='';document.getElementById('lp').value='';
@@ -2236,7 +2249,45 @@ function buildPanels(){
 // ═══════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════
+// CONTROL DE ACCESO POR ROL
+// ═══════════════════════════════
+function applyRoleAccess(user){
+  var allowed=USER_ROLES[user]||'all';
+  // Mostrar/ocultar items del sidebar según el rol
+  document.querySelectorAll('.nav-item').forEach(function(btn){
+    if(allowed==='all'){btn.style.display='';return;}
+    var onclick=btn.getAttribute('onclick')||'';
+    var match=onclick.match(/nav\('([^']+)'\)/);
+    var panel=match?match[1]:null;
+    // Mostrar si el panel está permitido o es el dashboard
+    btn.style.display=(panel&&allowed.indexOf(panel)>=0)||!panel?'':'none';
+  });
+  // Ocultar secciones del sidebar que queden vacías
+  document.querySelectorAll('.sidebar .sb-sec').forEach(function(sec){
+    var next=sec.nextElementSibling;
+    var hasVisible=false;
+    while(next&&!next.classList.contains('sb-sec')){
+      if(next.style.display!=='none'&&next.tagName==='BUTTON') hasVisible=true;
+      next=next.nextElementSibling;
+    }
+    sec.style.display=hasVisible?'':'none';
+  });
+  // Si gerencia, navegar directamente a compras y pagos al entrar
+  if(allowed!=='all'&&allowed.indexOf('pagos-proveedores')>=0){
+    setTimeout(function(){nav('pagos-proveedores');},100);
+  }
+}
+
+function canAccess(panel){
+  if(!currentUser) return false;
+  var allowed=USER_ROLES[currentUser]||'all';
+  if(allowed==='all') return true;
+  return allowed.indexOf(panel)>=0;
+}
+
+// ═══════════════════════════════
 function nav(name){
+  if(!canAccess(name)){toast('No tienes acceso a este módulo',true);return;}
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const p=document.getElementById('panel-'+name);
