@@ -916,9 +916,16 @@ function pagosGetRegistro(ocNum){
   if(!db.pagos) db.pagos={};
   if(!db.pagos[ocNum]) db.pagos[ocNum]={
     estadoEntrega:'Pendiente',formaPago:'',fechaTentPago:'',
-    estadoPago:'Pendiente',numCheque:'',fechaPago:'',obs:''
+    estadoPago:'Pendiente',numCheque:'',fechaPago:'',obs:'',
+    docTipoEdit:'',docNumEdit:'',docFechaEdit:'',docMontoEdit:''
   };
-  return db.pagos[ocNum];
+  // Migrar registros existentes sin campos doc
+  var r=db.pagos[ocNum];
+  if(r.docTipoEdit===undefined) r.docTipoEdit='';
+  if(r.docNumEdit===undefined) r.docNumEdit='';
+  if(r.docFechaEdit===undefined) r.docFechaEdit='';
+  if(r.docMontoEdit===undefined) r.docMontoEdit='';
+  return r;
 }
 
 function pagosStatsRender(){
@@ -990,6 +997,19 @@ function pagosRender(){
       return '<option value="'+v+'"'+(reg.formaPago===v?' selected':'')+'>'+v+'</option>';
     }).join('');
 
+    // Valores doc: usar override manual si existe, sino fallback al acta
+    var docTipoVal = reg.docTipoEdit || r.docTipo || '';
+    var docNumVal  = reg.docNumEdit  || r.docNum  || '';
+    var docFechaVal= reg.docFechaEdit|| r.docFecha|| '';
+    var docMontoVal= reg.docMontoEdit!==undefined&&reg.docMontoEdit!==''
+                       ? reg.docMontoEdit
+                       : (r.docMonto||'');
+
+    var inpStyle='padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none;';
+    var optsTipoDoc=['','Factura','Liquidación','Nota de venta','Recibo'].map(function(v){
+      return '<option value="'+v+'"'+(docTipoVal===v?' selected':'')+'>'+v+'</option>';
+    }).join('');
+
     return '<tr>'
       +'<td style="font-size:12px;font-weight:600">'+o.proveedor+'</td>'
       +'<td><code style="color:var(--teal);font-size:11px">'+o.numero+'</code></td>'
@@ -997,11 +1017,19 @@ function pagosRender(){
       +'<td style="font-size:11px">'+categoria+'</td>'
       +'<td style="font-size:11px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+detalle+'">'+detalle+'</td>'
       +'<td style="text-align:right;font-weight:700;color:var(--teal)">$'+(o.total||0).toFixed(2)+'</td>'
-      // Documento del acta
-      +'<td style="font-size:11px">'+(r.docTipo||'<span style="color:var(--muted)">—</span>')+'</td>'
-      +'<td style="font-size:11px;color:var(--teal)">'+(r.docNum||'<span style="color:var(--muted)">—</span>')+'</td>'
-      +'<td style="font-size:11px">'+(r.docFecha||'—')+'</td>'
-      +'<td style="text-align:right;font-size:11px">'+(r.docMonto?'$'+r.docMonto.toFixed(2):'—')+'</td>'
+      // Tipo Doc — editable (select)
+      +'<td><select data-oc="'+o.numero+'" data-campo="docTipoEdit" class="pagos-sel" style="'+inpStyle+'width:110px">'+optsTipoDoc+'</select></td>'
+      // N° Documento — editable
+      +'<td><input type="text" data-oc="'+o.numero+'" data-campo="docNumEdit" class="pagos-inp"'
+        +' value="'+docNumVal+'" placeholder="Nº doc"'
+        +' style="'+inpStyle+'width:90px;color:var(--teal)"></td>'
+      // Fecha Doc — editable
+      +'<td><input type="date" data-oc="'+o.numero+'" data-campo="docFechaEdit" class="pagos-inp"'
+        +' value="'+docFechaVal+'" style="'+inpStyle+'width:128px"></td>'
+      // Monto Doc — editable
+      +'<td><input type="number" step="0.01" min="0" data-oc="'+o.numero+'" data-campo="docMontoEdit" class="pagos-inp"'
+        +' value="'+docMontoVal+'" placeholder="0.00"'
+        +' style="'+inpStyle+'width:90px;text-align:right"></td>'
       // Estado entrega (editable)
       +'<td style="text-align:center"><select data-oc="'+o.numero+'" data-campo="estadoEntrega" class="pagos-sel"'
         +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsEnt+'</select></td>'
@@ -1068,9 +1096,16 @@ function pagosExportExcel(){
     var reg=pagosGetRegistro(o.numero);
     var actas=(db.actasIngreso||[]).filter(function(a){return a.ocId===o.numero;});
     var last=actas.length?actas[actas.length-1]:{};
+    // Usar valor editado manualmente si existe, sino fallback al acta
+    var docTipo  = reg.docTipoEdit  || last.docTipo  || '';
+    var docNum   = reg.docNumEdit   || last.docNum   || '';
+    var docFecha = reg.docFechaEdit || last.docFecha || '';
+    var docMonto = (reg.docMontoEdit!==undefined&&reg.docMontoEdit!=='')
+                     ? parseFloat(reg.docMontoEdit)||0
+                     : (last.docMonto||0);
     rows.push([
       o.proveedor,o.numero,o.fecha,o.tipo||'',o.detalle||'',o.total||0,
-      last.docTipo||'',last.docNum||'',last.docFecha||'',last.docMonto||0,
+      docTipo,docNum,docFecha,docMonto,
       reg.estadoEntrega,reg.formaPago,reg.fechaTentPago,
       reg.estadoPago,reg.numCheque,reg.fechaPago
     ]);
