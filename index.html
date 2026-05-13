@@ -1115,7 +1115,12 @@ function pagosUpdateReg(ocNum,campo,valor){
   var reg=pagosGetRegistro(ocNum);
   reg[campo]=valor;
   saveDB();
-  pagosStatsRender();
+  // Si cambia un estado, re-renderizar para actualizar los tags de color
+  if(campo==='estadoEntrega'||campo==='estadoPago'){
+    pagosRender();
+  } else {
+    pagosStatsRender();
+  }
 }
 
 function pagosExportExcel(){
