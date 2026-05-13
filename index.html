@@ -1855,6 +1855,16 @@ function buildPanels(){
     </div>
   </div>
   <div class="sg" id="campo-stats"></div>
+
+  <!-- PENDIENTES POR ENVIAR -->
+  <div class="card" id="campo-pendientes-card" style="border-color:rgba(224,82,99,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0;color:var(--red)">⚠️ Pendientes por enviar <span class="badge" id="campo-pend-count" style="background:var(--red);color:#fff">0</span></div>
+      <span style="font-size:11px;color:var(--muted)" id="campo-pend-periodo"></span>
+    </div>
+    <div id="campo-pendientes-body"><p style="color:var(--muted);font-size:13px">Selecciona un período para ver quién no ha enviado.</p></div>
+  </div>
+
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin:0">📊 Consolidado por cliente <span class="badge" id="campo-count">0</span></div>
@@ -6566,6 +6576,86 @@ async function catGuardarYPublicar(msg){
 async function initCampoPanel(){
   await initOperativosPanel(); await campoReload();
 }
+// ════════════════════════════
+// PENDIENTES DE REQUISICIÓN
+// ════════════════════════════
+async function campoPendientesRender(periodo, empresaFiltro, reqsRecibidas){
+  const bodyEl=document.getElementById('campo-pendientes-body');
+  const countEl=document.getElementById('campo-pend-count');
+  const perEl=document.getElementById('campo-pend-periodo');
+  if(!bodyEl) return;
+
+  // Sin período seleccionado: no podemos saber quién falta
+  if(!periodo){
+    bodyEl.innerHTML='<p style="color:var(--muted);font-size:13px">Selecciona un período para ver quién no ha enviado.</p>';
+    if(countEl) countEl.textContent='—';
+    if(perEl) perEl.textContent='';
+    document.getElementById('campo-pendientes-card').style.borderColor='rgba(122,146,176,.2)';
+    return;
+  }
+  if(perEl) perEl.textContent='Período: '+periodo;
+
+  // Cargar operativos registrados de Supabase (o usar caché si ya están)
+  let operativos=[];
+  if(_sb){
+    const {data}=await _sb.from('operativos_usuarios').select('nombre,empresa,clientes');
+    operativos=data||[];
+  }
+
+  // Filtrar por empresa si hay filtro
+  if(empresaFiltro) operativos=operativos.filter(op=>op.empresa===empresaFiltro);
+
+  // Construir set de lo que YA llegó: "operativo|cliente"
+  const recibidos=new Set(reqsRecibidas.map(r=>(r.operativo||'')+'|'+(r.cliente||'')));
+
+  // Calcular faltantes: cada operativo × cada cliente asignado que no envió
+  const pendientes=[];
+  operativos.forEach(op=>{
+    const clientes=op.clientes||[];
+    clientes.forEach(cli=>{
+      const key=(op.nombre||'')+'|'+cli;
+      if(!recibidos.has(key)){
+        pendientes.push({operativo:op.nombre,empresa:op.empresa,cliente:cli});
+      }
+    });
+  });
+
+  if(countEl) countEl.textContent=pendientes.length;
+  const card=document.getElementById('campo-pendientes-card');
+
+  if(!pendientes.length){
+    bodyEl.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="font-size:20px">✅</span><span style="color:var(--teal);font-size:13px;font-weight:600">¡Todos los operativos han enviado su requisición para este período!</span></div>';
+    if(card) card.style.borderColor='rgba(0,201,167,.3)';
+    return;
+  }
+
+  if(card) card.style.borderColor='rgba(224,82,99,.3)';
+
+  // Agrupar por operativo para mostrar de forma clara
+  const porOp={};
+  pendientes.forEach(p=>{
+    if(!porOp[p.operativo]) porOp[p.operativo]={empresa:p.empresa,clientes:[]};
+    porOp[p.operativo].clientes.push(p.cliente);
+  });
+
+  bodyEl.innerHTML='<div style="display:flex;flex-direction:column;gap:8px">'+
+    Object.entries(porOp).map(([op,data])=>`
+      <div style="background:var(--surface2);border:1px solid rgba(224,82,99,.25);border-radius:8px;padding:10px 14px;display:flex;align-items:flex-start;gap:12px">
+        <span style="font-size:18px;flex-shrink:0">👤</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${op}
+            <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:6px">${data.empresa}</span>
+          </div>
+          <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">
+            ${data.clientes.map(c=>`<span style="font-size:11px;background:rgba(224,82,99,.12);color:var(--red);border:1px solid rgba(224,82,99,.25);border-radius:5px;padding:2px 8px">❌ ${c}</span>`).join('')}
+          </div>
+        </div>
+        <span class="tag ter" style="font-size:10px;flex-shrink:0">${data.clientes.length} punto${data.clientes.length>1?'s':''}</span>
+      </div>`
+    ).join('')+
+  '</div>';
+}
+
 function campoRender(){
   const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
   const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
@@ -6585,6 +6675,10 @@ function campoRender(){
     <div class="sc st"><div class="l">Operativos</div><div class="v">${totalOps}</div><div class="s">Han enviado</div></div>
     <div class="sc sa"><div class="l">Clientes</div><div class="v">${totalClis}</div><div class="s">Cubiertos</div></div>`;
   document.getElementById('campo-count').textContent=reqs.length;
+
+  // ── PENDIENTES: cruzar operativos registrados vs los que enviaron ──
+  campoPendientesRender(periodo, empresa, reqs);
+
   const consolMap={};
   reqs.forEach(r=>{
     const emp=r.empresa||'—';const cli=r.cliente||'—';
