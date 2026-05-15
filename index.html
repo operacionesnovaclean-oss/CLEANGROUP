@@ -2758,10 +2758,10 @@ function rmGuardar(){
     document.getElementById('rm-edit-banner').style.display='none';
   } else {
     // NEW entry
-    db.reqMensuales.push({numero:num,periodo:per,fecha,elaborado:elab,data:JSON.parse(JSON.stringify(rm_data)),activos:act.length});
+    db.reqMensuales.push({numero:num,periodo:per,fecha,elaborado:elab,data:JSON.parse(JSON.stringify(rm_data)),activos:act.length,estado:'Pendiente Revisión',revision:{}});
     db.counters.rm++;
     saveDB();rmRenderList();setNums();
-    toast(`✅ Requisición ${num} guardada — ahora ve a "Necesidad de Compra"`);
+    toast(`✅ Requisición ${num} guardada — revísala antes de enviar a Necesidad de Compra`);
   }
   rmResetData();rm_empresa='';rm_cliente='';
   document.getElementById('rm-step2').style.display='none';
@@ -2782,16 +2782,23 @@ function rmRenderList(){
     const ocs=db.ordenesCompra.filter(o=>db.necesidades.filter(n=>n.rmId===r.numero).some(n=>n.numero===o.necId)).length;
     const aes=db.actasEntrega.filter(a=>a.rmId===r.numero).length;
     const act=Object.values(r.data||{}).reduce((s,e)=>s+Object.keys(e).filter(c=>Object.values(e[c]).some(v=>v.qty>0)).length,0);
-    return `<tr>
+    const est=r.estado||'Aprobada';
+    const estTag=est==='Pendiente Revisión'
+      ?'<span class="tag twn" style="font-size:10px">⏳ Pend. Revisión</span>'
+      :est==='En Revisión'
+        ?'<span class="tag tbl" style="font-size:10px">🔍 En Revisión</span>'
+        :'<span class="tag tok" style="font-size:10px">✅ Aprobada</span>';
+    const canNec=est==='Aprobada';
+    return `<tr style="${est==='Pendiente Revisión'?'background:rgba(245,166,35,.04)':''}">
       <td><code style="color:var(--teal)">${r.numero}</code></td>
       <td><strong>${r.periodo}</strong></td><td>${r.fecha}</td>
       <td>${act} clientes</td>
-      <td style="font-size:11px">${necs?`<span class="tag tok">✓ ${necs} Nec.</span>`:'<span class="tag twn">⏳ Sin Nec.</span>'} ${ocs?`<span class="tag tok" style="margin-left:3px">✓ ${ocs} OC</span>`:''} ${aes?`<span class="tag tok" style="margin-left:3px">✓ ${aes} Actas</span>`:''}</td>
-      <td>
-        <button class="btn btn-s btn-sm" onclick="rmEditar(${idx})">✏️ Editar</button>
-        <button class="btn btn-s btn-sm" title="Corregir solo el nombre del período" onclick="rmCorregirPeriodo(${idx})" style="color:var(--amber);border-color:var(--amber)">🗓️ Período</button>
-        <button class="btn btn-s btn-sm" onclick="rmCargar(${idx})">📂 Ver/Cargar</button>
-        <button class="btn btn-a btn-sm" onclick="nav('necesidad')">→ Nec.</button>
+      <td style="font-size:11px">${estTag} ${necs?`<span class="tag tok" style="margin-left:3px">✓ ${necs} Nec.</span>`:'<span class="tag" style="font-size:10px;background:rgba(122,146,176,.15);color:var(--muted)">Sin Nec.</span>'} ${ocs?`<span class="tag tok" style="margin-left:3px">✓ ${ocs} OC</span>`:''} ${aes?`<span class="tag tok" style="margin-left:3px">✓ ${aes} Actas</span>`:''}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="rmEditar(${idx})">✏️</button>
+        <button class="btn btn-s btn-sm" title="Corregir período" onclick="rmCorregirPeriodo(${idx})" style="color:var(--amber);border-color:var(--amber)">🗓️</button>
+        <button class="btn btn-p btn-sm" onclick="rmAbrirRevision(${idx})" style="background:${est==='Aprobada'?'var(--teal)':'var(--amber)'};color:var(--navy)">${est==='Aprobada'?'✅ Revisada':'🔍 Revisar'}</button>
+        ${canNec?`<button class="btn btn-a btn-sm" onclick="nav('necesidad')">→ Nec.</button>`:'<button class="btn btn-sm" style="opacity:.4;cursor:not-allowed;background:var(--surface2);color:var(--muted);border:1px solid var(--border)" title="Aprueba la revisión primero">→ Nec.</button>'}
         <button class="btn btn-d btn-sm" onclick="rmEliminar(${idx})">✕</button>
       </td>
     </tr>`;
@@ -2893,7 +2900,10 @@ let necGrupos=['Sin asignar','Químicos','Fundas','Insumos','Efectivo'];
 function necRefreshSelects(){
   const sel=document.getElementById('nec-rm-sel');if(!sel)return;
   sel.innerHTML='<option value="">-- Seleccionar --</option>';
-  db.reqMensuales.forEach(r=>{const o=document.createElement('option');o.value=r.numero;o.textContent=`${r.numero} — ${r.periodo}`;sel.appendChild(o);});
+  // Solo mostrar requisiciones Aprobadas (revisadas y validadas)
+  db.reqMensuales.filter(r=>(r.estado||'Aprobada')==='Aprobada').forEach(r=>{
+    const o=document.createElement('option');o.value=r.numero;o.textContent=`${r.numero} — ${r.periodo}`;sel.appendChild(o);
+  });
 }
 
 function initNec(){
@@ -3149,7 +3159,86 @@ function necPdfGrupo(grupo){
     </tbody></table>
     <div class="footer">Clean Group · Sistema ISO 9001 · ${grupo} · ${num} — ${periodo}</div>
     <script>window.onload=function(){window.print();}<\/script>
-  </body></html>`;
+  
+<!-- ══ MODAL REVISIÓN DE REQUISICIÓN ══════════════════════════════ -->
+<div id="modal-revision" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:900px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <!-- HEADER -->
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="rev-titulo">🔍 Revisión de Requisición</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="rev-subtitulo"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="rev-resumen-badge" style="font-size:11px;color:var(--muted)"></span>
+        <button onclick="rmCerrarRevision()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+    </div>
+
+    <!-- LEYENDA -->
+    <div style="padding:10px 22px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
+      <span>✅ <strong style="color:var(--teal)">Aprobado</strong> — pasa tal cual</span>
+      <span>✏️ <strong style="color:var(--amber)">Ajustado</strong> — modificas la cantidad</span>
+      <span>❌ <strong style="color:var(--red)">Rechazado</strong> — no procede</span>
+      <span style="color:var(--muted)">· Puedes agregar observación a cada ítem</span>
+    </div>
+
+    <!-- BODY -->
+    <div style="padding:18px 22px" id="rev-body">
+      <!-- se rellena con JS -->
+    </div>
+
+    <!-- FOOTER -->
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--surface);border-radius:0 0 14px 14px">
+      <div id="rev-footer-stats" style="font-size:12px;color:var(--muted)"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s" onclick="rmCerrarRevision()">Cancelar</button>
+        <button class="btn btn-a" onclick="rmGuardarRevision(false)">💾 Guardar borrador</button>
+        <button class="btn btn-p" onclick="rmGuardarRevision(true)">✅ Aprobar requisición</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ MODAL REVISIÓN REQUISICIÓN DE CAMPO ════════════════════════ -->
+<div id="modal-campo-rev" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:820px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <!-- HEADER -->
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="crev-titulo">🔍 Revisión de pedido</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="crev-sub"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="crev-badge" style="font-size:11px;color:var(--muted)"></span>
+        <button onclick="campoCerrarRevision()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+    </div>
+    <!-- LEYENDA -->
+    <div style="padding:8px 22px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;gap:16px;font-size:11px;flex-wrap:wrap">
+      <span>✅ <strong style="color:var(--teal)">Aprobado</strong></span>
+      <span>✏️ <strong style="color:var(--amber)">Cantidad ajustada</strong></span>
+      <span>❌ <strong style="color:var(--red)">Rechazado</strong> — no procede</span>
+      <span style="color:var(--muted)">Cambia la cantidad o el estado de cada ítem. Puedes agregar observación.</span>
+    </div>
+    <!-- ACCIONES RÁPIDAS -->
+    <div style="padding:10px 22px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-s btn-sm" onclick="crevMasivo('aprobado')" style="color:var(--teal);border-color:rgba(0,201,167,.4)">✅ Aprobar todos</button>
+      <button class="btn btn-s btn-sm" onclick="crevMasivo('rechazado')" style="color:var(--red);border-color:rgba(224,82,99,.4)">❌ Rechazar todos</button>
+      <span id="crev-stats" style="font-size:11px;color:var(--muted);align-self:center;margin-left:8px"></span>
+    </div>
+    <!-- BODY -->
+    <div style="padding:16px 22px;max-height:55vh;overflow-y:auto" id="crev-body"></div>
+    <!-- FOOTER -->
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--surface);border-radius:0 0 14px 14px">
+      <button class="btn btn-s" onclick="campoCerrarRevision()">Cancelar</button>
+      <button class="btn btn-p" onclick="crevGuardar()">💾 Guardar revisión</button>
+    </div>
+  </div>
+</div>
+
+</body></html>`;
   const w=window.open('','_blank','width=900,height=700');
   w.document.write(html);w.document.close();
 }
@@ -7125,12 +7214,21 @@ function campoRender(){
   if(listEl){listEl.innerHTML=reqs.map(r=>{
     const cnt=(r.items||[]).filter(i=>i.qty>0).length;
     const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
+    const revCount=(r.revision_campo||[]).filter(rv=>rv.estado).length;
+    const revTotal=(r.items||[]).filter(i=>i.qty>0).length;
+    const revTag=revCount===0?''
+      :revCount===revTotal
+        ?'<span class="tag tok" style="font-size:10px;margin-left:4px">✅ Revisada</span>'
+        :'<span class="tag twn" style="font-size:10px;margin-left:4px">🔍 '+revCount+'/'+revTotal+'</span>';
     return `<tr>
       <td><strong>${r.operativo||'—'}</strong></td><td>${r.empresa||'—'}</td><td>${r.cliente||'—'}</td>
       <td><span class="campo-period-tag">${r.periodo||'—'}</span></td>
       <td style="font-size:11px;color:var(--muted)">${fecha}</td>
-      <td><span class="tag tok">${cnt} ítems</span></td>
-      <td><button class="btn btn-d btn-sm" onclick="campoEliminar(this,${r.id})">🗑️</button></td>
+      <td><span class="tag tok">${cnt} ítems</span>${revTag}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-p btn-sm" onclick="campoAbrirRevision(${r.id})" style="background:var(--amber);color:var(--navy)">🔍 Revisar</button>
+        <button class="btn btn-d btn-sm" onclick="campoEliminar(this,${r.id})">🗑️</button>
+      </td>
     </tr>`;
   }).join('');}
 }
@@ -7274,6 +7372,392 @@ function campoGenerarRM(){
   if(empresa) rm_empresa=empresa;
   toast('✅ Datos cargados en Requisición Mensual → revisa y guarda');
   nav('req-mensual');
+}
+
+// ════════════════════════════════════════════════
+// MÓDULO DE REVISIÓN DE REQUISICIONES
+// ════════════════════════════════════════════════
+var _revIdx = null; // índice de la requisición en revisión
+
+function rmAbrirRevision(idx){
+  _revIdx = idx;
+  var r = db.reqMensuales[idx];
+  if(!r) return;
+
+  document.getElementById('rev-titulo').textContent = '🔍 Revisión — ' + r.numero;
+  document.getElementById('rev-subtitulo').textContent = r.periodo + ' · ' + r.elaborado + ' · ' + r.fecha;
+  document.getElementById('modal-revision').style.display = 'flex';
+
+  // Inicializar revision si no existe
+  if(!r.revision) r.revision = {};
+
+  _renderRevBody(r);
+  _updateRevFooter(r);
+}
+
+function rmCerrarRevision(){
+  document.getElementById('modal-revision').style.display = 'none';
+  _revIdx = null;
+}
+
+function _renderRevBody(r){
+  var body = document.getElementById('rev-body');
+  var data = r.data || {};
+  var revision = r.revision || {};
+  var html = '';
+
+  Object.entries(data).forEach(function(eEntry){
+    var empresa = eEntry[0], clientes = eEntry[1];
+    Object.entries(clientes).forEach(function(cEntry){
+      var cliente = cEntry[0], items = cEntry[1];
+      // Filtrar solo ítems con cantidad > 0
+      var itemsConQty = Object.entries(items).filter(function(iEntry){
+        var it = iEntry[1];
+        return it && (parseFloat(it.qty)||0) > 0;
+      });
+      if(!itemsConQty.length) return;
+
+      var totalItems = itemsConQty.length;
+      var aprobados  = itemsConQty.filter(function(ie){ return (revision[empresa+'||'+cliente+'||'+ie[0]]||{}).estado==='aprobado';  }).length;
+      var rechazados = itemsConQty.filter(function(ie){ return (revision[empresa+'||'+cliente+'||'+ie[0]]||{}).estado==='rechazado'; }).length;
+      var ajustados  = itemsConQty.filter(function(ie){ return (revision[empresa+'||'+cliente+'||'+ie[0]]||{}).estado==='ajustado';  }).length;
+
+      html += '<div style="margin-bottom:22px">';
+      // Cabecera cliente
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);flex-wrap:wrap">'
+            + '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">'+empresa+'</span>'
+            + '<span style="font-size:13px;font-weight:700;color:var(--text)">📍 '+cliente+'</span>'
+            + '<span style="font-size:10px;color:var(--muted);margin-left:4px">'+totalItems+' ítems'
+            + (aprobados  ? ' &nbsp;✅ '+aprobados  : '')
+            + (ajustados  ? ' &nbsp;✏️ '+ajustados  : '')
+            + (rechazados ? ' &nbsp;❌ '+rechazados : '')
+            + '</span>'
+            + '<span style="margin-left:auto;display:flex;gap:5px">'
+            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+','aprobado')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(0,201,167,.12);border:1px solid rgba(0,201,167,.3);color:var(--teal);cursor:pointer">✅ Todos</button>'
+            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+','rechazado')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(224,82,99,.1);border:1px solid rgba(224,82,99,.3);color:var(--red);cursor:pointer">❌ Rechazar todos</button>'
+            + '</span></div>';
+
+      // Ítems
+      html += '<div style="display:flex;flex-direction:column;gap:6px">';
+      itemsConQty.forEach(function(iEntry){
+        var key  = iEntry[0];
+        var item = iEntry[1];
+        var revKey = empresa+'||'+cliente+'||'+key;
+        var rev = revision[revKey] || {estado:'', qtyAjustada: item.qty, obs:''};
+        var est = rev.estado||'';
+
+        var bg  = est==='aprobado'  ? 'rgba(0,201,167,.08)'  : est==='rechazado' ? 'rgba(224,82,99,.08)'  : est==='ajustado' ? 'rgba(245,166,35,.08)'  : 'var(--surface2)';
+        var brd = est==='aprobado'  ? 'rgba(0,201,167,.3)'   : est==='rechazado' ? 'rgba(224,82,99,.3)'   : est==='ajustado' ? 'rgba(245,166,35,.3)'   : 'var(--border)';
+        var btnApr = 'padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid '+(est==='aprobado'?'var(--teal)':'var(--border)')+';background:'+(est==='aprobado'?'rgba(0,201,167,.2)':'transparent')+';color:'+(est==='aprobado'?'var(--teal)':'var(--muted)');
+        var btnRec = 'padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid '+(est==='rechazado'?'var(--red)':'var(--border)')+';background:'+(est==='rechazado'?'rgba(224,82,99,.2)':'transparent')+';color:'+(est==='rechazado'?'var(--red)':'var(--muted)');
+        var safeKey = JSON.stringify(revKey);
+        var qtyAdj = (rev.qtyAjustada !== undefined && rev.qtyAjustada !== null) ? rev.qtyAjustada : item.qty;
+
+        html += '<div style="background:'+bg+';border:1px solid '+brd+';border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+              + '<span style="font-size:10px;background:var(--navy);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted)">'+(item.grupo||'—')+'</span>'
+              + '<span style="flex:1;font-size:12px;font-weight:600;color:var(--text);min-width:160px">'+(item.prod||key)+'</span>'
+              + '<span style="font-size:11px;color:var(--muted)">Pedido: <strong style="color:var(--text)">'+item.qty+' '+(item.unidad||'')+'</strong></span>'
+              + '<div style="display:flex;align-items:center;gap:5px">'
+              + '<label style="font-size:10px;color:var(--muted)">Aprobar:</label>'
+              + '<input type="number" min="0" step="1" value="'+qtyAdj+'" '
+              + 'data-revkey='+safeKey+' '
+              + 'onchange="revSetQty(this)" '
+              + 'style="width:70px;padding:4px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;text-align:center">'
+              + '<span style="font-size:10px;color:var(--muted)">'+(item.unidad||'')+'</span>'
+              + '</div>'
+              + '<div style="display:flex;gap:4px">'
+              + '<button title="Aprobar"  onclick="revSetEstado('+safeKey+','aprobado')"  style="'+btnApr+'">✅</button>'
+              + '<button title="Rechazar" onclick="revSetEstado('+safeKey+','rechazado')" style="'+btnRec+'">❌</button>'
+              + '</div>'
+              + '<input type="text" placeholder="Observación (opcional)..." value="'+(rev.obs||'')+'" '
+              + 'data-revkey='+safeKey+' '
+              + 'onchange="revSetObs(this)" '
+              + 'style="flex:2;min-width:180px;padding:4px 9px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:11px;outline:none">'
+              + '</div>';
+      });
+      html += '</div></div>';
+    });
+  });
+
+  if(!html) html = '<p style="color:var(--muted);text-align:center;padding:32px">Esta requisición no tiene ítems con cantidad.</p>';
+  body.innerHTML = html;
+}
+
+function _safeId(str){ return str.replace(/[^a-zA-Z0-9]/g,'_'); }
+
+function revSetEstado(revKey, estado){
+  var r = db.reqMensuales[_revIdx];
+  if(!r.revision) r.revision = {};
+  var cur = r.revision[revKey] || {};
+  // Si ya tiene ese estado, toggle off (vuelve a vacío)
+  if(cur.estado === estado){
+    cur.estado = '';
+  } else {
+    cur.estado = estado;
+    // Si rechazado, forzar qty a 0
+    if(estado === 'rechazado') cur.qtyAjustada = 0;
+    // Si aprobado y qty era 0, restaurar original
+    if(estado === 'aprobado' && (!cur.qtyAjustada || cur.qtyAjustada === 0)){
+      var parts = revKey.split('||');
+      var emp=parts[0], cli=parts[1], key=parts[2];
+      cur.qtyAjustada = ((r.data[emp]||{})[cli]||{})[key] ? r.data[emp][cli][key].qty : 0;
+    }
+  }
+  r.revision[revKey] = cur;
+  // Re-render this item
+  _renderRevBody(r);
+  _updateRevFooter(r);
+}
+
+function revSetQty(input){
+  var revKey = input.dataset.revkey;
+  var qty = parseFloat(input.value)||0;
+  var r = db.reqMensuales[_revIdx];
+  if(!r.revision) r.revision = {};
+  if(!r.revision[revKey]) r.revision[revKey] = {};
+  r.revision[revKey].qtyAjustada = qty;
+  // Auto-estado: si qty < original → ajustado, si igual → aprobado, si 0 → rechazado
+  var parts = revKey.split('||');
+  var emp=parts[0],cli=parts[1],key=parts[2];
+  var qtyOrig = ((r.data[emp]||{})[cli]||{})[key] ? r.data[emp][cli][key].qty : 0;
+  if(qty === 0) r.revision[revKey].estado = 'rechazado';
+  else if(qty < qtyOrig) r.revision[revKey].estado = 'ajustado';
+  else r.revision[revKey].estado = 'aprobado';
+  _renderRevBody(r);
+  _updateRevFooter(r);
+}
+
+function revSetObs(input){
+  var revKey = input.dataset.revkey;
+  var r = db.reqMensuales[_revIdx];
+  if(!r.revision) r.revision = {};
+  if(!r.revision[revKey]) r.revision[revKey] = {};
+  r.revision[revKey].obs = input.value;
+}
+
+function revMasivo(empresa, cliente, estado){
+  var r = db.reqMensuales[_revIdx];
+  if(!r.revision) r.revision = {};
+  var clItems = (r.data[empresa]||{})[cliente]||{};
+  Object.entries(clItems).forEach(function(ie){
+    if(ie[1].qty <= 0) return;
+    var revKey = empresa+'||'+cliente+'||'+ie[0];
+    if(!r.revision[revKey]) r.revision[revKey] = {};
+    r.revision[revKey].estado = estado;
+    r.revision[revKey].qtyAjustada = estado==='rechazado' ? 0 : ie[1].qty;
+  });
+  _renderRevBody(r);
+  _updateRevFooter(r);
+}
+
+function _updateRevFooter(r){
+  var revision = r.revision || {};
+  var data = r.data || {};
+  var total=0, aprobados=0, ajustados=0, rechazados=0, sinRevisar=0;
+  Object.entries(data).forEach(function(eE){
+    Object.entries(eE[1]).forEach(function(cE){
+      Object.entries(cE[1]).forEach(function(iE){
+        if(iE[1].qty<=0) return;
+        total++;
+        var rk = eE[0]+'||'+cE[0]+'||'+iE[0];
+        var est = (revision[rk]||{}).estado||'';
+        if(est==='aprobado') aprobados++;
+        else if(est==='ajustado') ajustados++;
+        else if(est==='rechazado') rechazados++;
+        else sinRevisar++;
+      });
+    });
+  });
+  document.getElementById('rev-resumen-badge').textContent =
+    total + ' ítems · ✅ '+aprobados+' · ✏️ '+ajustados+' · ❌ '+rechazados+(sinRevisar?' · ⏳ '+sinRevisar+' sin revisar':'');
+  document.getElementById('rev-footer-stats').innerHTML =
+    sinRevisar
+      ? '<span style="color:var(--amber)">⚠️ Quedan '+sinRevisar+' ítems sin decisión</span>'
+      : '<span style="color:var(--teal)">✅ Todos los ítems revisados</span>';
+}
+
+function rmGuardarRevision(aprobar){
+  if(_revIdx === null) return;
+  var r = db.reqMensuales[_revIdx];
+
+  if(aprobar){
+    // Verificar que todos los ítems tengan decisión
+    var sinRevisar = 0;
+    var data = r.data||{};
+    Object.entries(data).forEach(function(eE){
+      Object.entries(eE[1]).forEach(function(cE){
+        Object.entries(cE[1]).forEach(function(iE){
+          if(iE[1].qty<=0) return;
+          var rk=eE[0]+'||'+cE[0]+'||'+iE[0];
+          if(!(r.revision[rk]||{}).estado) sinRevisar++;
+        });
+      });
+    });
+    if(sinRevisar > 0){
+      toast('Hay '+sinRevisar+' ítems sin decisión. Revísalos todos antes de aprobar.', true);
+      return;
+    }
+    r.estado = 'Aprobada';
+    toast('✅ Requisición '+r.numero+' aprobada — disponible en Necesidad de Compra');
+  } else {
+    r.estado = 'En Revisión';
+    toast('💾 Borrador guardado — la requisición queda En Revisión');
+  }
+
+  saveDB();
+  rmRenderList();
+  necRefreshSelects();
+  rmCerrarRevision();
+}
+
+
+// ════════════════════════════════════════════════
+// REVISIÓN DE REQUISICIONES DE CAMPO
+// ════════════════════════════════════════════════
+var _crevReq = null; // req de campo en revisión (objeto completo)
+
+function campoAbrirRevision(reqId){
+  var req = _campoReqs.find(function(r){ return Number(r.id)===Number(reqId); });
+  if(!req){ toast('Requisición no encontrada', true); return; }
+  _crevReq = JSON.parse(JSON.stringify(req)); // copia local
+  if(!_crevReq.revision_campo) _crevReq.revision_campo = [];
+
+  document.getElementById('crev-titulo').textContent = '🔍 Pedido de ' + (req.operativo||'—');
+  document.getElementById('crev-sub').textContent =
+    (req.empresa||'—') + ' · ' + (req.cliente||'—') + ' · Período: ' + (req.periodo||'—');
+  document.getElementById('modal-campo-rev').style.display = 'flex';
+  crevRender();
+}
+
+function campoCerrarRevision(){
+  document.getElementById('modal-campo-rev').style.display = 'none';
+  _crevReq = null;
+}
+
+function crevRender(){
+  if(!_crevReq) return;
+  var items = (_crevReq.items||[]).filter(function(i){ return parseFloat(i.qty)>0; });
+  var revision = _crevReq.revision_campo || [];
+
+  // Stats
+  var aprobados  = revision.filter(function(rv){ return rv.estado==='aprobado';  }).length;
+  var ajustados  = revision.filter(function(rv){ return rv.estado==='ajustado';  }).length;
+  var rechazados = revision.filter(function(rv){ return rv.estado==='rechazado'; }).length;
+  var sinRev     = items.length - revision.filter(function(rv){ return rv.estado; }).length;
+
+  document.getElementById('crev-badge').textContent =
+    items.length + ' ítems · ✅ '+aprobados+' · ✏️ '+ajustados+' · ❌ '+rechazados+(sinRev?' · ⏳ '+sinRev:' — todos revisados');
+  document.getElementById('crev-stats').textContent =
+    sinRev ? '⚠️ '+sinRev+' sin decisión' : '✅ Todos revisados';
+
+  var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+  items.forEach(function(item){
+    var rv = revision.find(function(x){ return x.prod===item.prod && x.unidad===item.unidad; }) || {};
+    var est = rv.estado||'';
+    var bg  = est==='aprobado'  ? 'rgba(0,201,167,.08)'  : est==='rechazado' ? 'rgba(224,82,99,.08)'  : est==='ajustado' ? 'rgba(245,166,35,.08)'  : 'var(--surface2)';
+    var brd = est==='aprobado'  ? 'rgba(0,201,167,.3)'   : est==='rechazado' ? 'rgba(224,82,99,.3)'   : est==='ajustado' ? 'rgba(245,166,35,.3)'   : 'var(--border)';
+    var qtyAdj = rv.qtyAjustada !== undefined ? rv.qtyAjustada : item.qty;
+    var prodQ = JSON.stringify(item.prod), unidQ = JSON.stringify(item.unidad);
+
+    html += '<div style="background:'+bg+';border:1px solid '+brd+';border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      + '<span style="font-size:10px;background:var(--navy);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted);flex-shrink:0">'+(item.grupo||'—')+'</span>'
+      + '<span style="flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:150px">'+(item.prod||'—')+'</span>'
+      + '<span style="font-size:11px;color:var(--muted);flex-shrink:0">Solicitó: <strong style="color:var(--text)">'+item.qty+' '+(item.unidad||'')+'</strong></span>'
+      + '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">'
+      + '<label style="font-size:10px;color:var(--muted)">Aprobar:</label>'
+      + '<input type="number" min="0" step="1" value="'+qtyAdj+'" '
+      + 'data-prod='+prodQ+' data-unid='+unidQ+' '
+      + 'onchange="crevSetQty(this)" '
+      + 'style="width:65px;padding:4px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;text-align:center">'
+      + '<span style="font-size:10px;color:var(--muted)">'+(item.unidad||'')+'</span>'
+      + '</div>'
+      + '<div style="display:flex;gap:4px;flex-shrink:0">'
+      + '<button title="Aprobar" onclick="crevSetEstado('+prodQ+','+unidQ+','aprobado')" '
+      + 'style="padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
+      + 'border:1px solid '+(est==='aprobado'?'var(--teal)':'var(--border)')+';'
+      + 'background:'+(est==='aprobado'?'rgba(0,201,167,.2)':'transparent')+';'
+      + 'color:'+(est==='aprobado'?'var(--teal)':'var(--muted)')+'">✅</button>'
+      + '<button title="Rechazar" onclick="crevSetEstado('+prodQ+','+unidQ+','rechazado')" '
+      + 'style="padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
+      + 'border:1px solid '+(est==='rechazado'?'var(--red)':'var(--border)')+';'
+      + 'background:'+(est==='rechazado'?'rgba(224,82,99,.2)':'transparent')+';'
+      + 'color:'+(est==='rechazado'?'var(--red)':'var(--muted)')+'">❌</button>'
+      + '</div>'
+      + '<input type="text" placeholder="Observación..." value="'+(rv.obs||'')+'" '
+      + 'data-prod='+prodQ+' data-unid='+unidQ+' '
+      + 'onchange="crevSetObs(this)" '
+      + 'style="min-width:160px;flex:2;padding:4px 9px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:11px;outline:none">'
+      + '</div>';
+  });
+  html += '</div>';
+  document.getElementById('crev-body').innerHTML = html;
+}
+
+function crevGetRv(prod, unidad){
+  if(!_crevReq.revision_campo) _crevReq.revision_campo = [];
+  var rv = _crevReq.revision_campo.find(function(x){ return x.prod===prod && x.unidad===unidad; });
+  if(!rv){
+    rv = {prod:prod, unidad:unidad, estado:'', qtyAjustada:0, obs:''};
+    _crevReq.revision_campo.push(rv);
+  }
+  return rv;
+}
+
+function crevSetEstado(prod, unidad, estado){
+  var rv = crevGetRv(prod, unidad);
+  // Toggle
+  if(rv.estado === estado) { rv.estado = ''; }
+  else {
+    rv.estado = estado;
+    if(estado === 'rechazado') rv.qtyAjustada = 0;
+    if(estado === 'aprobado' && (!rv.qtyAjustada)){
+      var item = (_crevReq.items||[]).find(function(i){ return i.prod===prod && i.unidad===unidad; });
+      rv.qtyAjustada = item ? item.qty : 0;
+    }
+  }
+  crevRender();
+}
+
+function crevSetQty(input){
+  var prod = input.dataset.prod, unidad = input.dataset.unid;
+  var qty = parseFloat(input.value)||0;
+  var rv = crevGetRv(prod, unidad);
+  rv.qtyAjustada = qty;
+  var item = (_crevReq.items||[]).find(function(i){ return i.prod===prod && i.unidad===unidad; });
+  var qtyOrig = item ? item.qty : 0;
+  rv.estado = qty === 0 ? 'rechazado' : qty < qtyOrig ? 'ajustado' : 'aprobado';
+  crevRender();
+}
+
+function crevSetObs(input){
+  var prod = input.dataset.prod, unidad = input.dataset.unid;
+  crevGetRv(prod, unidad).obs = input.value;
+}
+
+function crevMasivo(estado){
+  var items = (_crevReq.items||[]).filter(function(i){ return parseFloat(i.qty)>0; });
+  items.forEach(function(item){
+    var rv = crevGetRv(item.prod, item.unidad);
+    rv.estado = estado;
+    rv.qtyAjustada = estado==='rechazado' ? 0 : item.qty;
+  });
+  crevRender();
+}
+
+async function crevGuardar(){
+  if(!_crevReq || !_sb){ toast('Sin conexión', true); return; }
+  try{
+    var {error} = await _sb.from('campo_reqs')
+      .update({revision_campo: _crevReq.revision_campo})
+      .eq('id', _crevReq.id);
+    if(error) throw error;
+    // Actualizar local
+    var idx = _campoReqs.findIndex(function(r){ return Number(r.id)===Number(_crevReq.id); });
+    if(idx>=0) _campoReqs[idx].revision_campo = _crevReq.revision_campo;
+    toast('✅ Revisión guardada');
+    campoRender();
+    campoCerrarRevision();
+  } catch(e){ toast('Error: '+e.message, true); }
 }
 </script>
 </body>
