@@ -4,6 +4,50 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clean Group – Sistema ISO 9001</title>
+<!-- Bloqueo de iframes file:// ANTES del SDK de Supabase.
+     Supabase v2 crea un iframe apuntando al mismo archivo como fallback
+     del mecanismo de lock de sesion. En file:// esto genera un error de
+     seguridad del navegador. Interceptamos el setter de src en el prototipo
+     para bloquear silenciosamente cualquier iframe con URL file://.
+     Tambien sobreescribimos navigator.locks con una implementacion simple. -->
+<script>
+(function() {
+  // 1) Bloquear iframes con src file:// a nivel de prototipo
+  if (window.location.protocol === 'file:') {
+    try {
+      var iframeProto = HTMLIFrameElement.prototype;
+      var originalSrcDescriptor = Object.getOwnPropertyDescriptor(iframeProto, 'src');
+      if (originalSrcDescriptor && originalSrcDescriptor.set) {
+        Object.defineProperty(iframeProto, 'src', {
+          get: originalSrcDescriptor.get,
+          set: function(value) {
+            if (typeof value === 'string' && value.startsWith('file://')) {
+              console.warn('[fix] iframe src file:// bloqueado:', value.slice(0, 60));
+              return; // bloquear silenciosamente
+            }
+            originalSrcDescriptor.set.call(this, value);
+          },
+          configurable: true
+        });
+      }
+    } catch(e) { console.warn('[fix] No se pudo interceptar HTMLIFrameElement.prototype.src', e); }
+
+    // 2) Sobreescribir navigator.locks con implementacion simple sin iframe
+    var _lock = {
+      request: function(name, optionsOrFn, fn) {
+        var cb = typeof optionsOrFn === 'function' ? optionsOrFn : fn;
+        return Promise.resolve().then(function() { return cb({ name: name }); });
+      },
+      query: function() { return Promise.resolve({ held: [], pending: [] }); }
+    };
+    try {
+      Object.defineProperty(navigator, 'locks', { value: _lock, writable: true, configurable: true });
+    } catch(e) {
+      try { navigator.locks = _lock; } catch(e2) {}
+    }
+  }
+})();
+</script>
 <!-- Supabase SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -6398,7 +6442,10 @@ function fnAdminExcel(){
     auth: {
       persistSession: false,
       autoRefreshToken: false,
-      detectSessionInUrl: false
+      detectSessionInUrl: false,
+      // Evita el mecanismo de lock con iframe en file://
+      // (soportado en supabase-js >= 2.44)
+      lock: function(name, acquireTimeout, fn) { return Promise.resolve().then(fn); }
     }
   });
   window._sb = _sb;
