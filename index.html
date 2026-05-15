@@ -7403,86 +7403,142 @@ function rmCerrarRevision(){
 
 function _renderRevBody(r){
   var body = document.getElementById('rev-body');
+  body.innerHTML = '';
   var data = r.data || {};
   var revision = r.revision || {};
-  var html = '';
+  var hasContent = false;
 
   Object.entries(data).forEach(function(eEntry){
     var empresa = eEntry[0], clientes = eEntry[1];
     Object.entries(clientes).forEach(function(cEntry){
       var cliente = cEntry[0], items = cEntry[1];
-      // Filtrar solo ítems con cantidad > 0
       var itemsConQty = Object.entries(items).filter(function(iEntry){
-        var it = iEntry[1];
-        return it && (parseFloat(it.qty)||0) > 0;
+        return iEntry[1] && parseFloat(iEntry[1].qty||0) > 0;
       });
       if(!itemsConQty.length) return;
+      hasContent = true;
 
       var totalItems = itemsConQty.length;
       var aprobados  = itemsConQty.filter(function(ie){ return (revision[empresa+'||'+cliente+'||'+ie[0]]||{}).estado==='aprobado';  }).length;
       var rechazados = itemsConQty.filter(function(ie){ return (revision[empresa+'||'+cliente+'||'+ie[0]]||{}).estado==='rechazado'; }).length;
       var ajustados  = itemsConQty.filter(function(ie){ return (revision[empresa+'||'+cliente+'||'+ie[0]]||{}).estado==='ajustado';  }).length;
 
-      html += '<div style="margin-bottom:22px">';
-      // Cabecera cliente
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);flex-wrap:wrap">'
-            + '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">'+empresa+'</span>'
-            + '<span style="font-size:13px;font-weight:700;color:var(--text)">📍 '+cliente+'</span>'
-            + '<span style="font-size:10px;color:var(--muted);margin-left:4px">'+totalItems+' ítems'
-            + (aprobados  ? ' &nbsp;✅ '+aprobados  : '')
-            + (ajustados  ? ' &nbsp;✏️ '+ajustados  : '')
-            + (rechazados ? ' &nbsp;❌ '+rechazados : '')
-            + '</span>'
-            + '<span style="margin-left:auto;display:flex;gap:5px">'
-            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+',\'aprobado\')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(0,201,167,.12);border:1px solid rgba(0,201,167,.3);color:var(--teal);cursor:pointer">✅ Todos</button>'
-            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+',\'rechazado\')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(224,82,99,.1);border:1px solid rgba(224,82,99,.3);color:var(--red);cursor:pointer">❌ Rechazar todos</button>'
-            + '</span></div>';
+      // Bloque cliente
+      var blk = document.createElement('div');
+      blk.style.marginBottom = '22px';
+
+      // Cabecera
+      var head = document.createElement('div');
+      head.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);flex-wrap:wrap';
+      head.innerHTML = '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">'+empresa+'</span>'
+        +'<span style="font-size:13px;font-weight:700;color:var(--text)">📍 '+cliente+'</span>'
+        +'<span style="font-size:10px;color:var(--muted);margin-left:4px">'+totalItems+' ítems'
+        +(aprobados?' &nbsp;✅ '+aprobados:'')
+        +(ajustados?' &nbsp;✏️ '+ajustados:'')
+        +(rechazados?' &nbsp;❌ '+rechazados:'')+'</span>';
+
+      // Botones masivos
+      var btnGrp = document.createElement('span');
+      btnGrp.style.cssText = 'margin-left:auto;display:flex;gap:5px';
+      ['aprobado','rechazado'].forEach(function(est){
+        var b = document.createElement('button');
+        b.textContent = est==='aprobado'?'✅ Todos':'❌ Rechazar todos';
+        b.style.cssText = 'font-size:10px;padding:2px 8px;border-radius:5px;cursor:pointer;'
+          +(est==='aprobado'?'background:rgba(0,201,167,.12);border:1px solid rgba(0,201,167,.3);color:var(--teal)'
+            :'background:rgba(224,82,99,.1);border:1px solid rgba(224,82,99,.3);color:var(--red)');
+        b.dataset.empresa = empresa; b.dataset.cliente = cliente; b.dataset.estado = est;
+        b.addEventListener('click', function(){ revMasivo(this.dataset.empresa, this.dataset.cliente, this.dataset.estado); });
+        btnGrp.appendChild(b);
+      });
+      head.appendChild(btnGrp);
+      blk.appendChild(head);
 
       // Ítems
-      html += '<div style="display:flex;flex-direction:column;gap:6px">';
+      var itemsWrap = document.createElement('div');
+      itemsWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+
       itemsConQty.forEach(function(iEntry){
         var key  = iEntry[0];
         var item = iEntry[1];
         var revKey = empresa+'||'+cliente+'||'+key;
         var rev = revision[revKey] || {estado:'', qtyAjustada: item.qty, obs:''};
         var est = rev.estado||'';
-
-        var bg  = est==='aprobado'  ? 'rgba(0,201,167,.08)'  : est==='rechazado' ? 'rgba(224,82,99,.08)'  : est==='ajustado' ? 'rgba(245,166,35,.08)'  : 'var(--surface2)';
-        var brd = est==='aprobado'  ? 'rgba(0,201,167,.3)'   : est==='rechazado' ? 'rgba(224,82,99,.3)'   : est==='ajustado' ? 'rgba(245,166,35,.3)'   : 'var(--border)';
-        var btnApr = 'padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid '+(est==='aprobado'?'var(--teal)':'var(--border)')+';background:'+(est==='aprobado'?'rgba(0,201,167,.2)':'transparent')+';color:'+(est==='aprobado'?'var(--teal)':'var(--muted)');
-        var btnRec = 'padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid '+(est==='rechazado'?'var(--red)':'var(--border)')+';background:'+(est==='rechazado'?'rgba(224,82,99,.2)':'transparent')+';color:'+(est==='rechazado'?'var(--red)':'var(--muted)');
-        var safeKey = JSON.stringify(revKey);
+        var bg  = est==='aprobado'?'rgba(0,201,167,.08)':est==='rechazado'?'rgba(224,82,99,.08)':est==='ajustado'?'rgba(245,166,35,.08)':'var(--surface2)';
+        var brd = est==='aprobado'?'rgba(0,201,167,.3)':est==='rechazado'?'rgba(224,82,99,.3)':est==='ajustado'?'rgba(245,166,35,.3)':'var(--border)';
         var qtyAdj = (rev.qtyAjustada !== undefined && rev.qtyAjustada !== null) ? rev.qtyAjustada : item.qty;
 
-        html += '<div style="background:'+bg+';border:1px solid '+brd+';border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-              + '<span style="font-size:10px;background:var(--navy);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted)">'+(item.grupo||'—')+'</span>'
-              + '<span style="flex:1;font-size:12px;font-weight:600;color:var(--text);min-width:160px">'+(item.prod||key)+'</span>'
-              + '<span style="font-size:11px;color:var(--muted)">Pedido: <strong style="color:var(--text)">'+item.qty+' '+(item.unidad||'')+'</strong></span>'
-              + '<div style="display:flex;align-items:center;gap:5px">'
-              + '<label style="font-size:10px;color:var(--muted)">Aprobar:</label>'
-              + '<input type="number" min="0" step="1" value="'+qtyAdj+'" '
-              + 'data-revkey='+safeKey+' '
-              + 'onchange="revSetQty(this)" '
-              + 'style="width:70px;padding:4px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;text-align:center">'
-              + '<span style="font-size:10px;color:var(--muted)">'+(item.unidad||'')+'</span>'
-              + '</div>'
-              + '<div style="display:flex;gap:4px">'
-              + '<button title="Aprobar"  onclick="revSetEstado('+safeKey+',\'aprobado\')"  style="'+btnApr+'">✅</button>'
-              + '<button title="Rechazar" onclick="revSetEstado('+safeKey+',\'rechazado\')" style="'+btnRec+'">❌</button>'
-              + '</div>'
-              + '<input type="text" placeholder="Observación (opcional)..." value="'+(rev.obs||'')+'" '
-              + 'data-revkey='+safeKey+' '
-              + 'onchange="revSetObs(this)" '
-              + 'style="flex:2;min-width:180px;padding:4px 9px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:11px;outline:none">'
-              + '</div>';
+        var row = document.createElement('div');
+        row.style.cssText = 'background:'+bg+';border:1px solid '+brd+';border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+
+        var grp = document.createElement('span');
+        grp.style.cssText = 'font-size:10px;background:var(--navy);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted)';
+        grp.textContent = item.grupo||'—';
+        row.appendChild(grp);
+
+        var nom = document.createElement('span');
+        nom.style.cssText = 'flex:1;font-size:12px;font-weight:600;color:var(--text);min-width:160px';
+        nom.textContent = item.prod||key;
+        row.appendChild(nom);
+
+        var sol = document.createElement('span');
+        sol.style.cssText = 'font-size:11px;color:var(--muted)';
+        sol.innerHTML = 'Pedido: <strong style="color:var(--text)">'+item.qty+' '+(item.unidad||'')+'</strong>';
+        row.appendChild(sol);
+
+        // Input qty
+        var qw = document.createElement('div');
+        qw.style.cssText = 'display:flex;align-items:center;gap:5px';
+        var ql = document.createElement('label');
+        ql.style.cssText = 'font-size:10px;color:var(--muted)';
+        ql.textContent = 'Aprobar:';
+        var qi = document.createElement('input');
+        qi.type='number'; qi.min='0'; qi.step='1'; qi.value=qtyAdj;
+        qi.dataset.revkey = revKey;
+        qi.style.cssText = 'width:70px;padding:4px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;text-align:center';
+        qi.addEventListener('change', function(){ revSetQty(this); });
+        var qu = document.createElement('span');
+        qu.style.cssText = 'font-size:10px;color:var(--muted)';
+        qu.textContent = item.unidad||'';
+        qw.appendChild(ql); qw.appendChild(qi); qw.appendChild(qu);
+        row.appendChild(qw);
+
+        // Botones ✅ ❌
+        var bw = document.createElement('div');
+        bw.style.cssText = 'display:flex;gap:4px';
+        ['aprobado','rechazado'].forEach(function(e2){
+          var btn = document.createElement('button');
+          btn.title = e2==='aprobado'?'Aprobar':'Rechazar';
+          btn.textContent = e2==='aprobado'?'✅':'❌';
+          btn.style.cssText = 'padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
+            +'border:1px solid '+(est===e2?(e2==='aprobado'?'var(--teal)':'var(--red)'):'var(--border)')+';'
+            +'background:'+(est===e2?(e2==='aprobado'?'rgba(0,201,167,.2)':'rgba(224,82,99,.2)'):'transparent')+';'
+            +'color:'+(est===e2?(e2==='aprobado'?'var(--teal)':'var(--red)'):'var(--muted)');
+          btn.dataset.revkey = revKey; btn.dataset.estado = e2;
+          btn.addEventListener('click', function(){ revSetEstado(this.dataset.revkey, this.dataset.estado); });
+          bw.appendChild(btn);
+        });
+        row.appendChild(bw);
+
+        // Observación
+        var obs = document.createElement('input');
+        obs.type='text'; obs.placeholder='Observación (opcional)...'; obs.value=rev.obs||'';
+        obs.dataset.revkey = revKey; obs.dataset.field = 'obs';
+        obs.style.cssText = 'flex:2;min-width:180px;padding:4px 9px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:11px;outline:none';
+        obs.addEventListener('change', function(){ revSetObs(this); });
+        row.appendChild(obs);
+
+        itemsWrap.appendChild(row);
       });
-      html += '</div></div>';
+      blk.appendChild(itemsWrap);
+      body.appendChild(blk);
     });
   });
 
-  if(!html) html = '<p style="color:var(--muted);text-align:center;padding:32px">Esta requisición no tiene ítems con cantidad.</p>';
-  body.innerHTML = html;
+  if(!hasContent){
+    body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:32px">Esta requisición no tiene ítems con cantidad.</p>';
+  }
 }
+
 
 function _safeId(str){ return str.replace(/[^a-zA-Z0-9]/g,'_'); }
 
@@ -7639,60 +7695,95 @@ function crevRender(){
   if(!_crevReq) return;
   var items = (_crevReq.items||[]).filter(function(i){ return parseFloat(i.qty)>0; });
   var revision = _crevReq.revision_campo || [];
-
-  // Stats
   var aprobados  = revision.filter(function(rv){ return rv.estado==='aprobado';  }).length;
   var ajustados  = revision.filter(function(rv){ return rv.estado==='ajustado';  }).length;
   var rechazados = revision.filter(function(rv){ return rv.estado==='rechazado'; }).length;
   var sinRev     = items.length - revision.filter(function(rv){ return rv.estado; }).length;
-
   document.getElementById('crev-badge').textContent =
-    items.length + ' ítems · ✅ '+aprobados+' · ✏️ '+ajustados+' · ❌ '+rechazados+(sinRev?' · ⏳ '+sinRev:' — todos revisados');
+    items.length+' ítems · ✅ '+aprobados+' · ✏️ '+ajustados+' · ❌ '+rechazados+(sinRev?' · ⏳ '+sinRev:' — todos revisados');
   document.getElementById('crev-stats').textContent =
     sinRev ? '⚠️ '+sinRev+' sin decisión' : '✅ Todos revisados';
 
-  var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+  var body = document.getElementById('crev-body');
+  body.innerHTML = '';
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+
   items.forEach(function(item){
     var rv = revision.find(function(x){ return x.prod===item.prod && x.unidad===item.unidad; }) || {};
     var est = rv.estado||'';
-    var bg  = est==='aprobado'  ? 'rgba(0,201,167,.08)'  : est==='rechazado' ? 'rgba(224,82,99,.08)'  : est==='ajustado' ? 'rgba(245,166,35,.08)'  : 'var(--surface2)';
-    var brd = est==='aprobado'  ? 'rgba(0,201,167,.3)'   : est==='rechazado' ? 'rgba(224,82,99,.3)'   : est==='ajustado' ? 'rgba(245,166,35,.3)'   : 'var(--border)';
+    var bg  = est==='aprobado'?'rgba(0,201,167,.08)':est==='rechazado'?'rgba(224,82,99,.08)':est==='ajustado'?'rgba(245,166,35,.08)':'var(--surface2)';
+    var brd = est==='aprobado'?'rgba(0,201,167,.3)':est==='rechazado'?'rgba(224,82,99,.3)':est==='ajustado'?'rgba(245,166,35,.3)':'var(--border)';
     var qtyAdj = rv.qtyAjustada !== undefined ? rv.qtyAjustada : item.qty;
-    var prodQ = JSON.stringify(item.prod), unidQ = JSON.stringify(item.unidad);
 
-    html += '<div style="background:'+bg+';border:1px solid '+brd+';border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      + '<span style="font-size:10px;background:var(--navy);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted);flex-shrink:0">'+(item.grupo||'—')+'</span>'
-      + '<span style="flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:150px">'+(item.prod||'—')+'</span>'
-      + '<span style="font-size:11px;color:var(--muted);flex-shrink:0">Solicitó: <strong style="color:var(--text)">'+item.qty+' '+(item.unidad||'')+'</strong></span>'
-      + '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">'
-      + '<label style="font-size:10px;color:var(--muted)">Aprobar:</label>'
-      + '<input type="number" min="0" step="1" value="'+qtyAdj+'" '
-      + 'data-prod='+prodQ+' data-unid='+unidQ+' '
-      + 'onchange="crevSetQty(this)" '
-      + 'style="width:65px;padding:4px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;text-align:center">'
-      + '<span style="font-size:10px;color:var(--muted)">'+(item.unidad||'')+'</span>'
-      + '</div>'
-      + '<div style="display:flex;gap:4px;flex-shrink:0">'
-      + '<button title="Aprobar" onclick="crevSetEstado('+prodQ+','+unidQ+',\'aprobado\')" '
-      + 'style="padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
-      + 'border:1px solid '+(est==='aprobado'?'var(--teal)':'var(--border)')+';'
-      + 'background:'+(est==='aprobado'?'rgba(0,201,167,.2)':'transparent')+';'
-      + 'color:'+(est==='aprobado'?'var(--teal)':'var(--muted)')+'">✅</button>'
-      + '<button title="Rechazar" onclick="crevSetEstado('+prodQ+','+unidQ+',\'rechazado\')" '
-      + 'style="padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
-      + 'border:1px solid '+(est==='rechazado'?'var(--red)':'var(--border)')+';'
-      + 'background:'+(est==='rechazado'?'rgba(224,82,99,.2)':'transparent')+';'
-      + 'color:'+(est==='rechazado'?'var(--red)':'var(--muted)')+'">❌</button>'
-      + '</div>'
-      + '<input type="text" placeholder="Observación..." value="'+(rv.obs||'')+'" '
-      + 'data-prod='+prodQ+' data-unid='+unidQ+' '
-      + 'onchange="crevSetObs(this)" '
-      + 'style="min-width:160px;flex:2;padding:4px 9px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:11px;outline:none">'
-      + '</div>';
+    var row = document.createElement('div');
+    row.style.cssText = 'background:'+bg+';border:1px solid '+brd+';border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+
+    // Grupo tag
+    var grp = document.createElement('span');
+    grp.style.cssText = 'font-size:10px;background:var(--navy);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted);flex-shrink:0';
+    grp.textContent = item.grupo||'—';
+    row.appendChild(grp);
+
+    // Nombre
+    var nom = document.createElement('span');
+    nom.style.cssText = 'flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:150px';
+    nom.textContent = item.prod||'—';
+    row.appendChild(nom);
+
+    // Solicitó
+    var sol = document.createElement('span');
+    sol.style.cssText = 'font-size:11px;color:var(--muted);flex-shrink:0';
+    sol.innerHTML = 'Solicitó: <strong style="color:var(--text)">'+item.qty+' '+(item.unidad||'')+'</strong>';
+    row.appendChild(sol);
+
+    // Input cantidad
+    var qwrap = document.createElement('div');
+    qwrap.style.cssText = 'display:flex;align-items:center;gap:5px;flex-shrink:0';
+    var qlbl = document.createElement('label');
+    qlbl.style.cssText = 'font-size:10px;color:var(--muted)';
+    qlbl.textContent = 'Aprobar:';
+    var qinp = document.createElement('input');
+    qinp.type='number'; qinp.min='0'; qinp.step='1'; qinp.value=qtyAdj;
+    qinp.dataset.prod = item.prod; qinp.dataset.unid = item.unidad;
+    qinp.style.cssText = 'width:65px;padding:4px 7px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;text-align:center';
+    qinp.addEventListener('change', function(){ crevSetQty(this); });
+    var qunit = document.createElement('span');
+    qunit.style.cssText = 'font-size:10px;color:var(--muted)';
+    qunit.textContent = item.unidad||'';
+    qwrap.appendChild(qlbl); qwrap.appendChild(qinp); qwrap.appendChild(qunit);
+    row.appendChild(qwrap);
+
+    // Botones estado
+    var btnWrap = document.createElement('div');
+    btnWrap.style.cssText = 'display:flex;gap:4px;flex-shrink:0';
+    ['aprobado','rechazado'].forEach(function(e2){
+      var btn = document.createElement('button');
+      btn.title = e2==='aprobado'?'Aprobar':'Rechazar';
+      btn.textContent = e2==='aprobado'?'✅':'❌';
+      btn.style.cssText = 'padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
+        +'border:1px solid '+(est===e2?(e2==='aprobado'?'var(--teal)':'var(--red)'):'var(--border)')+';'
+        +'background:'+(est===e2?(e2==='aprobado'?'rgba(0,201,167,.2)':'rgba(224,82,99,.2)'):'transparent')+';'
+        +'color:'+(est===e2?(e2==='aprobado'?'var(--teal)':'var(--red)'):'var(--muted)');
+      btn.dataset.prod = item.prod; btn.dataset.unid = item.unidad; btn.dataset.estado = e2;
+      btn.addEventListener('click', function(){ crevSetEstado(this.dataset.prod, this.dataset.unid, this.dataset.estado); });
+      btnWrap.appendChild(btn);
+    });
+    row.appendChild(btnWrap);
+
+    // Observación
+    var obs = document.createElement('input');
+    obs.type='text'; obs.placeholder='Observación...'; obs.value=rv.obs||'';
+    obs.dataset.prod = item.prod; obs.dataset.unid = item.unidad;
+    obs.style.cssText = 'min-width:160px;flex:2;padding:4px 9px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:11px;outline:none';
+    obs.addEventListener('change', function(){ crevSetObs(this); });
+    row.appendChild(obs);
+
+    wrap.appendChild(row);
   });
-  html += '</div>';
-  document.getElementById('crev-body').innerHTML = html;
+  body.appendChild(wrap);
 }
+
 
 function crevGetRv(prod, unidad){
   if(!_crevReq.revision_campo) _crevReq.revision_campo = [];
