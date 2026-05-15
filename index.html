@@ -1996,6 +1996,7 @@ function buildPanels(){
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-p" onclick="cobNuevaFactura()">+ Nueva Factura</button>
+          <button class="btn btn-s" onclick="cobAbrirImportador()">⬆️ Importar Excel</button>
           <button class="btn btn-a" onclick="cobPreviewMes()">&#128438; PDF</button>
           <button class="btn btn-s" onclick="cobExportarExcel()">&#8659; Excel</button>
         </div>
@@ -2137,6 +2138,73 @@ function buildPanels(){
   </div>
 </div>
 <!-- FIN PANEL COBRANZAS -->
+
+<!-- MODAL IMPORTADOR EXCEL CONTIFICO -->
+<div id="modal-importador" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:680px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <!-- HEAD -->
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0">⬆️ Importar Facturas desde Excel</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px">Exporta las facturas desde Contifico y súbelas aquí</p>
+      </div>
+      <button onclick="cobCerrarImportador()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <!-- BODY -->
+    <div style="padding:18px 20px;overflow-y:auto;flex:1">
+
+      <!-- PASO 1: Empresa -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:6px">1. ¿De qué empresa es el archivo?</label>
+        <select id="imp-cia" style="width:100%;padding:9px 12px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          <option value="">— Seleccionar empresa —</option>
+          <option value="NOVACLEAN S.A.">NOVACLEAN S.A.</option>
+          <option value="HOMECLEAN C.A">HOMECLEAN C.A</option>
+          <option value="INMOCLEAN S.A">INMOCLEAN S.A</option>
+        </select>
+      </div>
+
+      <!-- PASO 2: Subir archivo -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:6px">2. Sube el archivo Excel exportado de Contifico</label>
+        <div style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s" id="imp-dropzone" onclick="document.getElementById('imp-file').click()">
+          <div style="font-size:28px;margin-bottom:8px">📂</div>
+          <div style="font-size:13px;color:var(--text);font-weight:600">Clic para seleccionar archivo</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Formatos: .xlsx · .xls · .csv</div>
+          <div style="font-size:11px;color:var(--teal);margin-top:6px;font-weight:600" id="imp-filename"></div>
+        </div>
+        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="cobLeerArchivo(this)">
+      </div>
+
+      <!-- MAPEO DE COLUMNAS -->
+      <div id="imp-mapeo-section" style="display:none;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">3. Mapear columnas del archivo</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Indica qué columna de tu Excel corresponde a cada campo. Si Contifico exporta siempre igual, esto se guardará automáticamente.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="imp-mapeo-grid"></div>
+      </div>
+
+      <!-- PREVIEW -->
+      <div id="imp-preview-section" style="display:none">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">4. Vista previa — primeras 5 filas</div>
+        <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead id="imp-preview-head"></thead>
+            <tbody id="imp-preview-body"></tbody>
+          </table>
+        </div>
+        <div id="imp-resumen" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
+      </div>
+    </div>
+    <!-- FOOTER -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="font-size:11px;color:var(--muted)" id="imp-status">Selecciona la empresa y sube el archivo.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s" onclick="cobCerrarImportador()">Cancelar</button>
+        <button class="btn btn-p" id="imp-btn-importar" onclick="cobEjecutarImport()" disabled style="opacity:.5;cursor:not-allowed">✅ Importar facturas</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- PANEL CONTROL DE FUNDAS — CONSOLIDADO ADMIN -->
 <div class="panel" id="panel-fundas">
@@ -2344,7 +2412,13 @@ function setNums(){
   // Usar counters oficiales para evitar saltos en secuencial al editar
   const rmNumEl=document.getElementById('rm-num');
   if(rmNumEl && rm_editIdx===null && !rmNumEl.value) rmNumEl.value=String(db.counters.rm+1);
-  s('nec-num','NEC-'+m+'-'+pad(db.counters.nec+1));
+  // Contar NECs del mes actual para reiniciar numeración cada mes
+  var necDelMes=(db.necesidades||[]).filter(function(n){
+    if(!n.numero) return false;
+    var p=n.numero.split('-'); // NEC-MM-NNN
+    return p.length>=2 && p[1]===m;
+  }).length;
+  s('nec-num','NEC-'+m+'-'+pad(necDelMes+1));
   s('oc-num','OC-'+m+'-'+pad(db.counters.oc+1));
   // No sobreescribir si estamos en modo edición
   if(ai_editIdx===null) s('ai-num','ACT-ING-'+m+'-'+pad(db.counters.ai+1));
@@ -5544,6 +5618,299 @@ function cobPreviewMes(){
 }
 
 // ── EXCEL ─────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════
+// IMPORTADOR EXCEL CONTIFICO
+// ════════════════════════════════════════════
+var _impData   = [];   // filas del excel
+var _impCols   = [];   // cabeceras detectadas
+var _impMapeo  = {};   // mapeo guardado por el usuario
+
+// Campos que necesitamos mapear
+var IMP_CAMPOS = [
+  {id:'numDoc',      label:'N° Documento',      req:true},
+  {id:'fechaEmision',label:'Fecha Emisión',      req:true},
+  {id:'razonSocial', label:'Cliente / Razón Social', req:true},
+  {id:'subtotal12',  label:'Subtotal (IVA 15%)', req:false},
+  {id:'subtotal0',   label:'Subtotal (IVA 0%)',  req:false},
+  {id:'total',       label:'Total',              req:true},
+  {id:'saldo',       label:'Saldo / Pendiente',  req:false},
+  {id:'autorizacion',label:'Autorización SRI',   req:false},
+  {id:'estado',      label:'Estado factura',     req:false},
+];
+
+function cobAbrirImportador(){
+  document.getElementById('modal-importador').style.display='flex';
+  document.getElementById('imp-preview-section').style.display='none';
+  document.getElementById('imp-mapeo-section').style.display='none';
+  document.getElementById('imp-filename').textContent='';
+  document.getElementById('imp-status').textContent='Selecciona la empresa y sube el archivo.';
+  cobDesactivarImportBtn();
+  _impData=[]; _impCols=[];
+  // Restaurar mapeo guardado
+  var saved=localStorage.getItem('cg_imp_mapeo');
+  if(saved) try{ _impMapeo=JSON.parse(saved); }catch(e){}
+}
+function cobCerrarImportador(){
+  document.getElementById('modal-importador').style.display='none';
+  document.getElementById('imp-file').value='';
+  _impData=[]; _impCols=[];
+}
+function cobDesactivarImportBtn(){
+  var btn=document.getElementById('imp-btn-importar');
+  btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='not-allowed';
+}
+function cobActivarImportBtn(){
+  var btn=document.getElementById('imp-btn-importar');
+  btn.disabled=false; btn.style.opacity='1'; btn.style.cursor='pointer';
+}
+
+function cobLeerArchivo(input){
+  var file=input.files[0]; if(!file) return;
+  document.getElementById('imp-filename').textContent='📄 '+file.name;
+  document.getElementById('imp-dropzone').style.borderColor='var(--teal)';
+  document.getElementById('imp-status').textContent='Leyendo archivo...';
+
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      if(typeof XLSX==='undefined'){toast('Cargando lector Excel...',true);return;}
+      var wb=XLSX.read(e.target.result,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var json=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!json||json.length<2){document.getElementById('imp-status').textContent='⚠️ El archivo parece estar vacío.';return;}
+
+      // Cabeceras en la primera fila
+      _impCols=json[0].map(function(c){return String(c).trim();});
+      // Datos desde fila 2
+      _impData=json.slice(1).filter(function(r){return r.some(function(c){return c!=='';});});
+
+      document.getElementById('imp-status').textContent='✅ Archivo leído: '+_impData.length+' filas detectadas.';
+      cobRenderMapeo();
+      cobRenderPreview();
+    }catch(err){
+      document.getElementById('imp-status').textContent='❌ Error al leer: '+err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function cobRenderMapeo(){
+  var grid=document.getElementById('imp-mapeo-grid');
+  grid.innerHTML=IMP_CAMPOS.map(function(campo){
+    var selVal=_impMapeo[campo.id]||cobAutoDetectar(campo.id);
+    var opts=_impCols.map(function(c,i){
+      return'<option value="'+i+'"'+(selVal===String(i)?' selected':'')+'>'+c+'</option>';
+    }).join('');
+    return'<div style="display:flex;flex-direction:column;gap:4px">'
+      +'<label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">'
+      +campo.label+(campo.req?' <span style="color:var(--red)">*</span>':'')+'</label>'
+      +'<select id="imp-map-'+campo.id+'" onchange="cobGuardarMapeo()" '
+      +'style="padding:6px 9px;border-radius:6px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none">'
+      +'<option value="">— No incluido —</option>'+opts
+      +'</select></div>';
+  }).join('');
+  document.getElementById('imp-mapeo-section').style.display='block';
+}
+
+// Autodetección inteligente de columnas por nombre
+function cobAutoDetectar(campoId){
+  if(!_impCols.length) return '';
+  var patrones={
+    numDoc:     ['documento','numero','n°','nro','factura','num'],
+    fechaEmision:['fecha','emision','emission','date'],
+    razonSocial: ['razon','cliente','nombre','social','comprador'],
+    subtotal12:  ['subtotal','sub12','base12','grav','12%','15%'],
+    subtotal0:   ['subtotal0','sub0','base0','cero','0%','exento'],
+    total:       ['total','valor total','monto'],
+    saldo:       ['saldo','pendiente','debe','cobrar'],
+    autorizacion:['autorizacion','autoriza','clave','sri','numero sri'],
+    estado:      ['estado','status','condicion']
+  };
+  var pats=patrones[campoId]||[];
+  for(var i=0;i<_impCols.length;i++){
+    var col=_impCols[i].toLowerCase();
+    for(var j=0;j<pats.length;j++){
+      if(col.includes(pats[j])) return String(i);
+    }
+  }
+  return '';
+}
+
+function cobGuardarMapeo(){
+  IMP_CAMPOS.forEach(function(campo){
+    var el=document.getElementById('imp-map-'+campo.id);
+    if(el) _impMapeo[campo.id]=el.value;
+  });
+  localStorage.setItem('cg_imp_mapeo',JSON.stringify(_impMapeo));
+  cobRenderPreview();
+}
+
+function cobRenderPreview(){
+  // Verificar campos requeridos
+  var faltantes=IMP_CAMPOS.filter(function(c){
+    if(!c.req) return false;
+    var el=document.getElementById('imp-map-'+c.id);
+    return !el||!el.value;
+  }).map(function(c){return c.label;});
+
+  if(faltantes.length){
+    document.getElementById('imp-status').textContent='⚠️ Mapea los campos requeridos: '+faltantes.join(', ');
+    cobDesactivarImportBtn();
+    return;
+  }
+
+  // Preview 5 filas
+  var prev=_impData.slice(0,5);
+  var headCells=IMP_CAMPOS.filter(function(c){
+    var el=document.getElementById('imp-map-'+c.id); return el&&el.value;
+  }).map(function(c){return'<th style="padding:6px 9px;font-size:10px;color:var(--muted);text-transform:uppercase;background:var(--navy2);border-bottom:1px solid var(--border)">'+c.label+'</th>';});
+  document.getElementById('imp-preview-head').innerHTML='<tr>'+headCells.join('')+'</tr>';
+
+  var bodyRows=prev.map(function(row){
+    var cells=IMP_CAMPOS.filter(function(c){
+      var el=document.getElementById('imp-map-'+c.id); return el&&el.value;
+    }).map(function(c){
+      var el=document.getElementById('imp-map-'+c.id);
+      var val=el&&el.value!==''?row[parseInt(el.value)]:'';
+      return'<td style="padding:5px 9px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text)">'+String(val||'—')+'</td>';
+    });
+    return'<tr>'+cells.join('')+'</tr>';
+  }).join('');
+  document.getElementById('imp-preview-body').innerHTML=bodyRows;
+  document.getElementById('imp-preview-section').style.display='block';
+
+  // Resumen
+  var cia=document.getElementById('imp-cia').value||'—';
+  var nuevas=_impData.length;
+  document.getElementById('imp-resumen').innerHTML=
+    '<strong style="color:var(--teal)">'+nuevas+'</strong> facturas listas para importar a <strong style="color:var(--text)">'+cia+'</strong>. '
+    +'Las duplicadas (mismo N° doc + empresa) se saltarán automáticamente.';
+  document.getElementById('imp-status').textContent='✅ Listo para importar.';
+  cobActivarImportBtn();
+}
+
+function cobEjecutarImport(){
+  var cia=document.getElementById('imp-cia').value;
+  if(!cia){toast('Selecciona la empresa primero',true);return;}
+
+  // Leer mapeo actual
+  var mapa={};
+  IMP_CAMPOS.forEach(function(c){
+    var el=document.getElementById('imp-map-'+c.id);
+    mapa[c.id]=el&&el.value!==''?parseInt(el.value):null;
+  });
+
+  var importadas=0, saltadas=0, errores=0;
+  var hoy=new Date().toISOString().split('T')[0];
+  var mes=cob_mesActivo;
+
+  _impData.forEach(function(row){
+    try{
+      var numDoc  = mapa.numDoc!==null    ? String(row[mapa.numDoc]||'').trim()  : '';
+      var razon   = mapa.razonSocial!==null? String(row[mapa.razonSocial]||'').trim() : '';
+      var fechaEm = mapa.fechaEmision!==null? cobParseFecha(row[mapa.fechaEmision]) : hoy;
+      var total   = mapa.total!==null     ? cobParseNum(row[mapa.total])   : 0;
+      var sub12   = mapa.subtotal12!==null? cobParseNum(row[mapa.subtotal12]): 0;
+      var sub0    = mapa.subtotal0!==null ? cobParseNum(row[mapa.subtotal0]) : 0;
+      var saldo   = mapa.saldo!==null     ? cobParseNum(row[mapa.saldo])   : total;
+      var auth    = mapa.autorizacion!==null? String(row[mapa.autorizacion]||'').trim():'';
+      var estadoRaw=mapa.estado!==null    ? String(row[mapa.estado]||'').trim().toLowerCase():'';
+
+      if(!numDoc||!razon) return; // fila vacía
+
+      // Determinar estado
+      var estado='Abierta';
+      if(estadoRaw.includes('anula'))estado='Anulada';
+      else if(saldo<=0||estadoRaw.includes('cerr')||estadoRaw.includes('cobr')||estadoRaw.includes('pagad'))estado='Cerrada';
+
+      // Detectar mes desde fecha emisión
+      var mesFac=mes;
+      if(fechaEm){
+        var dp=fechaEm.split('-');
+        if(dp.length===3) mesFac=dp[0]+'-'+dp[1];
+      }
+
+      // Verificar duplicado
+      var dup=(db.cobFacturas||[]).find(function(f){return f.numDoc===numDoc&&f.cia===cia;});
+      if(dup){saltadas++;return;}
+
+      // Calcular IVA si no viene en el Excel
+      var iva=total-(sub12+sub0);
+      if(iva<0) iva=sub12*0.15;
+
+      if(!db.cobFacturas) db.cobFacturas=[];
+      db.cobFacturas.push({
+        fecha:       fechaEm||hoy,
+        numDoc:      numDoc,
+        estado:      estado,
+        cia:         cia,
+        razonSocial: razon,
+        fechaEmision:fechaEm||hoy,
+        fechaLimite: '',
+        diasGracia:  60,
+        subtotal:    sub12,
+        subtotal0:   sub0,
+        iva:         iva,
+        total:       total,
+        retenciones: 0,
+        cancelado:   Math.max(0,total-saldo),
+        saldo:       Math.max(0,saldo),
+        fechaCobro:  '',
+        estadoGestion:'',
+        comentario:  auth?'Autorización SRI: '+auth:'',
+        mes:         mesFac,
+        importado:   true
+      });
+      importadas++;
+    }catch(e){ errores++; }
+  });
+
+  saveDB();
+  cobLimpiarForm();
+  cobPopularFiltros();
+  cobRenderTabla();
+  cobRenderIndicadores();
+  cobCerrarImportador();
+
+  var msg='✅ Importadas: '+importadas;
+  if(saltadas)  msg+=' · Saltadas (duplicadas): '+saltadas;
+  if(errores)   msg+=' · Errores: '+errores;
+  toast(importadas>0?'✅ '+importadas+' facturas importadas':'Sin facturas nuevas');
+  if(importadas>0||saltadas>0) alert(msg);
+}
+
+// Parsear fecha desde varios formatos que usa Contifico
+function cobParseFecha(val){
+  if(!val) return '';
+  var s=String(val).trim();
+  // dd/mm/yyyy
+  var m1=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(m1) return m1[3]+'-'+m1[2].padStart(2,'0')+'-'+m1[1].padStart(2,'0');
+  // yyyy-mm-dd
+  var m2=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m2) return s;
+  // Excel serial number
+  var n=parseFloat(s);
+  if(!isNaN(n)&&n>40000){
+    var d=new Date(Math.round((n-25569)*864e5));
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  return s;
+}
+
+// Parsear número desde varios formatos ($1.234,56 / 1234.56 / etc.)
+function cobParseNum(val){
+  if(val===null||val===undefined||val==='') return 0;
+  var s=String(val).trim().replace(/[$\s]/g,'');
+  // Si usa punto como separador de miles y coma como decimal: 1.234,56
+  if(s.match(/\.\d{3}/) && s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+  // Si usa coma como separador de miles: 1,234.56
+  else s=s.replace(/,/g,'');
+  return parseFloat(s)||0;
+}
+
+function cobCiaCorta(cia){ return cia.split(' ')[0]; }
+
 function cobExportarExcel(){
   if(typeof XLSX==='undefined'){toast('Cargando Excel...',true);return;}
   var lista = (db.cobFacturas||[]).filter(function(f){return f.mes===cob_mesActivo;});
