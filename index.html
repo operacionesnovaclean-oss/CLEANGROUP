@@ -6735,7 +6735,8 @@ async function campoReload(){
   if(!_sb){toast('Sin conexión',true);return;}
   const {data,error}=await _sb.from('campo_reqs').select('*').order('fecha_iso',{ascending:false}).limit(500);
   if(error){toast('Error: '+error.message,true);return;}
-  _campoReqs=data||[]; campoRender();
+  _campoReqs=(data||[]).map(function(r){ if(!r.revision_campo) r.revision_campo=[]; return r; });
+  campoRender();
 }
 // ════════════════════════════════════════════
 // EDITOR DE CATÁLOGO
@@ -7046,7 +7047,7 @@ async function campoPendientesRender(periodo, empresaFiltro, reqsRecibidas){
     bodyEl.innerHTML='<p style="color:var(--muted);font-size:13px">Selecciona un período para ver quién no ha enviado.</p>';
     if(countEl) countEl.textContent='—';
     if(perEl) perEl.textContent='';
-    document.getElementById('campo-pendientes-card').style.borderColor='rgba(122,146,176,.2)';
+    var _pc=document.getElementById('campo-pendientes-card'); if(_pc) _pc.style.borderColor='rgba(122,146,176,.2)';
     return;
   }
   if(perEl) perEl.textContent='Período: '+periodo;
@@ -7133,7 +7134,7 @@ function campoRender(){
   document.getElementById('campo-count').textContent=reqs.length;
 
   // ── PENDIENTES: cruzar operativos registrados vs los que enviaron ──
-  campoPendientesRender(periodo, empresa, reqs);
+  try{ campoPendientesRender(periodo, empresa, reqs); }catch(e){ console.warn('campoPendientesRender:',e); }
 
   const consolMap={};
   reqs.forEach(r=>{
@@ -7433,8 +7434,8 @@ function _renderRevBody(r){
             + (rechazados ? ' &nbsp;❌ '+rechazados : '')
             + '</span>'
             + '<span style="margin-left:auto;display:flex;gap:5px">'
-            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+','aprobado')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(0,201,167,.12);border:1px solid rgba(0,201,167,.3);color:var(--teal);cursor:pointer">✅ Todos</button>'
-            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+','rechazado')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(224,82,99,.1);border:1px solid rgba(224,82,99,.3);color:var(--red);cursor:pointer">❌ Rechazar todos</button>'
+            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+',\'aprobado\')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(0,201,167,.12);border:1px solid rgba(0,201,167,.3);color:var(--teal);cursor:pointer">✅ Todos</button>'
+            + '<button onclick="revMasivo('+JSON.stringify(empresa)+','+JSON.stringify(cliente)+',\'rechazado\')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(224,82,99,.1);border:1px solid rgba(224,82,99,.3);color:var(--red);cursor:pointer">❌ Rechazar todos</button>'
             + '</span></div>';
 
       // Ítems
@@ -7466,8 +7467,8 @@ function _renderRevBody(r){
               + '<span style="font-size:10px;color:var(--muted)">'+(item.unidad||'')+'</span>'
               + '</div>'
               + '<div style="display:flex;gap:4px">'
-              + '<button title="Aprobar"  onclick="revSetEstado('+safeKey+','aprobado')"  style="'+btnApr+'">✅</button>'
-              + '<button title="Rechazar" onclick="revSetEstado('+safeKey+','rechazado')" style="'+btnRec+'">❌</button>'
+              + '<button title="Aprobar"  onclick="revSetEstado('+safeKey+',\'aprobado\')"  style="'+btnApr+'">✅</button>'
+              + '<button title="Rechazar" onclick="revSetEstado('+safeKey+',\'rechazado\')" style="'+btnRec+'">❌</button>'
               + '</div>'
               + '<input type="text" placeholder="Observación (opcional)..." value="'+(rev.obs||'')+'" '
               + 'data-revkey='+safeKey+' '
@@ -7672,12 +7673,12 @@ function crevRender(){
       + '<span style="font-size:10px;color:var(--muted)">'+(item.unidad||'')+'</span>'
       + '</div>'
       + '<div style="display:flex;gap:4px;flex-shrink:0">'
-      + '<button title="Aprobar" onclick="crevSetEstado('+prodQ+','+unidQ+','aprobado')" '
+      + '<button title="Aprobar" onclick="crevSetEstado('+prodQ+','+unidQ+',\'aprobado\')" '
       + 'style="padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
       + 'border:1px solid '+(est==='aprobado'?'var(--teal)':'var(--border)')+';'
       + 'background:'+(est==='aprobado'?'rgba(0,201,167,.2)':'transparent')+';'
       + 'color:'+(est==='aprobado'?'var(--teal)':'var(--muted)')+'">✅</button>'
-      + '<button title="Rechazar" onclick="crevSetEstado('+prodQ+','+unidQ+','rechazado')" '
+      + '<button title="Rechazar" onclick="crevSetEstado('+prodQ+','+unidQ+',\'rechazado\')" '
       + 'style="padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;'
       + 'border:1px solid '+(est==='rechazado'?'var(--red)':'var(--border)')+';'
       + 'background:'+(est==='rechazado'?'rgba(224,82,99,.2)':'transparent')+';'
@@ -7750,7 +7751,16 @@ async function crevGuardar(){
     var {error} = await _sb.from('campo_reqs')
       .update({revision_campo: _crevReq.revision_campo})
       .eq('id', _crevReq.id);
-    if(error) throw error;
+    if(error){
+      // Si la columna no existe en Supabase, guardar solo localmente
+      if(error.message && error.message.includes('column')){
+        toast('⚠️ Columna revision_campo no existe en Supabase — revisión guardada solo localmente', true);
+        var idx2 = _campoReqs.findIndex(function(r){ return Number(r.id)===Number(_crevReq.id); });
+        if(idx2>=0) _campoReqs[idx2].revision_campo = _crevReq.revision_campo;
+        campoRender(); campoCerrarRevision(); return;
+      }
+      throw error;
+    }
     // Actualizar local
     var idx = _campoReqs.findIndex(function(r){ return Number(r.id)===Number(_crevReq.id); });
     if(idx>=0) _campoReqs[idx].revision_campo = _crevReq.revision_campo;
