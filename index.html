@@ -318,6 +318,69 @@ tr:hover td{background:rgba(255,255,255,.02)}
   </div>
 </div>
 
+<!-- ══ MODAL REVISIÓN DE REQUISICIÓN ══════════════════════════════ -->
+<div id="modal-revision" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:900px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="rev-titulo">🔍 Revisión de Requisición</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="rev-subtitulo"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="rev-resumen-badge" style="font-size:11px;color:var(--muted)"></span>
+        <button onclick="rmCerrarRevision()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+    </div>
+    <div style="padding:10px 22px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
+      <span>✅ <strong style="color:var(--teal)">Aprobado</strong> — pasa tal cual</span>
+      <span>✏️ <strong style="color:var(--amber)">Ajustado</strong> — modificas la cantidad</span>
+      <span>❌ <strong style="color:var(--red)">Rechazado</strong> — no procede</span>
+      <span style="color:var(--muted)">· Puedes agregar observación a cada ítem</span>
+    </div>
+    <div style="padding:18px 22px" id="rev-body"></div>
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--surface);border-radius:0 0 14px 14px">
+      <div id="rev-footer-stats" style="font-size:12px;color:var(--muted)"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s" onclick="rmCerrarRevision()">Cancelar</button>
+        <button class="btn btn-a" onclick="rmGuardarRevision(false)">💾 Guardar borrador</button>
+        <button class="btn btn-p" onclick="rmGuardarRevision(true)">✅ Aprobar requisición</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL REVISIÓN REQUISICIÓN DE CAMPO ════════════════════════ -->
+<div id="modal-campo-rev" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:820px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="crev-titulo">🔍 Revisión de pedido</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="crev-sub"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="crev-badge" style="font-size:11px;color:var(--muted)"></span>
+        <button onclick="campoCerrarRevision()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+    </div>
+    <div style="padding:8px 22px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;gap:16px;font-size:11px;flex-wrap:wrap">
+      <span>✅ <strong style="color:var(--teal)">Aprobado</strong></span>
+      <span>✏️ <strong style="color:var(--amber)">Cantidad ajustada</strong></span>
+      <span>❌ <strong style="color:var(--red)">Rechazado</strong> — no procede</span>
+      <span style="color:var(--muted)">Cambia la cantidad o el estado de cada ítem. Puedes agregar observación.</span>
+    </div>
+    <div style="padding:10px 22px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-s btn-sm" onclick="crevMasivo('aprobado')" style="color:var(--teal);border-color:rgba(0,201,167,.4)">✅ Aprobar todos</button>
+      <button class="btn btn-s btn-sm" onclick="crevMasivo('rechazado')" style="color:var(--red);border-color:rgba(224,82,99,.4)">❌ Rechazar todos</button>
+      <span id="crev-stats" style="font-size:11px;color:var(--muted);align-self:center;margin-left:8px"></span>
+    </div>
+    <div style="padding:16px 22px;max-height:55vh;overflow-y:auto" id="crev-body"></div>
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--surface);border-radius:0 0 14px 14px">
+      <button class="btn btn-s" onclick="campoCerrarRevision()">Cancelar</button>
+      <button class="btn btn-p" onclick="crevGuardar()">💾 Guardar revisión</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════
 // SUPABASE CONFIG
@@ -3159,86 +3222,7 @@ function necPdfGrupo(grupo){
     </tbody></table>
     <div class="footer">Clean Group · Sistema ISO 9001 · ${grupo} · ${num} — ${periodo}</div>
     <script>window.onload=function(){window.print();}<\/script>
-  
-<!-- ══ MODAL REVISIÓN DE REQUISICIÓN ══════════════════════════════ -->
-<div id="modal-revision" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:900px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
-    <!-- HEADER -->
-    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
-      <div>
-        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="rev-titulo">🔍 Revisión de Requisición</h3>
-        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="rev-subtitulo"></p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span id="rev-resumen-badge" style="font-size:11px;color:var(--muted)"></span>
-        <button onclick="rmCerrarRevision()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
-      </div>
-    </div>
-
-    <!-- LEYENDA -->
-    <div style="padding:10px 22px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
-      <span>✅ <strong style="color:var(--teal)">Aprobado</strong> — pasa tal cual</span>
-      <span>✏️ <strong style="color:var(--amber)">Ajustado</strong> — modificas la cantidad</span>
-      <span>❌ <strong style="color:var(--red)">Rechazado</strong> — no procede</span>
-      <span style="color:var(--muted)">· Puedes agregar observación a cada ítem</span>
-    </div>
-
-    <!-- BODY -->
-    <div style="padding:18px 22px" id="rev-body">
-      <!-- se rellena con JS -->
-    </div>
-
-    <!-- FOOTER -->
-    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--surface);border-radius:0 0 14px 14px">
-      <div id="rev-footer-stats" style="font-size:12px;color:var(--muted)"></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-s" onclick="rmCerrarRevision()">Cancelar</button>
-        <button class="btn btn-a" onclick="rmGuardarRevision(false)">💾 Guardar borrador</button>
-        <button class="btn btn-p" onclick="rmGuardarRevision(true)">✅ Aprobar requisición</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<!-- ══ MODAL REVISIÓN REQUISICIÓN DE CAMPO ════════════════════════ -->
-<div id="modal-campo-rev" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:820px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
-    <!-- HEADER -->
-    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
-      <div>
-        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="crev-titulo">🔍 Revisión de pedido</h3>
-        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="crev-sub"></p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span id="crev-badge" style="font-size:11px;color:var(--muted)"></span>
-        <button onclick="campoCerrarRevision()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
-      </div>
-    </div>
-    <!-- LEYENDA -->
-    <div style="padding:8px 22px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;gap:16px;font-size:11px;flex-wrap:wrap">
-      <span>✅ <strong style="color:var(--teal)">Aprobado</strong></span>
-      <span>✏️ <strong style="color:var(--amber)">Cantidad ajustada</strong></span>
-      <span>❌ <strong style="color:var(--red)">Rechazado</strong> — no procede</span>
-      <span style="color:var(--muted)">Cambia la cantidad o el estado de cada ítem. Puedes agregar observación.</span>
-    </div>
-    <!-- ACCIONES RÁPIDAS -->
-    <div style="padding:10px 22px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-s btn-sm" onclick="crevMasivo('aprobado')" style="color:var(--teal);border-color:rgba(0,201,167,.4)">✅ Aprobar todos</button>
-      <button class="btn btn-s btn-sm" onclick="crevMasivo('rechazado')" style="color:var(--red);border-color:rgba(224,82,99,.4)">❌ Rechazar todos</button>
-      <span id="crev-stats" style="font-size:11px;color:var(--muted);align-self:center;margin-left:8px"></span>
-    </div>
-    <!-- BODY -->
-    <div style="padding:16px 22px;max-height:55vh;overflow-y:auto" id="crev-body"></div>
-    <!-- FOOTER -->
-    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--surface);border-radius:0 0 14px 14px">
-      <button class="btn btn-s" onclick="campoCerrarRevision()">Cancelar</button>
-      <button class="btn btn-p" onclick="crevGuardar()">💾 Guardar revisión</button>
-    </div>
-  </div>
-</div>
-
-</body></html>`;
+  </body></html>`;
   const w=window.open('','_blank','width=900,height=700');
   w.document.write(html);w.document.close();
 }
@@ -7227,8 +7211,8 @@ function campoRender(){
       <td style="font-size:11px;color:var(--muted)">${fecha}</td>
       <td><span class="tag tok">${cnt} ítems</span>${revTag}</td>
       <td style="display:flex;gap:4px">
-        <button class="btn btn-p btn-sm" onclick="campoAbrirRevision(${r.id})" style="background:var(--amber);color:var(--navy)">🔍 Revisar</button>
-        <button class="btn btn-d btn-sm" onclick="campoEliminar(this,${r.id})">🗑️</button>
+        <button class="btn btn-p btn-sm" onclick="campoAbrirRevision('${r.id}')" style="background:var(--amber);color:var(--navy)">🔍 Revisar</button>
+        <button class="btn btn-d btn-sm" onclick="campoEliminar(this,'${r.id}')">🗑️</button>
       </td>
     </tr>`;
   }).join('');}
@@ -7325,18 +7309,18 @@ async function campoEditarEmpresa(selId, ids){
 async function campoEliminar(btn,id){
   if(!confirm('¿Eliminar este envío?')) return;
   if(!_sb){toast('Sin conexión',true);return;}
-  const numId=parseInt(id,10);
+  const strId=String(id);
   btn.disabled=true;btn.textContent='...';
   try{
-    const{error,data}=await _sb.from('campo_reqs').delete().eq('id',numId).select();
+    const{error,data}=await _sb.from('campo_reqs').delete().eq('id',strId).select();
     if(error){
       console.error('Delete error:',error);
       toast('Error: '+error.message,true);
       btn.disabled=false;btn.textContent='🗑️';
       return;
     }
-    // Quitar de la lista local (comparar como número)
-    _campoReqs=_campoReqs.filter(r=>Number(r.id)!==numId);
+    // Quitar de la lista local (comparar como string UUID)
+    _campoReqs=_campoReqs.filter(r=>String(r.id)!==strId);
     toast('✅ Eliminado correctamente');
     campoRender();
   }catch(e){
@@ -7674,7 +7658,7 @@ function rmGuardarRevision(aprobar){
 var _crevReq = null; // req de campo en revisión (objeto completo)
 
 function campoAbrirRevision(reqId){
-  var req = _campoReqs.find(function(r){ return Number(r.id)===Number(reqId); });
+  var req = _campoReqs.find(function(r){ return String(r.id)===String(reqId); });
   if(!req){ toast('Requisición no encontrada', true); return; }
   _crevReq = JSON.parse(JSON.stringify(req)); // copia local
   if(!_crevReq.revision_campo) _crevReq.revision_campo = [];
@@ -7846,14 +7830,14 @@ async function crevGuardar(){
       // Si la columna no existe en Supabase, guardar solo localmente
       if(error.message && error.message.includes('column')){
         toast('⚠️ Columna revision_campo no existe en Supabase — revisión guardada solo localmente', true);
-        var idx2 = _campoReqs.findIndex(function(r){ return Number(r.id)===Number(_crevReq.id); });
+        var idx2 = _campoReqs.findIndex(function(r){ return String(r.id)===String(_crevReq.id); });
         if(idx2>=0) _campoReqs[idx2].revision_campo = _crevReq.revision_campo;
         campoRender(); campoCerrarRevision(); return;
       }
       throw error;
     }
     // Actualizar local
-    var idx = _campoReqs.findIndex(function(r){ return Number(r.id)===Number(_crevReq.id); });
+    var idx = _campoReqs.findIndex(function(r){ return String(r.id)===String(_crevReq.id); });
     if(idx>=0) _campoReqs[idx].revision_campo = _crevReq.revision_campo;
     toast('✅ Revisión guardada');
     campoRender();
