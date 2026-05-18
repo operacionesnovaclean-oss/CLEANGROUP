@@ -1379,6 +1379,7 @@ function buildPanels(){
           <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
         </select>
         <button class="btn btn-s" onclick="rmPreview()">🖨️ Vista previa</button>
+        <button class="btn btn-a btn-sm" onclick="rmImportarDesdeCampo()" title="Rellena las cantidades usando la revisión del módulo de Campo">📥 Importar desde Campo</button>
         <button class="btn btn-p" onclick="rmGuardar()">💾 Guardar Requisición</button>
       </div>
     </div>
@@ -2589,6 +2590,91 @@ function initRM(){
 // Helper — siempre usa el catálogo actualizado de Supabase si existe
 function rmCat(){ return (window._catalogoOverride&&Object.keys(window._catalogoOverride).length) ? window._catalogoOverride : RM_CAT; }
 
+// ── IMPORTAR DESDE CAMPO ────────────────────────────────────────────
+// Lee _campoReqs, aplica la revision_campo (aprobado/ajustado/rechazado)
+// y vuelca las cantidades resultantes en rm_data, respetando empresa/cliente.
+function rmImportarDesdeCampo(){
+  if(!window._campoReqs || !_campoReqs.length){
+    toast('No hay datos de campo cargados. Ve al módulo Campo primero.', true);
+    return;
+  }
+  const periodo = document.getElementById('rm-periodo').value.trim();
+  if(!periodo){
+    toast('Escribe primero el Período / Mes antes de importar.', true);
+    return;
+  }
+
+  // Filtrar por período (comparación flexible: MAYO 2026 === mayo 2026)
+  const reqs = _campoReqs.filter(r => {
+    const p = (r.periodo||'').trim().toUpperCase();
+    return p === periodo.toUpperCase() || p.includes(periodo.toUpperCase()) || periodo.toUpperCase().includes(p);
+  });
+
+  if(!reqs.length){
+    toast('No se encontraron envíos de campo para el período "'+periodo+'".', true);
+    return;
+  }
+
+  // Reconstruir rm_data desde cero
+  rmResetData();
+
+  let importados = 0, rechazados = 0, sinRevision = 0;
+
+  reqs.forEach(function(r){
+    const emp = r.empresa || '—';
+    const cli = r.cliente || '—';
+    const revision = r.revision_campo || [];
+    const tieneRevision = revision.some(rv => rv.estado);
+
+    (r.items || []).forEach(function(it){
+      if(!it.qty || +it.qty === 0) return;
+
+      const rv = revision.find(x => x.prod === it.prod && x.unidad === it.unidad);
+
+      // Si tiene revisión y fue rechazado → no importar
+      if(rv && rv.estado === 'rechazado'){
+        rechazados++;
+        return;
+      }
+
+      // Cantidad efectiva: ajustada si fue revisado, original si no
+      const qty = (rv && rv.estado && rv.qtyAjustada != null) ? +rv.qtyAjustada : +it.qty;
+      if(qty <= 0){ rechazados++; return; }
+      if(!rv || !rv.estado) sinRevision++;
+
+      const key = it.prod + '|' + (it.unidad || '');
+
+      // Asegurar que empresa/cliente/item existan en rm_data
+      if(!rm_data[emp]) rm_data[emp] = {};
+      if(!rm_data[emp][cli]) rm_data[emp][cli] = {};
+      if(!rm_data[emp][cli][key]){
+        rm_data[emp][cli][key] = { prod: it.prod, grupo: it.grupo || 'INSUMOS', unidad: it.unidad || '', qty: 0 };
+      }
+
+      rm_data[emp][cli][key].qty += qty;
+      importados++;
+    });
+  });
+
+  // Activar empresa del primer resultado para que se vea algo
+  const primeraEmpresa = reqs[0] ? (reqs[0].empresa || null) : null;
+  if(primeraEmpresa){
+    rm_empresa = primeraEmpresa;
+    rm_cliente = '';
+    rmUpdateEmpresaBtns();
+    document.getElementById('rm-emp-lbl').textContent = rm_empresa;
+    document.getElementById('rm-step2').style.display = 'block';
+    rmRenderClientesBtns();
+  }
+
+  rmRenderConsolidado();
+
+  let msg = '✅ Importados: '+importados+' ítems desde '+reqs.length+' envíos de campo.';
+  if(rechazados) msg += ' · ❌ '+rechazados+' rechazados/omitidos.';
+  if(sinRevision) msg += ' · ⏳ '+sinRevision+' sin revisar (se usó qty original).';
+  toast(msg);
+}
+
 function rmResetData(){
   rm_data={};
   const cat=rmCat();
@@ -2865,10 +2951,21 @@ function rmGuardar(){
     document.getElementById('rm-edit-banner').style.display='none';
   } else {
     // NEW entry
-    db.reqMensuales.push({numero:num,periodo:per,fecha,elaborado:elab,data:JSON.parse(JSON.stringify(rm_data)),activos:act.length,estado:'Pendiente Revisión',revision:{}});
+    // Auto-aprobar todos los ítems al guardar (la revisión ya se hizo en el módulo de Campo)
+    const autoRevision = {};
+    const newData = JSON.parse(JSON.stringify(rm_data));
+    Object.entries(newData).forEach(function(eE){
+      Object.entries(eE[1]).forEach(function(cE){
+        Object.entries(cE[1]).forEach(function(iE){
+          if(!iE[1]||parseFloat(iE[1].qty||0)<=0) return;
+          autoRevision[eE[0]+'||'+cE[0]+'||'+iE[0]]={estado:'aprobado',qtyAjustada:iE[1].qty,obs:''};
+        });
+      });
+    });
+    db.reqMensuales.push({numero:num,periodo:per,fecha,elaborado:elab,data:newData,activos:act.length,estado:'Aprobada',revision:autoRevision});
     db.counters.rm++;
     saveDB();rmRenderList();setNums();
-    toast(`✅ Requisición ${num} guardada — revísala antes de enviar a Necesidad de Compra`);
+    toast(`✅ Requisición ${num} guardada y aprobada — disponible en Necesidad de Compra`);
   }
   rmResetData();rm_empresa='';rm_cliente='';
   document.getElementById('rm-step2').style.display='none';
@@ -2890,11 +2987,7 @@ function rmRenderList(){
     const aes=db.actasEntrega.filter(a=>a.rmId===r.numero).length;
     const act=Object.values(r.data||{}).reduce((s,e)=>s+Object.keys(e).filter(c=>Object.values(e[c]).some(v=>v.qty>0)).length,0);
     const est=r.estado||'Aprobada';
-    const estTag=est==='Pendiente Revisión'
-      ?'<span class="tag twn" style="font-size:10px">⏳ Pend. Revisión</span>'
-      :est==='En Revisión'
-        ?'<span class="tag tbl" style="font-size:10px">🔍 En Revisión</span>'
-        :'<span class="tag tok" style="font-size:10px">✅ Aprobada</span>';
+    const estTag='<span class="tag tok" style="font-size:10px">✅ Aprobada</span>';
     const canNec=est==='Aprobada';
     return `<tr style="${est==='Pendiente Revisión'?'background:rgba(245,166,35,.04)':''}">
       <td><code style="color:var(--teal)">${r.numero}</code></td>
@@ -2904,7 +2997,7 @@ function rmRenderList(){
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-s btn-sm" onclick="rmEditar(${idx})">✏️</button>
         <button class="btn btn-s btn-sm" title="Corregir período" onclick="rmCorregirPeriodo(${idx})" style="color:var(--amber);border-color:var(--amber)">🗓️</button>
-        <button class="btn btn-p btn-sm" onclick="rmAbrirRevision(${idx})" style="background:${est==='Aprobada'?'var(--teal)':'var(--amber)'};color:var(--navy)">${est==='Aprobada'?'✅ Revisada':'🔍 Revisar'}</button>
+        <button class="btn btn-p btn-sm" onclick="rmAprobarTodo(${idx})" style="background:${est==='Aprobada'?'var(--teal)':'var(--amber)'};color:var(--navy)">${est==='Aprobada'?'✅ Aprobada':'✅ Aprobar'}</button>
         ${canNec?`<button class="btn btn-a btn-sm" onclick="nav('necesidad')">→ Nec.</button>`:'<button class="btn btn-sm" style="opacity:.4;cursor:not-allowed;background:var(--surface2);color:var(--muted);border:1px solid var(--border)" title="Aprueba la revisión primero">→ Nec.</button>'}
         <button class="btn btn-d btn-sm" onclick="rmEliminar(${idx})">✕</button>
       </td>
@@ -7694,6 +7787,37 @@ function _updateRevFooter(r){
     sinRevisar
       ? '<span style="color:var(--amber)">⚠️ Quedan '+sinRevisar+' ítems sin decisión</span>'
       : '<span style="color:var(--teal)">✅ Todos los ítems revisados</span>';
+}
+
+function rmAprobarTodo(idx){
+  var r = db.reqMensuales[idx];
+  if(!r) return;
+  if(r.estado === 'Aprobada'){
+    toast('Esta requisición ya está aprobada.');
+    return;
+  }
+  // Aprobar todos los ítems con cantidad > 0 de una vez
+  if(!r.revision) r.revision = {};
+  var data = r.data || {};
+  var total = 0;
+  Object.entries(data).forEach(function(eE){
+    var empresa = eE[0];
+    Object.entries(eE[1]).forEach(function(cE){
+      var cliente = cE[0];
+      Object.entries(cE[1]).forEach(function(iE){
+        var key = iE[0], item = iE[1];
+        if(!item || parseFloat(item.qty||0) <= 0) return;
+        var rk = empresa+'||'+cliente+'||'+key;
+        r.revision[rk] = { estado:'aprobado', qtyAjustada: item.qty, obs:'' };
+        total++;
+      });
+    });
+  });
+  r.estado = 'Aprobada';
+  saveDB();
+  rmRenderList();
+  necRefreshSelects();
+  toast('✅ Requisición '+r.numero+' aprobada — '+total+' ítems aprobados. Disponible en Necesidad de Compra.');
 }
 
 function rmGuardarRevision(aprobar){
