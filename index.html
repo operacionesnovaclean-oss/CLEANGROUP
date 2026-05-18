@@ -1399,7 +1399,7 @@ function buildPanels(){
     <div class="fg">
       <div class="fi"><label>Seleccionar Requisición</label><select id="nec-rm-sel" onchange="necCargarRM()"><option value="">-- Seleccionar --</option></select></div>
       <div class="fi"><label>Empresa a consolidar</label><select id="nec-empresa-sel" onchange="necFiltrarEmpresa()"><option value="">-- Seleccionar empresa --</option><option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option></select></div>
-      <div class="fi"><label>N° Necesidad</label><input id="nec-num" readonly></div>
+      <div class="fi"><label>N° Necesidad <span style="font-size:9px;color:var(--amber);font-weight:600">&#9998; editable</span></label><input id="nec-num" placeholder="Ej: NEC-05-003" title="Puedes escribir el numero manualmente para respetar la secuencia"></div>
       <div class="fi"><label>Período</label><input id="nec-periodo" readonly></div>
       <div class="fi"><label>Fecha</label><input id="nec-fecha" type="date"></div>
       <div class="fi"><label>Elaborado por</label><input id="nec-elaborado"></div>
@@ -2526,7 +2526,9 @@ function setNums(){
     var p=n.numero.split('-'); // NEC-MM-NNN
     return p.length>=2 && p[1]===m;
   }).length;
-  s('nec-num','NEC-'+m+'-'+pad(necDelMes+1));
+  // Solo autocompletar si el campo está vacío (respeta edición manual del usuario)
+  var necNumEl=document.getElementById('nec-num');
+  if(necNumEl && !necNumEl.value) necNumEl.value='NEC-'+m+'-'+pad(necDelMes+1);
   s('oc-num','OC-'+m+'-'+pad(db.counters.oc+1));
   // No sobreescribir si estamos en modo edición
   if(ai_editIdx===null) s('ai-num','ACT-ING-'+m+'-'+pad(db.counters.ai+1));
@@ -3492,17 +3494,100 @@ function necGuardar(){
   const fecha=document.getElementById('nec-fecha').value;
   const rmNum=document.getElementById('nec-rm-sel').value;
   const empresa=document.getElementById('nec-empresa-sel').value;
-  if(!fecha||!rmNum||!empresa){toast('Selecciona Req., Empresa y completa la fecha',true);return;}
+  if(!num){toast('El N° Necesidad no puede estar vacío',true);return;}
+  if(!fecha||!empresa){toast('Completa la fecha y la empresa',true);return;}
   if(!necItems.length){toast('Sin ítems',true);return;}
-  db.necesidades.push({numero:num,empresa,periodo:document.getElementById('nec-periodo').value,fecha,elaborado:document.getElementById('nec-elaborado').value,rmId:rmNum,items:JSON.parse(JSON.stringify(necItems)),ocId:null});
-  db.counters.nec++;
-  saveDB();necRenderList();necItems=[];
-  document.getElementById('nec-items-card').style.display='none';
-  document.getElementById('nec-empresa-sel').value='';
+
+  if(_necEditIdx !== null){
+    // ── MODO EDICIÓN: actualizar registro existente ──
+    const old = db.necesidades[_necEditIdx];
+    db.necesidades[_necEditIdx] = Object.assign({}, old, {
+      numero: num,
+      empresa: empresa,
+      periodo: document.getElementById('nec-periodo').value,
+      fecha: fecha,
+      elaborado: document.getElementById('nec-elaborado').value,
+      rmId: rmNum || old.rmId,
+      items: JSON.parse(JSON.stringify(necItems))
+    });
+    _necEditIdx = null;
+    var banner = document.getElementById('nec-edit-banner'); if(banner) banner.remove();
+    saveDB(); necRenderList(); necItems=[];
+    document.getElementById('nec-items-card').style.display='none';
+    document.getElementById('nec-empresa-sel').value='';
+    var rmSel=document.getElementById('nec-rm-sel'); if(rmSel) rmSel.value='';
+    document.getElementById('nec-num').value='';
+    setNums();
+    // Actualizar select de OC si el número cambió
+    necRefreshSelects();
+    toast('✅ Necesidad '+num+' actualizada');
+  } else {
+    // ── MODO NUEVO: crear registro ──
+    if(!rmNum){toast('Selecciona la Requisición origen',true);return;}
+    db.necesidades.push({numero:num,empresa,periodo:document.getElementById('nec-periodo').value,fecha,elaborado:document.getElementById('nec-elaborado').value,rmId:rmNum,items:JSON.parse(JSON.stringify(necItems)),ocId:null});
+    db.counters.nec++;
+    saveDB(); necRenderList(); necItems=[];
+    document.getElementById('nec-items-card').style.display='none';
+    document.getElementById('nec-empresa-sel').value='';
+    document.getElementById('nec-num').value='';
+    setNums();
+    toast('✅ Necesidad '+num+' guardada — ve a "Orden de Compra"');
+    const ocSel=document.getElementById('oc-nec-sel');
+    if(ocSel){const o=document.createElement('option');o.value=num;o.textContent=num+' — '+empresa+' — '+document.getElementById('nec-periodo').value;ocSel.appendChild(o);}
+  }
+}
+
+var _necEditIdx = null; // índice de la NEC en edición
+
+function necEditar(idx){
+  const n = db.necesidades[idx];
+  if(!n){ toast('Necesidad no encontrada', true); return; }
+  _necEditIdx = idx;
+  nav('necesidades');
+  // Cargar encabezado
+  document.getElementById('nec-num').value       = n.numero;
+  document.getElementById('nec-fecha').value      = n.fecha;
+  document.getElementById('nec-periodo').value    = n.periodo;
+  document.getElementById('nec-elaborado').value  = n.elaborado||'';
+  // Seleccionar empresa y RM en los selects
+  var rmSel = document.getElementById('nec-rm-sel');
+  if(rmSel){ rmSel.value = n.rmId||''; }
+  var empSel = document.getElementById('nec-empresa-sel');
+  if(empSel){ empSel.value = n.empresa||''; }
+  // Cargar ítems
+  necItems = JSON.parse(JSON.stringify(n.items||[]));
+  document.getElementById('nec-empresa-lbl').textContent = n.empresa;
+  document.getElementById('nec-items-count').textContent = necItems.length;
+  document.getElementById('nec-items-card').style.display = 'block';
+  necRenderGruposChips();
+  necRenderItems();
+  // Indicador visual de modo edición
+  var card = document.getElementById('nec-items-card');
+  var existing = document.getElementById('nec-edit-banner');
+  if(!existing){
+    var banner = document.createElement('div');
+    banner.id = 'nec-edit-banner';
+    banner.style.cssText = 'background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);border-radius:8px;padding:9px 14px;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center';
+    banner.innerHTML = '✏️ Modo edición — <code style="font-family:JetBrains Mono,monospace;font-size:11px">'+n.numero+'</code> &nbsp;<span style="font-weight:400;color:var(--muted)">Modifica los ítems, el número o la fecha y guarda.</span>'
+      +'<button onclick="necCancelarEdicion()" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 9px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit">Cancelar</button>';
+    card.insertBefore(banner, card.firstChild);
+  } else {
+    existing.querySelector('code').textContent = n.numero;
+  }
+  toast('✏️ Editando '+n.numero+' — modifica y guarda');
+}
+
+function necCancelarEdicion(){
+  _necEditIdx = null;
+  necItems = [];
+  document.getElementById('nec-items-card').style.display = 'none';
+  document.getElementById('nec-empresa-sel').value = '';
+  var rmSel = document.getElementById('nec-rm-sel'); if(rmSel) rmSel.value='';
+  var banner = document.getElementById('nec-edit-banner'); if(banner) banner.remove();
+  // Limpiar número para que se autogenere el siguiente
+  document.getElementById('nec-num').value = '';
   setNums();
-  toast(`✅ Necesidad ${num} guardada — ve a "Orden de Compra"`);
-  const ocSel=document.getElementById('oc-nec-sel');
-  if(ocSel){const o=document.createElement('option');o.value=num;o.textContent=`${num} — ${empresa} — ${document.getElementById('nec-periodo').value}`;ocSel.appendChild(o);}
+  toast('Edición cancelada');
 }
 
 function necRenderList(){
@@ -3527,6 +3612,7 @@ function necRenderList(){
       <td>${n.items.length} ítems · ${grupos.length} grupos</td>
       <td>${ocBadges}${pendBadge}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="necEditar(${idx})" title="Editar necesidad" style="border-color:rgba(245,166,35,.5);color:var(--amber)">✏️ Editar</button>
         <button class="btn btn-s btn-sm" onclick="necExcelId(${idx})" title="Descargar Excel">⬇️ XLS</button>
         <button class="btn btn-s btn-sm" onclick="necPdfId(${idx})" title="Descargar PDF" style="background:var(--red);color:#fff">📄 PDF</button>
         <button class="btn btn-s btn-sm" onclick="necWhatsappId(${idx})" title="Enviar por WhatsApp" style="background:#25D366;color:#fff">💬 WA</button>
