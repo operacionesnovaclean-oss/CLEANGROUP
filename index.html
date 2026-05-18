@@ -1379,7 +1379,7 @@ function buildPanels(){
           <option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
         </select>
         <button class="btn btn-s" onclick="rmPreview()">🖨️ Vista previa</button>
-        <button class="btn btn-a btn-sm" onclick="rmImportarDesdeCampo()" title="Rellena las cantidades usando la revisión del módulo de Campo">📥 Importar desde Campo</button>
+        <button class="btn btn-a btn-sm" onclick="rmMostrarPeriodosCampo()" title="Rellena las cantidades usando la revisión del módulo de Campo">📥 Importar desde Campo</button>
         <button class="btn btn-p" onclick="rmGuardar()">💾 Guardar Requisición</button>
       </div>
     </div>
@@ -2591,29 +2591,80 @@ function initRM(){
 function rmCat(){ return (window._catalogoOverride&&Object.keys(window._catalogoOverride).length) ? window._catalogoOverride : RM_CAT; }
 
 // ── IMPORTAR DESDE CAMPO ────────────────────────────────────────────
-// Lee _campoReqs, aplica la revision_campo (aprobado/ajustado/rechazado)
-// y vuelca las cantidades resultantes en rm_data, respetando empresa/cliente.
-function rmImportarDesdeCampo(){
+function rmMostrarPeriodosCampo(){
   if(!window._campoReqs || !_campoReqs.length){
-    toast('No hay datos de campo cargados. Ve al módulo Campo primero.', true);
+    toast('No hay datos de campo. Abre el módulo Campo primero para cargarlos.', true);
     return;
   }
-  const periodo = document.getElementById('rm-periodo').value.trim();
-  if(!periodo){
-    toast('Escribe primero el Período / Mes antes de importar.', true);
-    return;
-  }
+  const periodos=[...new Set(_campoReqs.map(r=>(r.periodo||'').trim()).filter(Boolean))].sort().reverse();
+  if(!periodos.length){ toast('No hay períodos en los envíos de campo.',true); return; }
+  if(periodos.length===1){ rmImportarDesdeCampo(periodos[0]); return; }
+  const lista=periodos.map((p,i)=>'  '+(i+1)+') '+p).join('\n');
+  const resp=prompt('Períodos disponibles en Campo:\n\n'+lista+'\n\nEscribe el número o el nombre:');
+  if(!resp) return;
+  const num=parseInt(resp.trim(),10);
+  const elegido=(!isNaN(num)&&num>=1&&num<=periodos.length)
+    ?periodos[num-1]
+    :periodos.find(p=>p.toUpperCase().includes(resp.trim().toUpperCase()));
+  if(!elegido){ toast('Período no encontrado.',true); return; }
+  rmImportarDesdeCampo(elegido);
+}
 
-  // Filtrar por período (comparación flexible: MAYO 2026 === mayo 2026)
-  const reqs = _campoReqs.filter(r => {
-    const p = (r.periodo||'').trim().toUpperCase();
-    return p === periodo.toUpperCase() || p.includes(periodo.toUpperCase()) || periodo.toUpperCase().includes(p);
+function rmImportarDesdeCampo(periodoForzado){
+  if(!window._campoReqs||!_campoReqs.length){ toast('No hay datos de campo cargados.',true); return; }
+
+  const reqs=periodoForzado
+    ?_campoReqs.filter(r=>(r.periodo||'').trim()===periodoForzado)
+    :_campoReqs;
+  if(!reqs.length){ toast('No se encontraron envíos para "'+periodoForzado+'".',true); return; }
+
+  // Rellenar período si está vacío
+  const rmPerEl=document.getElementById('rm-periodo');
+  if(periodoForzado&&!rmPerEl.value.trim()) rmPerEl.value=periodoForzado;
+
+  // Usar el mismo consolMap revisado que usa el módulo de Campo
+  const consolMap=campoBuildConsolMap(reqs);
+
+  // Volcar consolMap en rm_data
+  rmResetData();
+  let importados=0, rechazados=0, sinRevision=0;
+
+  Object.entries(consolMap).forEach(([emp,clis])=>{
+    Object.entries(clis).forEach(([cli,data])=>{
+      Object.values(data.items).forEach(it=>{
+        if(it.rechazado){ rechazados++; return; }
+        if(it.qty<=0){ rechazados++; return; }
+        const key=it.prod+'|'+(it.unidad||'');
+        if(!rm_data[emp]) rm_data[emp]={};
+        if(!rm_data[emp][cli]) rm_data[emp][cli]={};
+        if(!rm_data[emp][cli][key])
+          rm_data[emp][cli][key]={prod:it.prod,grupo:it.grupo||'INSUMOS',unidad:it.unidad||'',qty:0};
+        rm_data[emp][cli][key].qty+=it.qty;
+        if(!it.revisado) sinRevision++;
+        importados++;
+      });
+    });
   });
 
-  if(!reqs.length){
-    toast('No se encontraron envíos de campo para el período "'+periodo+'".', true);
-    return;
+  // Activar primera empresa para que se vea el consolidado
+  const primeraEmp=Object.keys(consolMap)[0]||null;
+  if(primeraEmp){
+    rm_empresa=primeraEmp; rm_cliente='';
+    rmUpdateEmpresaBtns();
+    document.getElementById('rm-emp-lbl').textContent=rm_empresa;
+    document.getElementById('rm-step2').style.display='block';
+    rmRenderClientesBtns();
   }
+  rmRenderConsolidado();
+
+  let msg='✅ '+importados+' ítems importados desde '+reqs.length+' envíos ('+Object.keys(consolMap).length+' empresas).';
+  if(rechazados) msg+=' · ❌ '+rechazados+' rechazados/omitidos.';
+  if(sinRevision) msg+=' · ⏳ '+sinRevision+' sin revisar (qty original).';
+  toast(msg);
+}
+
+// ----- código antiguo que ya no se usa (mantenido para no romper referencias) -----
+function _rmImportLegacy(periodoForzado){
 
   // Reconstruir rm_data desde cero
   rmResetData();
@@ -7237,6 +7288,40 @@ async function campoPendientesRender(periodo, empresaFiltro, reqsRecibidas){
   '</div>';
 }
 
+// Construye el mapa consolidado revisado a partir de un array de requisiciones de campo.
+// Respeta revision_campo: rechazados se omiten, ajustados usan qtyAjustada.
+function campoBuildConsolMap(reqs){
+  const consolMap={};
+  reqs.forEach(r=>{
+    const emp=r.empresa||'—'; const cli=r.cliente||'—';
+    if(!consolMap[emp]) consolMap[emp]={};
+    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set(),revisada:false};
+    const block=consolMap[emp][cli];
+    block.ops.add(r.operativo||'?'); block.periodos.add(r.periodo||'?');
+    const revision=r.revision_campo||[];
+    if(revision.some(rv=>rv.estado)) block.revisada=true;
+    (r.items||[]).forEach(it=>{
+      if(!it.qty||+it.qty===0) return;
+      const key=it.prod+'|'+it.unidad;
+      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0,qtyOrig:0,revisado:false,rechazado:false};
+      const rv=revision.find(x=>x.prod===it.prod&&x.unidad===it.unidad);
+      if(rv&&rv.estado){
+        block.items[key].revisado=true;
+        if(rv.estado==='rechazado'){
+          block.items[key].rechazado=true;
+        } else {
+          block.items[key].qty+=(rv.qtyAjustada!=null?+rv.qtyAjustada:+it.qty);
+          block.items[key].qtyOrig+=+it.qty;
+        }
+      } else {
+        block.items[key].qty+=+it.qty;
+        block.items[key].qtyOrig+=+it.qty;
+      }
+    });
+  });
+  return consolMap;
+}
+
 function campoRender(){
   const periodo=(document.getElementById('campo-periodo-sel')||{}).value||'';
   const empresa=(document.getElementById('campo-empresa-sel')||{}).value||'';
@@ -7260,39 +7345,7 @@ function campoRender(){
   // ── PENDIENTES: cruzar operativos registrados vs los que enviaron ──
   try{ campoPendientesRender(periodo, empresa, reqs); }catch(e){ console.warn('campoPendientesRender:',e); }
 
-  const consolMap={};
-  reqs.forEach(r=>{
-    const emp=r.empresa||'—';const cli=r.cliente||'—';
-    if(!consolMap[emp]) consolMap[emp]={};
-    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set(),revisada:false};
-    const block=consolMap[emp][cli];
-    block.ops.add(r.operativo||'?');block.periodos.add(r.periodo||'?');
-    const revision=r.revision_campo||[];
-    const tieneRevision=revision.some(rv=>rv.estado);
-    if(tieneRevision) block.revisada=true;
-    (r.items||[]).forEach(it=>{
-      if(!it.qty||+it.qty===0) return;
-      const key=it.prod+'|'+it.unidad;
-      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0,qtyOrig:0,revisado:false,rechazado:false};
-      // Si hay revisión para este ítem, usar la cantidad ajustada/aprobada
-      const rv=revision.find(x=>x.prod===it.prod&&x.unidad===it.unidad);
-      if(rv&&rv.estado){
-        block.items[key].revisado=true;
-        if(rv.estado==='rechazado'){
-          block.items[key].rechazado=true;
-          // qty no suma — ítem rechazado
-        } else {
-          // aprobado o ajustado: sumar qtyAjustada
-          block.items[key].qty+=(rv.qtyAjustada!=null?+rv.qtyAjustada:+it.qty);
-          block.items[key].qtyOrig+=+it.qty;
-        }
-      } else {
-        // Sin revisión: usar cantidad original
-        block.items[key].qty+=+it.qty;
-        block.items[key].qtyOrig+=+it.qty;
-      }
-    });
-  });
+  const consolMap=campoBuildConsolMap(reqs);
   const consEl=document.getElementById('campo-consolidado');
   if(consEl){
     if(!reqs.length){consEl.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay requisiciones para el filtro seleccionado.</p>';}
