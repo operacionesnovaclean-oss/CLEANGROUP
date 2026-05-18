@@ -7567,13 +7567,23 @@ function campoGenerarRM(){
     const cat=rmCat();
     if(!cat[emp]) cat[emp]={};if(!cat[emp][cli]) cat[emp][cli]=[];
     if(!rm_data[emp]) rm_data[emp]={};if(!rm_data[emp][cli]) rm_data[emp][cli]={};
+    // ── CORRECCIÓN: respetar revision_campo (ajustes/rechazos del supervisor) ──
+    const revision=(req.revision_campo||[]);
     (req.items||[]).forEach(it=>{
       if(!it.qty||+it.qty===0) return;
+      // Buscar revisión para este ítem
+      const rv=revision.find(function(x){return x.prod===it.prod&&x.unidad===it.unidad;});
+      // Si fue rechazado, omitir el ítem completamente
+      if(rv && rv.estado==='rechazado') return;
+      // Usar cantidad ajustada si existe, de lo contrario la cantidad original
+      const qtyFinal = (rv && rv.estado && rv.qtyAjustada!=null && rv.qtyAjustada!==undefined)
+        ? +rv.qtyAjustada : +it.qty;
+      if(qtyFinal===0) return; // seguridad extra
       const key=it.prod+'|'+it.unidad;
       if(!cat[emp][cli].find(x=>x.p===it.prod&&x.u===it.unidad))
         cat[emp][cli].push({g:it.grupo||'INSUMOS',p:it.prod,u:it.unidad,r:0});
       if(!rm_data[emp][cli][key]) rm_data[emp][cli][key]={prod:it.prod,grupo:it.grupo||'INSUMOS',unidad:it.unidad,qty:0};
-      rm_data[emp][cli][key].qty+=+it.qty;
+      rm_data[emp][cli][key].qty+=qtyFinal;
     });
   });
   const p=periodo||(reqs[0]&&reqs[0].periodo)||'';
