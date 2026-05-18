@@ -7171,14 +7171,33 @@ function campoRender(){
   reqs.forEach(r=>{
     const emp=r.empresa||'—';const cli=r.cliente||'—';
     if(!consolMap[emp]) consolMap[emp]={};
-    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set()};
+    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set(),revisada:false};
     const block=consolMap[emp][cli];
     block.ops.add(r.operativo||'?');block.periodos.add(r.periodo||'?');
+    const revision=r.revision_campo||[];
+    const tieneRevision=revision.some(rv=>rv.estado);
+    if(tieneRevision) block.revisada=true;
     (r.items||[]).forEach(it=>{
       if(!it.qty||+it.qty===0) return;
       const key=it.prod+'|'+it.unidad;
-      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0};
-      block.items[key].qty+=+it.qty;
+      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0,qtyOrig:0,revisado:false,rechazado:false};
+      // Si hay revisión para este ítem, usar la cantidad ajustada/aprobada
+      const rv=revision.find(x=>x.prod===it.prod&&x.unidad===it.unidad);
+      if(rv&&rv.estado){
+        block.items[key].revisado=true;
+        if(rv.estado==='rechazado'){
+          block.items[key].rechazado=true;
+          // qty no suma — ítem rechazado
+        } else {
+          // aprobado o ajustado: sumar qtyAjustada
+          block.items[key].qty+=(rv.qtyAjustada!=null?+rv.qtyAjustada:+it.qty);
+          block.items[key].qtyOrig+=+it.qty;
+        }
+      } else {
+        // Sin revisión: usar cantidad original
+        block.items[key].qty+=+it.qty;
+        block.items[key].qtyOrig+=+it.qty;
+      }
     });
   });
   const consEl=document.getElementById('campo-consolidado');
@@ -7207,7 +7226,11 @@ function campoRender(){
                 onclick="event.stopPropagation();campoEditarEmpresa('empsel-${bid}',[${reqIds.map(id=>`'${id}'`).join(',')}])">✓</button>
             </span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px"><span class="tag tok">${itemsArr.length} ítems</span><span style="color:var(--muted)">▼</span></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tag tok">${itemsArr.length} ítems</span>
+            ${data.revisada?'<span class="tag tok" style="font-size:10px">✅ Con revisión</span>':'<span class="tag twn" style="font-size:10px">⏳ Sin revisar</span>'}
+            <span style="color:var(--muted)">▼</span>
+          </div>
         </div>
         <div class="campo-block-body" id="${bid}">
           ${Object.entries(grupos).map(([g,its])=>`
@@ -7218,12 +7241,21 @@ function campoRender(){
               const ik=Object.keys(window._consItems).length;
               const rowId='cirow'+ik;
               window._consItems[rowId]={prod:it.prod,unidad:it.unidad,qty:it.qty,emp,cli,reqIds:[...reqIds]};
-              return`<div class="cons-item-row" id="${rowId}" style="border-bottom:1px solid rgba(255,255,255,.03)">
+              const revBadge=it.rechazado
+                ? '<span style="font-size:10px;color:var(--red);background:rgba(224,82,99,.12);border-radius:4px;padding:1px 5px">❌ Rechazado</span>'
+                : it.revisado&&it.qtyOrig&&it.qty!==it.qtyOrig
+                  ? '<span style="font-size:10px;color:var(--amber);background:rgba(245,166,35,.12);border-radius:4px;padding:1px 5px" title="Solicitado: '+it.qtyOrig+'">✏️ Ajustado</span>'
+                  : it.revisado
+                    ? '<span style="font-size:10px;color:var(--teal);background:rgba(0,201,167,.1);border-radius:4px;padding:1px 5px">✅ Aprobado</span>'
+                    : '';
+              const qtyColor=it.rechazado?'var(--red)':it.revisado?'var(--teal)':'var(--text)';
+              const rowStyle=it.rechazado?'opacity:.45;text-decoration:line-through':'';
+              return`<div class="cons-item-row" id="${rowId}" style="border-bottom:1px solid rgba(255,255,255,.03);${rowStyle}">
                 <div class="cons-item-view" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
-                  <span>${it.prod}</span>
+                  <span style="display:flex;align-items:center;gap:6px">${it.prod}${revBadge}</span>
                   <span style="display:flex;gap:8px;align-items:center">
                     <span style="color:var(--muted);font-size:10px">${it.unidad}</span>
-                    <span style="color:var(--teal);font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.qty}</span>
+                    <span style="color:${qtyColor};font-weight:700;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${it.rechazado?0:it.qty}</span>
                     <button data-action="ci-edit" data-rowid="${rowId}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 3px" title="Editar">✏️</button>
                   </span>
                 </div>
