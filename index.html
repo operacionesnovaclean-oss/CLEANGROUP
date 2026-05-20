@@ -436,7 +436,7 @@ let _sb = null;  // Supabase client — se inicializa al cargar el SDK
 // ═══════════════════════════════
 // AUTH
 // ═══════════════════════════════
-const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'1234',gerencia:'gerencia2024'};
+const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'gerente2025',gerencia:'gerencia2024'};
 
 // Módulos permitidos por rol. 'all' = acceso total.
 const USER_ROLES={
@@ -444,7 +444,7 @@ const USER_ROLES={
   compras:'all',
   bodega:'all',
   supervisor:'all',
-  gerente:'all',
+  gerente:['dashboard','orden-compra','pagos-proveedores','cobranzas'],
   gerencia:['dashboard','pagos-proveedores','inventario','cobranzas']
 };
 let currentUser=null;
@@ -2463,9 +2463,14 @@ function applyRoleAccess(user){
     }
     sec.style.display=hasVisible?'':'none';
   });
-  // Si gerencia, navegar directamente a compras y pagos al entrar
-  if(allowed!=='all'&&allowed.indexOf('pagos-proveedores')>=0){
-    setTimeout(function(){nav('pagos-proveedores');},100);
+  // Si es rol restringido, navegar al primer módulo permitido al entrar
+  if(allowed!=='all'){
+    setTimeout(function(){
+      // gerente → dashboard; gerencia → pagos-proveedores (comportamiento anterior)
+      if(allowed.indexOf('dashboard')>=0) nav('dashboard');
+      else if(allowed.indexOf('pagos-proveedores')>=0) nav('pagos-proveedores');
+      else nav(allowed[0]);
+    },100);
   }
 }
 
