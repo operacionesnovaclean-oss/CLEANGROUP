@@ -493,6 +493,11 @@ function applyDBData(json){
     db.actasEntrega  = p.actasEntrega  || [];
     db.inventario    = p.inventario    || [];
     db.counters      = p.counters      || {rm:0,nec:0,oc:0,ai:0,ae:0};
+    if(p.cobFacturas)   db.cobFacturas   = p.cobFacturas;
+    if(p.cobClientes)   db.cobClientes   = p.cobClientes;
+    if(p.cobContadores) db.cobContadores = p.cobContadores;
+    if(p.pagos) db.pagos = p.pagos;
+
     window._lastSavedJson = json;
     return true;
   }catch(e){console.warn('applyDBData error',e);return false;}
@@ -513,6 +518,7 @@ function loadDB(){
     if(!db.actasIngreso)  db.actasIngreso=[];
     if(!db.actasEntrega)  db.actasEntrega=[];
     if(!db.counters)      db.counters={rm:0,nec:0,oc:0,ai:0,ae:0};
+    if(!db.pagos)         db.pagos={};
   }
 
   // ① Local inmediato
@@ -1201,29 +1207,35 @@ function pagosRender(){
       +'</tr>';
   }).join('');
 
-  // Event delegation
-  body.removeEventListener('change',pagosBodyChange);
-  body.removeEventListener('input',pagosBodyInput);
-  body.addEventListener('change',pagosBodyChange);
-  body.addEventListener('input',pagosBodyInput);
+  // Event delegation: 'change' para selects e inputs date/number, 'blur' para texto
+  body.removeEventListener('change', pagosBodyChange);
+  body.removeEventListener('blur',   pagosBodyBlur, true);
+  body.addEventListener('change', pagosBodyChange);
+  body.addEventListener('blur',   pagosBodyBlur, true);
 }
 
 function pagosBodyChange(e){
-  var el=e.target;
-  if(!el.classList.contains('pagos-sel'))return;
-  pagosUpdateReg(el.dataset.oc,el.dataset.campo,el.value);
+  var el = e.target;
+  if(el.classList.contains('pagos-sel')){
+    pagosUpdateReg(el.dataset.oc, el.dataset.campo, el.value);
+  }
+  if(el.classList.contains('pagos-inp') && (el.type==='date' || el.type==='number')){
+    pagosUpdateReg(el.dataset.oc, el.dataset.campo, el.value);
+  }
 }
-function pagosBodyInput(e){
-  var el=e.target;
-  if(!el.classList.contains('pagos-inp'))return;
-  pagosUpdateReg(el.dataset.oc,el.dataset.campo,el.value);
+function pagosBodyBlur(e){
+  var el = e.target;
+  if(el.classList.contains('pagos-inp') && el.type==='text'){
+    pagosUpdateReg(el.dataset.oc, el.dataset.campo, el.value);
+  }
 }
-function pagosUpdateReg(ocNum,campo,valor){
-  var reg=pagosGetRegistro(ocNum);
-  reg[campo]=valor;
+function pagosUpdateReg(ocNum, campo, valor){
+  var reg = pagosGetRegistro(ocNum);
+  reg[campo] = valor;
   saveDB();
-  // Si cambia un estado, re-renderizar para actualizar los tags de color
-  if(campo==='estadoEntrega'||campo==='estadoPago'){
+  // Re-renderizar solo cuando cambia estado (actualiza badges de color)
+  // Para texto/fecha/numero NO re-renderizar: destruiria el campo activo
+  if(campo==='estadoEntrega' || campo==='estadoPago'){
     pagosRender();
   } else {
     pagosStatsRender();
