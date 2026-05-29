@@ -2203,11 +2203,20 @@ function buildPanels(){
       </div>
       <div class="tw"><table>
         <thead><tr>
-          <th>Fecha</th><th>N&#176; Doc</th><th>Estado</th><th>Cía.</th><th>Cliente</th>
-          <th style="text-align:right">Subtotal</th><th style="text-align:right">IVA</th>
-          <th style="text-align:right">Total</th><th style="text-align:right">Ret.</th>
-          <th style="text-align:right">Saldo</th><th style="text-align:center">Días</th>
-          <th>Gestión</th><th style="text-align:center">Emisión</th><th></th>
+          <th>Fecha</th><th>N&#176; Documento</th><th>Estado Factura</th><th>Compañía</th><th>Razón Social</th>
+          <th style="text-align:center">T. Período<br>Gracia</th>
+          <th style="text-align:right">Subtotal<br>IVA &gt;0%</th>
+          <th style="text-align:right">Subtotal<br>IVA 0%</th>
+          <th style="text-align:right">IVA</th>
+          <th style="text-align:right">Total</th>
+          <th style="text-align:right">Retenciones</th>
+          <th style="text-align:right">Cancelado</th>
+          <th style="text-align:right">Saldo</th>
+          <th style="text-align:center">Tiempo<br>Transcurrido</th>
+          <th style="text-align:center">Fecha<br>Cobro</th>
+          <th>Estado Gestión<br>Cobranza</th>
+          <th>Comentarios</th>
+          <th></th>
         </tr></thead>
         <tbody id="cob-tabla-body"></tbody>
       </table></div>
@@ -5747,20 +5756,37 @@ function cobRenderTabla(){
       : aTiempo ? '<span style="color:var(--teal);font-size:11px">✓ A tiempo</span>'
       : '<span style="color:var(--red);font-size:11px">⚠️ Tardía</span>';
 
+    // Período de gracia
+    var gracia = f.diasGracia || 60;
+    var labelGracia = gracia + 'd';
+
+    // Cancelado
+    var cancelado = +(f.cancelado||0);
+
+    // Fecha de cobro
+    var fechaCobro = f.fechaCobro ? cobFmtFecha(f.fechaCobro) : '<span style="color:var(--muted)">—</span>';
+
+    // Comentario (truncado)
+    var comentario = f.comentario ? '<span title="'+f.comentario.replace(/"/g,'&quot;')+'" style="font-size:10px;color:var(--muted);max-width:120px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f.comentario+'</span>' : '<span style="color:var(--muted)">—</span>';
+
     return '<tr style="'+(f.estado==='Anulada'?'opacity:.6':'')+(saldo>0&&typeof dias==='number'&&dias>60?';background:rgba(224,82,99,.04)':'')+'"">'
       +'<td style="font-size:11px;white-space:nowrap">'+cobFmtFecha(f.fecha)+'</td>'
       +'<td><code style="color:var(--teal);font-size:11px">'+f.numDoc+'</code></td>'
       +'<td>'+tagEstado+'</td>'
       +'<td style="font-size:11px;color:var(--muted)">'+cobCiaCorta(f.cia)+'</td>'
       +'<td style="font-size:12px;font-weight:600">'+f.razonSocial+'</td>'
+      +'<td style="text-align:center;font-size:11px;color:var(--muted)">'+labelGracia+'</td>'
       +'<td style="text-align:right;font-size:12px">$'+(+f.subtotal||0).toFixed(2)+'</td>'
+      +'<td style="text-align:right;font-size:12px">$'+(+(f.subtotal0)||0).toFixed(2)+'</td>'
       +'<td style="text-align:right;font-size:12px">$'+(+f.iva||0).toFixed(2)+'</td>'
       +'<td style="text-align:right;font-weight:700;color:var(--teal)">$'+(+f.total||0).toFixed(2)+'</td>'
       +'<td style="text-align:right;font-size:12px;color:var(--amber)">$'+(+f.retenciones||0).toFixed(2)+'</td>'
+      +'<td style="text-align:right;font-size:12px;color:var(--teal)">$'+cancelado.toFixed(2)+'</td>'
       +'<td style="text-align:right;font-weight:700;color:'+(saldo>0.01?'var(--red)':'var(--teal)')+'">'+(saldo>0.01?'$'+saldo.toFixed(2):'✓ 0')+'</td>'
       +'<td style="text-align:center;color:'+colorDias+';font-family:monospace;font-weight:700">'+labelDias+'</td>'
+      +'<td style="text-align:center;font-size:11px;white-space:nowrap">'+fechaCobro+'</td>'
       +'<td>'+tagGestion+'</td>'
-      +'<td style="text-align:center">'+tagEmision+'</td>'
+      +'<td style="max-width:130px">'+comentario+'</td>'
       +'<td style="white-space:nowrap;display:flex;gap:4px">'
         +'<button class="btn btn-s btn-sm" onclick="cobEditar('+idx+')">✏️</button>'
         +'<button class="btn btn-d btn-sm" onclick="cobEliminar('+idx+')">✕</button>'
@@ -6467,10 +6493,14 @@ function cobExportarExcel(){
   ];
   var hoy=new Date();
   lista.forEach(function(f){
-    var dias=f.fechaEmision?Math.round((hoy-new Date(f.fechaEmision))/(1000*60*60*24)):'';
+    var hoyD = new Date(); hoyD.setHours(0,0,0,0);
+    var dObj = cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
+    var dias = '';
+    if(dObj && !isNaN(dObj.getTime())){ dObj.setHours(0,0,0,0); dias = Math.round((hoyD-dObj)/(1000*60*60*24)); if(dias<0) dias=0; }
+    var gracia = (f.diasGracia||60)+' DÍAS';
     rows.push([
       f.fecha, f.numDoc, f.estado, f.cia, f.fechaEmision, f.razonSocial,
-      '60 DIAS', f.subtotal||0, f.subtotal0||0, f.iva||0, f.total||0,
+      gracia, f.subtotal||0, f.subtotal0||0, f.iva||0, f.total||0,
       f.retenciones||0, f.cancelado||0, f.saldo||0, dias,
       f.fechaCobro||'', f.estadoGestion||'', f.comentario||''
     ]);
