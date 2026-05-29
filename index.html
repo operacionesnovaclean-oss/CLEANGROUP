@@ -2152,7 +2152,12 @@ function buildPanels(){
           </select>
         </div>
         <div class="fi" style="flex:2"><label>Razón Social del Cliente</label>
-          <select id="cob-razon" onchange="cobActualizarFechaLimite()"><option value="">— Seleccionar cliente —</option></select>
+          <select id="cob-razon" onchange="cobRazonChange();cobActualizarFechaLimite()" style="margin-bottom:6px"><option value="">— Seleccionar cliente —</option></select>
+          <div id="cob-razon-manual-wrap" style="display:none;position:relative">
+            <input id="cob-razon-manual" type="text" placeholder="Escribe el nombre exacto del cliente..."
+              style="width:100%;padding:9px 34px 9px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--amber);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <span title="Volver al selector" onclick="cobRazonResetManual()" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);font-size:14px">✕</span>
+          </div>
         </div>
       </div>
       <div class="fg" style="margin-bottom:14px">
@@ -5801,7 +5806,8 @@ function cobActualizarFormClientes(){
   if(!sel) return;
   var lista = cob_clientes.filter(function(c){return c.activo && (!cia||c.cia===cia);});
   sel.innerHTML = '<option value="">— Seleccionar cliente —</option>'
-    + lista.map(function(c){return '<option value="'+c.razon+'">'+c.razon+'</option>';}).join('');
+    + lista.map(function(c){return '<option value="'+c.razon+'">'+c.razon+'</option>';}).join('')
+    + '<option value="__manual__">✏️ Escribir manualmente...</option>';
 }
 
 function cobActualizarFechaLimite(){
@@ -5839,13 +5845,58 @@ function cobCalcTotales(){
   }
 }
 
+// ── CAMPO RAZÓN SOCIAL HÍBRIDO (select + texto libre) ─────────────────────
+function cobRazonChange(){
+  var sel = document.getElementById('cob-razon');
+  if(sel && sel.value === '__manual__'){
+    cobRazonActivarManual('');
+  }
+}
+
+function cobRazonActivarManual(valor){
+  var wrap = document.getElementById('cob-razon-manual-wrap');
+  var inp  = document.getElementById('cob-razon-manual');
+  var sel  = document.getElementById('cob-razon');
+  if(wrap) wrap.style.display = 'block';
+  if(inp){ inp.value = valor||''; inp.focus(); }
+  if(sel){
+    // Agregar opción especial si no existe
+    if(!sel.querySelector('option[value="__manual__"]')){
+      var opt = document.createElement('option');
+      opt.value='__manual__'; opt.textContent='✏️ Escribir manualmente...';
+      sel.appendChild(opt);
+    }
+    sel.value = '__manual__';
+    sel.style.opacity = '0.5';
+  }
+}
+
+function cobRazonResetManual(){
+  var wrap = document.getElementById('cob-razon-manual-wrap');
+  var inp  = document.getElementById('cob-razon-manual');
+  var sel  = document.getElementById('cob-razon');
+  if(wrap) wrap.style.display = 'none';
+  if(inp) inp.value = '';
+  if(sel){
+    sel.style.opacity = '';
+    // Quitar opción especial
+    var opt = sel.querySelector('option[value="__manual__"]');
+    if(opt) opt.remove();
+    sel.value = '';
+  }
+}
+
 function cobGuardarFactura(){
   var g = function(id){var el=document.getElementById(id);return el?el.value.trim():''};
   var fecha      = g('cob-fecha');
   var numDoc     = g('cob-num-doc');
   var estado     = g('cob-estado');
   var cia        = g('cob-cia');
-  var razon      = g('cob-razon');
+  // Leer razón social: del input manual si está visible, si no del select
+  var razonWrap  = document.getElementById('cob-razon-manual-wrap');
+  var razon      = (razonWrap && razonWrap.style.display!=='none')
+                   ? (g('cob-razon-manual')||'')
+                   : g('cob-razon');
   var fechaEm    = g('cob-fecha-emision');
   var fechaLim   = g('cob-fecha-limite');
   var subtotal   = parseFloat(g('cob-subtotal'))||0;
@@ -5903,7 +5954,15 @@ function cobEditar(idx){
   s('cob-estado',       f.estado);
   s('cob-cia',          f.cia);
   cobActualizarFormClientes();
-  s('cob-razon',        f.razonSocial);
+  // Intentar seleccionar en el select; si no existe, activar modo manual
+  var selRazon = document.getElementById('cob-razon');
+  var enCatalogo = selRazon && Array.from(selRazon.options).some(function(o){return o.value===f.razonSocial;});
+  if(enCatalogo){
+    cobRazonResetManual();
+    s('cob-razon', f.razonSocial);
+  } else {
+    cobRazonActivarManual(f.razonSocial);
+  }
   s('cob-fecha-emision',f.fechaEmision);
   s('cob-fecha-limite', f.fechaLimite);
   s('cob-subtotal',     f.subtotal);
@@ -5930,11 +5989,12 @@ function cobEliminar(idx){
 }
 
 function cobLimpiarForm(){
-  ['cob-fecha','cob-num-doc','cob-estado','cob-cia','cob-razon','cob-fecha-emision',
+  ['cob-fecha','cob-num-doc','cob-estado','cob-cia','cob-razon','cob-razon-manual','cob-fecha-emision',
    'cob-fecha-limite','cob-subtotal','cob-subtotal0','cob-retenciones','cob-cancelado',
    'cob-fecha-cobro','cob-gestion-estado','cob-comentario'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
+  cobRazonResetManual();
   ['cob-iva-calc','cob-total-calc','cob-saldo-calc'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.textContent='$0.00';
   });
