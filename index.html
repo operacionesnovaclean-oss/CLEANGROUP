@@ -1068,7 +1068,8 @@ function pagosGetRegistro(ocNum){
   if(!db.pagos[ocNum]) db.pagos[ocNum]={
     estadoEntrega:'Pendiente',formaPago:'',fechaTentPago:'',
     estadoPago:'Pendiente',numCheque:'',fechaPago:'',obs:'',
-    docTipoEdit:'',docNumEdit:'',docFechaEdit:'',docMontoEdit:''
+    docTipoEdit:'',docNumEdit:'',docFechaEdit:'',docMontoEdit:'',
+    detalleEdit:''
   };
   // Migrar registros existentes sin campos doc
   var r=db.pagos[ocNum];
@@ -1076,22 +1077,55 @@ function pagosGetRegistro(ocNum){
   if(r.docNumEdit===undefined) r.docNumEdit='';
   if(r.docFechaEdit===undefined) r.docFechaEdit='';
   if(r.docMontoEdit===undefined) r.docMontoEdit='';
+  if(r.detalleEdit===undefined) r.detalleEdit='';
   return r;
+}
+
+function pagosBuildList(){
+  // Filas desde Órdenes de Compra (flujo formal)
+  var ocList=(db.ordenesCompra||[]).map(function(o){
+    var reg=pagosGetRegistro(o.numero);
+    var actas=(db.actasIngreso||[]).filter(function(a){return a.ocId===o.numero;});
+    var last=actas.length?actas[actas.length-1]:{};
+    return {
+      kind:'oc', key:o.numero, ref:o, manualTag:false,
+      proveedor:o.proveedor||'—', numero:o.numero,
+      fecha:o.fecha||'', categoria:o.tipo||'—', detalle:o.detalle||'—',
+      montoOC:o.total||0,
+      docTipo:last.docTipo||'', docNum:last.docNum||'', docFecha:last.docFecha||'', docMonto:last.docMonto||0,
+      reg:reg
+    };
+  });
+  // Filas desde Actas de Ingreso manuales (sin OC vinculada, no devoluciones)
+  var manualList=(db.actasIngreso||[]).filter(function(a){return !a.ocId && a.tipo!=='devolucion';}).map(function(a){
+    var reg=pagosGetRegistro(a.numero);
+    var detalle=(a.items||[]).map(function(it){return it.desc;}).filter(Boolean).join(', ')||'—';
+    return {
+      kind:'manual', key:a.numero, ref:a, manualTag:true,
+      proveedor:a.proveedor||'—', numero:a.numero,
+      fecha:a.fecha||'', categoria:'—', detalle:detalle,
+      montoOC:a.docMonto||0,
+      docTipo:a.docTipo||'', docNum:a.docNum||'', docFecha:a.docFecha||'', docMonto:a.docMonto||0,
+      reg:reg
+    };
+  });
+  return ocList.concat(manualList);
 }
 
 function pagosStatsRender(){
   const el=document.getElementById('pagos-stats');if(!el)return;
-  const ocs=db.ordenesCompra||[];
-  const total=ocs.length;
-  const pendPago=ocs.filter(function(o){return (pagosGetRegistro(o.numero)||{}).estadoPago!=='Pagado';}).length;
-  const pagados=ocs.filter(function(o){return (pagosGetRegistro(o.numero)||{}).estadoPago==='Pagado';}).length;
-  const totalMonto=ocs.reduce(function(s,o){return s+(o.total||0);},0);
-  const montoPendiente=ocs.filter(function(o){return (pagosGetRegistro(o.numero)||{}).estadoPago!=='Pagado';})
-    .reduce(function(s,o){return s+(o.total||0);},0);
-  el.innerHTML='<div class="sc st"><div class="l">Total OC</div><div class="v">'+total+'</div></div>'
+  const list=pagosBuildList();
+  const montoDe=function(r){return r.montoOC!=null?r.montoOC:(r.docMonto||0);};
+  const total=list.length;
+  const pendPago=list.filter(function(r){return r.reg.estadoPago!=='Pagado';}).length;
+  const pagados=list.filter(function(r){return r.reg.estadoPago==='Pagado';}).length;
+  const totalMonto=list.reduce(function(s,r){return s+montoDe(r);},0);
+  const montoPendiente=list.filter(function(r){return r.reg.estadoPago!=='Pagado';})
+    .reduce(function(s,r){return s+montoDe(r);},0);
+  el.innerHTML='<div class="sc st"><div class="l">Total Compras</div><div class="v">'+total+'</div></div>'
     +'<div class="sc sa"><div class="l">Pago Pendiente</div><div class="v">'+pendPago+'</div><div class="s">$'+montoPendiente.toFixed(2)+'</div></div>'
     +'<div class="sc st"><div class="l">Pagadas</div><div class="v" style="color:var(--teal)">'+pagados+'</div></div>'
-    +'<div class="sc st"><div class="l">Monto Total OC</div><div class="v" style="font-size:16px">$'+totalMonto.toFixed(2)+'</div></div>';
+    +'<div class="sc st"><div class="l">Monto Total</div><div class="v" style="font-size:16px">$'+totalMonto.toFixed(2)+'</div></div>';
 }
 
 function pagosRender(){
@@ -1099,24 +1133,13 @@ function pagosRender(){
   var search=(document.getElementById('pagos-search')||{}).value?.toLowerCase()||'';
   var filtroEnt=(document.getElementById('pagos-filtro-estado-entrega')||{}).value||'';
   var filtroPago=(document.getElementById('pagos-filtro-estado-pago')||{}).value||'';
-  var ocs=db.ordenesCompra||[];
-
-  // Enriquecer con datos del acta de ingreso vinculada
-  var list=ocs.map(function(o){
-    var reg=pagosGetRegistro(o.numero);
-    // Buscar acta de ingreso vinculada
-    var actas=(db.actasIngreso||[]).filter(function(a){return a.ocId===o.numero;});
-    var docTipo=actas.length?actas[actas.length-1].docTipo||'':'';
-    var docNum=actas.length?actas[actas.length-1].docNum||'':'';
-    var docFecha=actas.length?actas[actas.length-1].docFecha||'':'';
-    var docMonto=actas.length?actas[actas.length-1].docMonto||0:0;
-    return {oc:o,reg:reg,docTipo:docTipo,docNum:docNum,docFecha:docFecha,docMonto:docMonto};
-  });
+  var list=pagosBuildList();
 
   if(search) list=list.filter(function(r){
-    return (r.oc.proveedor||'').toLowerCase().includes(search)
-      ||(r.oc.numero||'').toLowerCase().includes(search)
-      ||(r.docNum||'').toLowerCase().includes(search);
+    return (r.proveedor||'').toLowerCase().includes(search)
+      ||(r.numero||'').toLowerCase().includes(search)
+      ||(r.docNum||'').toLowerCase().includes(search)
+      ||(r.reg.detalleEdit||r.detalle||'').toLowerCase().includes(search);
   });
   if(filtroEnt) list=list.filter(function(r){return r.reg.estadoEntrega===filtroEnt;});
   if(filtroPago) list=list.filter(function(r){return r.reg.estadoPago===filtroPago;});
@@ -1126,12 +1149,14 @@ function pagosRender(){
     body.innerHTML='<tr><td colspan="17" style="text-align:center;color:var(--muted);padding:20px">Sin registros</td></tr>';
     return;
   }
+  // Orden: más reciente primero por fecha
+  list=list.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
 
-  body.innerHTML=list.slice().reverse().map(function(r,i){
-    var o=r.oc, reg=r.reg;
-    var idx=db.ordenesCompra.findIndex(function(x){return x.numero===o.numero;});
-    var detalle=o.detalle||'—';
-    var categoria=o.tipo||'—';
+  body.innerHTML=list.map(function(r){
+    var reg=r.reg;
+    var detalle=r.detalle||'—';
+    var detalleVal=(reg.detalleEdit!==undefined&&reg.detalleEdit!==''?reg.detalleEdit:r.detalle)||'';
+    var categoria=r.categoria||'—';
 
     // Colores de estado
     var colEnt=reg.estadoEntrega==='Completo'?'tok':reg.estadoEntrega==='Parcial'?'twn':'ter';
@@ -1161,45 +1186,52 @@ function pagosRender(){
       return '<option value="'+v+'"'+(docTipoVal===v?' selected':'')+'>'+v+'</option>';
     }).join('');
 
+    var numCell = r.manualTag
+      ? '<code style="color:var(--teal);font-size:11px">'+r.numero+'</code><br><span style="font-size:9px;color:var(--amber);font-weight:600">✏️ Manual</span>'
+      : '<code style="color:var(--teal);font-size:11px">'+r.numero+'</code>';
+    var montoOCCell = r.montoOC!=null ? '$'+r.montoOC.toFixed(2) : '<span style="color:var(--muted)">—</span>';
+
     return '<tr>'
-      +'<td style="font-size:12px;font-weight:600">'+o.proveedor+'</td>'
-      +'<td><code style="color:var(--teal);font-size:11px">'+o.numero+'</code></td>'
-      +'<td style="font-size:11px">'+o.fecha+'</td>'
+      +'<td style="font-size:12px;font-weight:600">'+r.proveedor+'</td>'
+      +'<td>'+numCell+'</td>'
+      +'<td style="font-size:11px">'+r.fecha+'</td>'
       +'<td style="font-size:11px">'+categoria+'</td>'
-      +'<td style="font-size:11px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+detalle+'">'+detalle+'</td>'
-      +'<td style="text-align:right;font-weight:700;color:var(--teal)">$'+(o.total||0).toFixed(2)+'</td>'
+      +'<td><input type="text" data-oc="'+r.key+'" data-campo="detalleEdit" class="pagos-inp"'
+        +' value="'+detalleVal.replace(/"/g,'&quot;')+'" placeholder="Ej: Materiales de limpieza" title="'+detalle+'"'
+        +' style="'+inpStyle+'width:160px;'+(reg.detalleEdit?'color:var(--teal);font-weight:600':'')+'"></td>'
+      +'<td style="text-align:right;font-weight:700;color:var(--teal)">'+montoOCCell+'</td>'
       // Tipo Doc — editable (select)
-      +'<td><select data-oc="'+o.numero+'" data-campo="docTipoEdit" class="pagos-sel" style="'+inpStyle+'width:110px">'+optsTipoDoc+'</select></td>'
+      +'<td><select data-oc="'+r.key+'" data-campo="docTipoEdit" class="pagos-sel" style="'+inpStyle+'width:110px">'+optsTipoDoc+'</select></td>'
       // N° Documento — editable
-      +'<td><input type="text" data-oc="'+o.numero+'" data-campo="docNumEdit" class="pagos-inp"'
+      +'<td><input type="text" data-oc="'+r.key+'" data-campo="docNumEdit" class="pagos-inp"'
         +' value="'+docNumVal+'" placeholder="Nº doc"'
         +' style="'+inpStyle+'width:90px;color:var(--teal)"></td>'
       // Fecha Doc — editable
-      +'<td><input type="date" data-oc="'+o.numero+'" data-campo="docFechaEdit" class="pagos-inp"'
+      +'<td><input type="date" data-oc="'+r.key+'" data-campo="docFechaEdit" class="pagos-inp"'
         +' value="'+docFechaVal+'" style="'+inpStyle+'width:128px"></td>'
       // Monto Doc — editable
-      +'<td><input type="number" step="0.01" min="0" data-oc="'+o.numero+'" data-campo="docMontoEdit" class="pagos-inp"'
+      +'<td><input type="number" step="0.01" min="0" data-oc="'+r.key+'" data-campo="docMontoEdit" class="pagos-inp"'
         +' value="'+docMontoVal+'" placeholder="0.00"'
         +' style="'+inpStyle+'width:90px;text-align:right"></td>'
       // Estado entrega (editable)
-      +'<td style="text-align:center"><select data-oc="'+o.numero+'" data-campo="estadoEntrega" class="pagos-sel"'
+      +'<td style="text-align:center"><select data-oc="'+r.key+'" data-campo="estadoEntrega" class="pagos-sel"'
         +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsEnt+'</select></td>'
       // Forma de pago
-      +'<td><select data-oc="'+o.numero+'" data-campo="formaPago" class="pagos-sel"'
+      +'<td><select data-oc="'+r.key+'" data-campo="formaPago" class="pagos-sel"'
         +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsFpago+'</select></td>'
       // Fecha tentativa pago
-      +'<td><input type="date" data-oc="'+o.numero+'" data-campo="fechaTentPago" class="pagos-inp"'
+      +'<td><input type="date" data-oc="'+r.key+'" data-campo="fechaTentPago" class="pagos-inp"'
         +' value="'+(reg.fechaTentPago||'')+'"'
         +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
       // Estado pago
-      +'<td style="text-align:center"><select data-oc="'+o.numero+'" data-campo="estadoPago" class="pagos-sel"'
+      +'<td style="text-align:center"><select data-oc="'+r.key+'" data-campo="estadoPago" class="pagos-sel"'
         +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px">'+optsPago+'</select></td>'
       // N° Cheque/Transferencia
-      +'<td><input type="text" data-oc="'+o.numero+'" data-campo="numCheque" class="pagos-inp"'
+      +'<td><input type="text" data-oc="'+r.key+'" data-campo="numCheque" class="pagos-inp"'
         +' value="'+(reg.numCheque||'')+'" placeholder="Ej: CHQ-001"'
         +' style="width:90px;padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
       // Fecha pago real
-      +'<td><input type="date" data-oc="'+o.numero+'" data-campo="fechaPago" class="pagos-inp"'
+      +'<td><input type="date" data-oc="'+r.key+'" data-campo="fechaPago" class="pagos-inp"'
         +' value="'+(reg.fechaPago||'')+'"'
         +' style="padding:3px 6px;border-radius:5px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-size:11px;outline:none"></td>'
       +'<td style="text-align:center">'
@@ -1231,8 +1263,8 @@ function pagosBodyBlur(e){
     pagosUpdateReg(el.dataset.oc, el.dataset.campo, el.value);
   }
 }
-function pagosUpdateReg(ocNum, campo, valor){
-  var reg = pagosGetRegistro(ocNum);
+function pagosUpdateReg(key, campo, valor){
+  var reg = pagosGetRegistro(key);
   reg[campo] = valor;
   saveDB();
   // Re-renderizar solo cuando cambia estado (actualiza badges de color)
@@ -1250,23 +1282,22 @@ function pagosExportExcel(){
     ['REPORTE DE COMPRAS Y PAGOS A PROVEEDORES — FOR COM 03'],
     ['Exportado: '+new Date().toLocaleDateString('es-EC')],
     [],
-    ['Proveedor','N° OC','Fecha OC','Categoría','Detalle','Monto OC','Tipo Documento',
+    ['Proveedor','N° OC / Acta','Origen','Fecha','Tipo OC','Detalle','Monto OC','Tipo Documento',
      'N° Documento','Fecha Documento','Monto Documento','Estado Entrega',
      'Forma Pago','Fecha Tent. Pago','Estado Pago','N° Cheque/Trans.','Fecha Pago']
   ];
-  (db.ordenesCompra||[]).forEach(function(o){
-    var reg=pagosGetRegistro(o.numero);
-    var actas=(db.actasIngreso||[]).filter(function(a){return a.ocId===o.numero;});
-    var last=actas.length?actas[actas.length-1]:{};
-    // Usar valor editado manualmente si existe, sino fallback al acta
-    var docTipo  = reg.docTipoEdit  || last.docTipo  || '';
-    var docNum   = reg.docNumEdit   || last.docNum   || '';
-    var docFecha = reg.docFechaEdit || last.docFecha || '';
+  pagosBuildList().forEach(function(r){
+    var reg=r.reg;
+    var docTipo  = reg.docTipoEdit  || r.docTipo  || '';
+    var docNum   = reg.docNumEdit   || r.docNum   || '';
+    var docFecha = reg.docFechaEdit || r.docFecha || '';
     var docMonto = (reg.docMontoEdit!==undefined&&reg.docMontoEdit!=='')
                      ? parseFloat(reg.docMontoEdit)||0
-                     : (last.docMonto||0);
+                     : (r.docMonto||0);
+    var detalleVal=(reg.detalleEdit!==undefined&&reg.detalleEdit!==''?reg.detalleEdit:r.detalle)||'';
     rows.push([
-      o.proveedor,o.numero,o.fecha,o.tipo||'',o.detalle||'',o.total||0,
+      r.proveedor,r.numero,r.manualTag?'Manual (sin OC)':'Orden de Compra',r.fecha,r.categoria||'',detalleVal,
+      r.montoOC!=null?r.montoOC:'',
       docTipo,docNum,docFecha,docMonto,
       reg.estadoEntrega,reg.formaPago,reg.fechaTentPago,
       reg.estadoPago,reg.numCheque,reg.fechaPago
@@ -1274,7 +1305,7 @@ function pagosExportExcel(){
   });
   var wb=XLSX.utils.book_new();
   var ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:25},{wch:12},{wch:12},{wch:12},{wch:20},{wch:12},{wch:16},
+  ws['!cols']=[{wch:25},{wch:14},{wch:16},{wch:12},{wch:12},{wch:20},{wch:12},{wch:16},
     {wch:18},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:14},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,'Compras y Pagos');
   XLSX.writeFile(wb,'ReporteCompras_'+new Date().toISOString().split('T')[0]+'.xlsx');
@@ -1858,7 +1889,7 @@ function buildPanels(){
 
   <!-- Filtros -->
   <div class="sb" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
-    <input id="pagos-search" placeholder="🔍 Buscar proveedor, N° OC, factura..." oninput="pagosRender()" style="flex:1;min-width:220px">
+    <input id="pagos-search" placeholder="🔍 Buscar proveedor, N° OC, factura, detalle..." oninput="pagosRender()" style="flex:1;min-width:220px">
     <select id="pagos-filtro-estado-entrega" onchange="pagosRender()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
       <option value="">Todos los estados entrega</option>
       <option value="Pendiente">Pendiente entrega</option>
@@ -1881,9 +1912,9 @@ function buildPanels(){
         <thead>
           <tr>
             <th>Proveedor</th>
-            <th>N° OC</th>
-            <th>Fecha OC</th>
-            <th>Categoría</th>
+            <th>N° OC / Acta</th>
+            <th>Fecha</th>
+            <th>Tipo OC</th>
             <th>Detalle</th>
             <th style="text-align:right">Monto OC</th>
             <th>Tipo Doc.</th>
