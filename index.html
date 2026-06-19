@@ -1543,7 +1543,7 @@ function buildPanels(){
     <div id="ai-compra-fields">
       <div class="fg">
         <div class="fi"><label>N° Orden de Compra</label><select id="ai-oc-ref" onchange="aiCargarOC()"><option value="">-- Sin OC / Ingreso manual --</option></select></div>
-        <div class="fi"><label>Proveedor</label><input id="ai-proveedor" readonly></div>
+        <div class="fi"><label>Proveedor</label><input id="ai-proveedor" placeholder="Nombre del proveedor (ingreso manual)"></div>
         <div class="fi"><label>Tipo de Documento</label>
           <select id="ai-doc-tipo" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
             <option value="">-- Sin documento --</option>
@@ -4298,10 +4298,15 @@ function aiPopulateOCSelect(){
 function aiCargarOC(){
   const num=document.getElementById('ai-oc-ref').value;
   const box=document.getElementById('ai-oc-box');
-  if(!num){aiOCRef=null;aiItems=[];box.style.display='none';aiRenderItems();aiUpdateBadge();return;}
+  const provInput=document.getElementById('ai-proveedor');
+  if(!num){
+    aiOCRef=null;aiItems=[];box.style.display='none';
+    if(provInput){provInput.removeAttribute('readonly');provInput.value='';}
+    aiRenderItems();aiUpdateBadge();return;
+  }
   const oc=db.ordenesCompra.find(o=>o.numero===num);if(!oc)return;
   aiOCRef=oc;
-  document.getElementById('ai-proveedor').value=oc.proveedor;
+  if(provInput){provInput.value=oc.proveedor;provInput.setAttribute('readonly','readonly');}
   aiItems=oc.items.map(it=>{
     let cod=it.cod||'';
     if(!cod){
@@ -4335,36 +4340,75 @@ function aiUpdateBadge(){
 
 function aiAddItem(){aiItems.push({cantOC:null,cant:1,cod:'',desc:'',estado:'Nuevo',obs:'',fromOC:false});aiRenderItems();}
 
-function aiGetCodCell(it, i){
-  if(it.cod) return '<code style="font-size:11px;color:var(--teal)">'+it.cod+'</code>';
-  const opts = CATALOG.map(c=>'<option value="'+c.cod+'"'+(c.cod===it.cod?' selected':'')+'>'+c.cod+'</option>').join('');
-  return '<select onchange="aiPickCod('+i+',this)" style="width:120px;padding:3px 6px;background:var(--navy);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px"><option value="">Cód...</option>'+opts+'</select>';
-}
-
 function aiRenderItems(){
   const body=document.getElementById('ai-items-body');if(!body)return;
   body.innerHTML=aiItems.map((it,i)=>{
     const parcial=it.fromOC&&it.cant<it.cantOC;
-    const codCell=aiGetCodCell(it,i);
-    const descCell=it.fromOC?`<span style="font-size:12px">${it.desc}</span>`:`<input value="${it.desc}" onchange="aiItems[${i}].desc=this.value" style="min-width:160px">`;
-    return `<tr style="${parcial?'background:rgba(245,166,35,.05)':''}">
-      <td style="text-align:center;color:var(--muted);font-size:12px">${it.cantOC??'—'}</td>
-      <td><input type="number" min="0" value="${it.cant}" style="width:60px;${parcial?'color:var(--amber);font-weight:600':''}"
-        onchange="aiItems[${i}].cant=+this.value;aiUpdateBadge();aiRenderItems()">
-        ${parcial?'<div style="font-size:9px;color:var(--amber);margin-top:1px">↓ parcial</div>':''}
+    if(it.fromOC){
+      return `<tr style="${parcial?'background:rgba(245,166,35,.05)':''}">
+        <td style="text-align:center;color:var(--muted);font-size:12px">${it.cantOC??'—'}</td>
+        <td><input type="number" min="0" value="${it.cant}" style="width:60px;${parcial?'color:var(--amber);font-weight:600':''}"
+          onchange="aiItems[${i}].cant=+this.value;aiUpdateBadge();aiRenderItems()">
+          ${parcial?'<div style="font-size:9px;color:var(--amber);margin-top:1px">↓ parcial</div>':''}
+        </td>
+        <td><code style="font-size:11px;color:var(--teal)">${it.cod||'—'}</code></td>
+        <td><span style="font-size:12px">${it.desc}</span></td>
+        <td><select onchange="aiItems[${i}].estado=this.value" style="width:100px;padding:3px 6px;background:var(--navy);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px">
+          <option ${it.estado==='Nuevo'?'selected':''}>Nuevo</option>
+          <option ${it.estado==='Buen estado'?'selected':''}>Buen estado</option>
+          <option ${it.estado==='Mal estado'?'selected':''}>Mal estado</option>
+        </select></td>
+        <td><input value="${it.obs||''}" onchange="aiItems[${i}].obs=this.value" placeholder="Obs..." style="min-width:120px"></td>
+        <td><button class="btn btn-d btn-sm" onclick="aiItems.splice(${i},1);aiUpdateBadge();aiRenderItems()" title="Quitar: no recibido">✕</button></td>
+      </tr>`;
+    }
+    return `<tr>
+      <td style="text-align:center;color:var(--muted);font-size:12px">—</td>
+      <td><input type="number" min="0" value="${it.cant}" style="width:60px" onchange="aiItems[${i}].cant=+this.value"></td>
+      <td><code style="font-size:11px;color:var(--teal);min-width:90px;display:block">${it.cod||'—'}</code></td>
+      <td style="position:relative;min-width:220px">
+        <input id="ai-ac-${i}" value="${(it.desc||'').replace(/"/g,'&quot;')}"
+          placeholder="Buscar por nombre o código..."
+          autocomplete="off"
+          oninput="aiAcSearch(${i},this.value)"
+          onfocus="aiAcSearch(${i},this.value)"
+          onblur="setTimeout(()=>aiAcHide(${i}),200)"
+          onchange="aiItems[${i}].desc=this.value"
+          style="width:100%;padding:4px 8px;background:var(--navy);border:1px solid ${it.cod?'var(--teal)':'var(--border)'};border-radius:5px;color:var(--text);font-size:12px">
+        <div id="ai-ac-list-${i}" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:9999;background:var(--surface);border:1px solid var(--teal);border-radius:7px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)"></div>
       </td>
-      <td>${codCell}</td><td>${descCell}</td>
       <td><select onchange="aiItems[${i}].estado=this.value" style="width:100px;padding:3px 6px;background:var(--navy);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px">
         <option ${it.estado==='Nuevo'?'selected':''}>Nuevo</option>
         <option ${it.estado==='Buen estado'?'selected':''}>Buen estado</option>
         <option ${it.estado==='Mal estado'?'selected':''}>Mal estado</option>
       </select></td>
       <td><input value="${it.obs||''}" onchange="aiItems[${i}].obs=this.value" placeholder="Obs..." style="min-width:120px"></td>
-      <td><button class="btn btn-d btn-sm" onclick="aiItems.splice(${i},1);aiUpdateBadge();aiRenderItems()" title="${it.fromOC?'Quitar: no recibido':'Eliminar'}">✕</button></td>
+      <td><button class="btn btn-d btn-sm" onclick="aiItems.splice(${i},1);aiRenderItems()">✕</button></td>
     </tr>`;
   }).join('')||`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">${aiOCRef?'Todos eliminados.':'Selecciona una OC o agrega ítems manualmente.'}</td></tr>`;
 }
-function aiPickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){aiItems[i].cod=c.cod;aiItems[i].desc=c.desc;}aiRenderItems();}
+function aiAcSearch(i,q){
+  const list=document.getElementById('ai-ac-list-'+i);if(!list)return;
+  const term=(q||'').trim().toUpperCase();
+  if(!term){list.style.display='none';return;}
+  const hits=CATALOG.filter(c=>c.desc.toUpperCase().includes(term)||c.cod.toUpperCase().includes(term)).slice(0,10);
+  if(!hits.length){list.style.display='none';return;}
+  list.innerHTML=hits.map(c=>`<div onmousedown="aiAcPick(${i},'${c.cod}')"
+    style="padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)"
+    onmouseover="this.style.background='rgba(0,201,167,.15)'" onmouseout="this.style.background=''">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal)">${c.cod}</span>
+    <span style="font-size:12px;color:var(--text);margin-left:8px">${c.desc}</span>
+    <span style="font-size:10px;color:var(--muted);margin-left:6px">${c.u}</span>
+  </div>`).join('');
+  list.style.display='block';
+}
+function aiAcPick(i,cod){
+  const c=CATALOG.find(x=>x.cod===cod);if(!c)return;
+  aiItems[i].cod=c.cod;
+  aiItems[i].desc=c.desc;
+  aiRenderItems();
+}
+function aiAcHide(i){const l=document.getElementById('ai-ac-list-'+i);if(l)l.style.display='none';}
 
 function aiGuardar(){
   const num=document.getElementById('ai-num').value;
@@ -4412,6 +4456,8 @@ function aiEditar(idx){
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   s('ai-num',a.numero);s('ai-fecha',a.fecha);s('ai-ciudad',a.ciudad||'GUAYAQUIL');
   s('ai-elaborado',a.elaborado);s('ai-proveedor',a.proveedor);
+  const provInputE=document.getElementById('ai-proveedor');
+  if(provInputE){ if(a.ocId) provInputE.setAttribute('readonly','readonly'); else provInputE.removeAttribute('readonly'); }
   s('ai-doc-tipo',a.docTipo||'');s('ai-doc-num',a.docNum||'');
   s('ai-doc-fecha',a.docFecha||'');s('ai-doc-monto',a.docMonto||'');
   s('ai-dev-persona',a.devPersona);s('ai-dev-cargo',a.devCargo);s('ai-dev-depto',a.devDepto);
@@ -4470,6 +4516,7 @@ function aiLimpiar(){
   document.getElementById('ai-edit-banner').style.display='none';
   ['ai-elaborado','ai-ent-nombre','ai-ent-cedula','ai-rec-nombre','ai-rec-cedula','ai-dev-persona','ai-dev-cargo','ai-dev-depto','ai-proveedor','ai-doc-tipo','ai-doc-num','ai-doc-fecha','ai-doc-monto'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const s=document.getElementById('ai-oc-ref');if(s)s.value='';
+  const provInputL=document.getElementById('ai-proveedor');if(provInputL)provInputL.removeAttribute('readonly');
   const l=document.getElementById('ai-items-lbl');if(l)l.textContent='';
   setNums();
 }
