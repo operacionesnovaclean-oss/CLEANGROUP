@@ -1496,6 +1496,7 @@ function buildPanels(){
     </div>
     <div class="fg">
       <div class="fi"><label>Cargar desde Necesidad</label><select id="oc-nec-sel" onchange="ocNecSelChange()"><option value="">-- Manual / Nueva --</option></select></div>
+      <div class="fi"><label>Empresa</label><select id="oc-empresa"><option value="">-- Seleccionar empresa --</option><option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option></select></div>
       <div class="fi" id="oc-grupo-fi" style="display:none"><label>Grupo / Proveedor a ordenar</label><select id="oc-nec-grupo" onchange="ocCargarNec()"><option value="">-- Todos los ítems --</option></select></div>
       <div class="fi"><label>N° Orden de Compra</label><input id="oc-num" placeholder="Ej: OC-001"></div>
       <div class="fi"><label>Fecha</label><input id="oc-fecha" type="date"></div>
@@ -1547,7 +1548,7 @@ function buildPanels(){
   </div>
   <div class="card"><div class="card-title">🛒 Órdenes Guardadas <span class="badge" id="oc-count">0</span></div>
     <div class="sb"><input id="oc-search" placeholder="Buscar OC..." oninput="ocRenderList()"></div>
-    <div class="tw"><table><thead><tr><th>N° OC</th><th>Fecha</th><th>Proveedor</th><th>Total</th><th>Origen Nec.</th><th>Acta Ingreso</th><th>Acciones</th></tr></thead><tbody id="oc-list"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>N° OC</th><th>Fecha</th><th>Empresa</th><th>Proveedor</th><th>Total</th><th>Origen Nec.</th><th>Acta Ingreso</th><th>Acciones</th></tr></thead><tbody id="oc-list"></tbody></table></div>
   </div>
 </div>
 
@@ -3892,6 +3893,10 @@ function ocNecSelChange(){
   const nec=db.necesidades.find(n=>n.numero===num);
   if(!nec){grupoFi.style.display='none';infoBox.style.display='none';return;}
 
+  // Autocompletar la empresa desde la Necesidad seleccionada
+  const empSel=document.getElementById('oc-empresa');
+  if(empSel) empSel.value=nec.empresa||'';
+
   // Obtener grupos disponibles en esta necesidad
   const grupos=[...new Set((nec.items||[]).map(it=>it.provGrupo||'Sin asignar'))].filter(Boolean).sort();
 
@@ -4021,7 +4026,7 @@ function ocGuardar(){
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
   const grupoNec=(document.getElementById('oc-nec-grupo')||{}).value||'';
   const ocData={
-    numero:num,fecha,necId:necNum||null,grupoNec:grupoNec||null,proveedor:prov,
+    numero:num,fecha,necId:necNum||null,grupoNec:grupoNec||null,empresa:g('oc-empresa')||null,proveedor:prov,
     provRuc:g('oc-prov-ruc'),provDir:g('oc-prov-dir'),provCont:g('oc-prov-contacto'),provTel:g('oc-prov-tel'),provEmail:g('oc-prov-email'),
     condPago:g('oc-condpago'),tipo:g('oc-tipo'),detalle:g('oc-detalle'),proforma:g('oc-proforma'),fProforma:g('oc-fproforma'),
     contactoCG:g('oc-contacto'),obs:g('oc-obs'),items:JSON.parse(JSON.stringify(ocItems)),
@@ -4065,6 +4070,7 @@ function ocEditar(idx){
     s('oc-num',o.numero);s('oc-fecha',o.fecha);s('oc-condpago',o.condPago);
     s('oc-tipo',o.tipo);s('oc-detalle',o.detalle);s('oc-proforma',o.proforma);
     s('oc-fproforma',o.fProforma);s('oc-contacto',o.contactoCG);s('oc-obs',o.obs);
+    s('oc-empresa',o.empresa);
     s('oc-prov-nombre',o.proveedor);s('oc-prov-ruc',o.provRuc);s('oc-prov-dir',o.provDir);
     s('oc-prov-contacto',o.provCont);s('oc-prov-tel',o.provTel);s('oc-prov-email',o.provEmail);
     const necSel=document.getElementById('oc-nec-sel');if(necSel)necSel.value=o.necId||'';
@@ -4083,6 +4089,7 @@ function ocLimpiar(){
   ocItems=[];oc_editIdx=null;ocRenderItems();
   document.getElementById('oc-edit-banner').style.display='none';
   ['oc-prov-sel','oc-prov-nombre','oc-prov-ruc','oc-prov-dir','oc-prov-contacto','oc-prov-tel','oc-prov-email','oc-proforma','oc-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const empSelClr=document.getElementById('oc-empresa');if(empSelClr)empSelClr.value='';
   const s=document.getElementById('oc-nec-sel');if(s)s.value='';
   const grupoFi=document.getElementById('oc-grupo-fi');if(grupoFi)grupoFi.style.display='none';
   const grupoSel=document.getElementById('oc-nec-grupo');if(grupoSel)grupoSel.innerHTML='<option value="">-- Todos los ítems --</option>';
@@ -4098,7 +4105,7 @@ function ocPreview(){
   const iva=ivaBase*0.15;
   const o={
     numero:g('oc-num'),fecha:g('oc-fecha'),condPago:g('oc-condpago'),tipo:g('oc-tipo'),
-    detalle:g('oc-detalle'),necId:g('oc-nec-sel'),contactoCG:g('oc-contacto'),obs:g('oc-obs'),
+    detalle:g('oc-detalle'),necId:g('oc-nec-sel'),empresa:g('oc-empresa'),contactoCG:g('oc-contacto'),obs:g('oc-obs'),
     proveedor:g('oc-prov-nombre'),provRuc:g('oc-prov-ruc'),provDir:g('oc-prov-dir'),
     provCont:g('oc-prov-contacto'),provTel:g('oc-prov-tel'),provEmail:g('oc-prov-email'),
     items:ocItems,subtotal:sub,iva,total:sub+iva
@@ -4113,6 +4120,7 @@ function ocBuildPrintContent(o){
     <div class="dmg">
       <div class="dmi"><strong>N° OC</strong>${o.numero}</div>
       <div class="dmi"><strong>Fecha</strong>${o.fecha}</div>
+      <div class="dmi"><strong>Empresa</strong>${o.empresa||'—'}</div>
       <div class="dmi"><strong>Condición de Pago</strong>${o.condPago||'—'}</div>
       <div class="dmi"><strong>Tipo</strong>${o.tipo||'—'}</div>
       <div class="dmi"><strong>Detalle</strong>${o.detalle||'—'}</div>
@@ -4214,6 +4222,7 @@ function ocEnviarWA(idx){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
     +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">N° Orden de Compra</small><br><b style="font-size:14px;color:#0f1b2d">'+o.numero+'</b></div>'
     +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Fecha</small><br><b>'+o.fecha+'</b></div>'
+    +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Empresa</small><br><b>'+(o.empresa||'—')+'</b></div>'
     +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Condición de Pago</small><br><b>'+(o.condPago||'—')+'</b></div>'
     +'<div><small style="color:#555;font-size:9px;text-transform:uppercase">Tipo</small><br><b>'+(o.tipo||'—')+'</b></div>'
     +'</div>'
@@ -4290,7 +4299,9 @@ function ocRenderList(){
     const idx=db.ordenesCompra.length-1-i;
     return `<tr>
       <td><code style="color:var(--teal)">${o.numero}</code></td>
-      <td>${o.fecha}</td><td>${o.proveedor}</td>
+      <td>${o.fecha}</td>
+      <td>${o.empresa?`<span class="tag tbl" style="font-size:10px">${o.empresa}</span>`:'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+      <td>${o.proveedor}</td>
       <td style="color:var(--teal);font-weight:600">$${o.total.toFixed(2)}</td>
       <td>${o.necId?`<span class="tag tbl" style="font-size:10px">${o.necId}</span>`:'<span style="color:var(--muted);font-size:11px">Manual</span>'}</td>
       <td>${o.aiId?`<span class="tag tok">✓ ${o.aiId}</span>`:'<span class="tag twn">⏳ Sin Acta</span>'}</td>
@@ -4304,7 +4315,7 @@ function ocRenderList(){
         <button class="btn btn-d btn-sm" onclick="ocEliminar(${idx})">✕</button>
       </td>
     </tr>`;
-  }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
+  }).join(''):'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
 }
 
 function ocPreviewId(idx){
