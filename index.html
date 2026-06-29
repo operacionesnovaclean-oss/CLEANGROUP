@@ -2169,10 +2169,22 @@ function buildPanels(){
         <div class="fi"><label>Fecha del documento</label><input id="cob-fecha" type="date"></div>
         <div class="fi"><label>N&#176; Documento</label><input id="cob-num-doc" placeholder="Ej: 002335" style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal)"></div>
         <div class="fi"><label>Estado Factura</label>
-          <select id="cob-estado">
+          <select id="cob-estado" onchange="cobToggleAnulacion()">
             <option value="Abierta">Abierta</option><option value="Cerrada">Cerrada</option><option value="Anulada">Anulada</option>
           </select>
         </div>
+      </div>
+      <div id="cob-anulacion-wrap" style="display:none;background:rgba(224,82,99,.08);border:1px solid var(--red);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+        <label style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="checkbox" id="cob-anulada-cliente" onchange="cobToggleAnulacionMotivo()" style="accent-color:var(--teal);width:16px;height:16px">
+          <span style="font-size:12px;color:var(--text);font-weight:600">Esta anulación fue solicitada por el cliente (no es un error propio)</span>
+        </label>
+        <div id="cob-anulada-motivo-wrap" style="display:none">
+          <div class="fi"><label>Motivo / comentario del cliente</label>
+            <input id="cob-anulada-motivo" placeholder="Ej: El cliente solicitó anular por cambio de orden de compra...">
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px">⚠️ Si no marcas la casilla ni dejas un comentario, esta anulación se contará como <strong style="color:var(--red)">error propio</strong> en el indicador ISO de Frecuencia de Anulación.</p>
       </div>
       <div class="fg" style="margin-bottom:14px">
         <div class="fi"><label>Compañía</label>
@@ -2277,6 +2289,22 @@ function buildPanels(){
   </div>
 
   <div id="cob-pane-clientes" style="display:none">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:6px">🔄 Cruce de Clientes vs Facturas Emitidas</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Compara tu lista de clientes de facturación contra las facturas realmente emitidas, para detectar clientes que ya no facturan y clientes facturados que aún no están registrados aquí.</p>
+      <div class="sg" id="cob-cruce-stats" style="margin-bottom:0"></div>
+    </div>
+    <div class="card" id="cob-cruce-noreg-card" style="display:none">
+      <div class="card-title">⚠️ Facturados sin registrar en la lista de clientes</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Estas razones sociales aparecen en facturas emitidas pero no coinciden con ningún cliente de la lista. Puede que sean clientes nuevos o un nombre escrito distinto — revisa y agrega el correcto.</p>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Compañía</th><th>Razón Social (en facturas)</th><th style="text-align:center">Facturas</th>
+          <th>Última factura</th><th></th>
+        </tr></thead>
+        <tbody id="cob-cruce-noreg-body"></tbody>
+      </table></div>
+    </div>
     <div class="card">
       <div class="card-title">Agregar Cliente de Facturación</div>
       <div class="fg">
@@ -5676,8 +5704,13 @@ function cobRenderIndicadores(){
   }).length;
   var pctEmision = totalEmitir>0 ? Math.round((aTiempo/totalEmitir)*100) : 0;
 
-  // 2. FRECUENCIA ANULACIÓN
-  var anuladas = delMes.filter(function(f){ return f.estado==='Anulada'; }).length;
+  // 2. FRECUENCIA ANULACIÓN — solo cuentan para el indicador las anulaciones
+  // que NO fueron solicitadas por el cliente (es decir, error propio).
+  // Si una anulación no tiene marcado "solicitada por el cliente" (y su
+  // comentario), se asume que fue un error propio.
+  var facturasAnuladas  = delMes.filter(function(f){ return f.estado==='Anulada'; });
+  var anuladasCliente   = facturasAnuladas.filter(function(f){ return !!f.anuladaPorCliente; }).length;
+  var anuladas          = facturasAnuladas.length - anuladasCliente; // error propio (cuenta para el indicador)
 
   // 3. CARTERA CORRIENTE (facturas Abiertas <= 60 días)
   var hoy = new Date();
@@ -5753,9 +5786,10 @@ function cobRenderIndicadores(){
     +'</div>'
     // 2. Anulaciones
     +'<div class="sc" style="border:2px solid '+cA+'">'
-    +'<div class="l" style="color:var(--muted)">❌ Anulaciones</div>'
+    +'<div class="l" style="color:var(--muted)">❌ Anulaciones (error propio)</div>'
     +'<div class="v" style="font-size:28px;color:'+cA+'">'+anuladas+'</div>'
-    +'<div class="s">facturas anuladas en '+labelMes+' · Meta: = 0</div>'
+    +'<div class="s">facturas anuladas por error propio en '+labelMes+' · Meta: = 0</div>'
+    +(anuladasCliente>0 ? '<div class="s" style="color:var(--muted)">+ '+anuladasCliente+' anulada(s) a solicitud del cliente · no cuentan para este indicador</div>' : '')
     +'<div style="margin-top:5px"><span class="tag '+(anuladas===0?'tok':'ter')+'" style="font-size:10px">'+(anuladas===0?'✅ META':'❌ TIENE ANULACIONES')+'</span></div>'
     +'</div>'
     // 3. Cartera corriente
@@ -5831,7 +5865,9 @@ function cobRenderTabla(){
     var tagEstado = f.estado==='Cerrada'
       ? '<span class="tag tok" style="font-size:10px">✓ Cerrada</span>'
       : f.estado==='Anulada'
-      ? '<span class="tag ter" style="font-size:10px">✕ Anulada</span>'
+      ? (f.anuladaPorCliente
+          ? '<span class="tag twn" style="font-size:10px" title="Anulación solicitada por el cliente">✕ Anulada (cliente)</span>'
+          : '<span class="tag ter" style="font-size:10px" title="Anulación por error propio">✕ Anulada (error)</span>')
       : '<span class="tag twn" style="font-size:10px">⏳ Abierta</span>';
     var tagGestion = f.estadoGestion==='Cobrado'
       ? '<span class="tag tok" style="font-size:10px">💰 Cobrado</span>'
@@ -5855,8 +5891,12 @@ function cobRenderTabla(){
     // Fecha de cobro
     var fechaCobro = f.fechaCobro ? cobFmtFecha(f.fechaCobro) : '<span style="color:var(--muted)">—</span>';
 
-    // Comentario (truncado)
-    var comentario = f.comentario ? '<span title="'+f.comentario.replace(/"/g,'&quot;')+'" style="font-size:10px;color:var(--muted);max-width:120px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f.comentario+'</span>' : '<span style="color:var(--muted)">—</span>';
+    // Comentario (truncado) — si la factura fue anulada por el cliente, se muestra el motivo
+    var comentarioTxt = f.comentario || '';
+    if(f.estado==='Anulada' && f.anuladaPorCliente && f.anuladaMotivo){
+      comentarioTxt = (comentarioTxt ? comentarioTxt+' — ' : '') + 'Solicitado por cliente: '+f.anuladaMotivo;
+    }
+    var comentario = comentarioTxt ? '<span title="'+comentarioTxt.replace(/"/g,'&quot;')+'" style="font-size:10px;color:var(--muted);max-width:120px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+comentarioTxt+'</span>' : '<span style="color:var(--muted)">—</span>';
 
     return '<tr style="'+(f.estado==='Anulada'?'opacity:.6':'')+(saldo>0&&typeof dias==='number'&&dias>60?';background:rgba(224,82,99,.04)':'')+'"">'
       +'<td style="font-size:11px;white-space:nowrap">'+cobFmtFecha(f.fecha)+'</td>'
@@ -6001,6 +6041,26 @@ function cobRazonResetManual(){
   }
 }
 
+// ── ANULACIÓN: SOLICITADA POR CLIENTE vs ERROR PROPIO ─────────────────────
+function cobToggleAnulacion(){
+  var estado = (document.getElementById('cob-estado')||{}).value||'';
+  var wrap = document.getElementById('cob-anulacion-wrap');
+  if(wrap) wrap.style.display = estado==='Anulada' ? 'block' : 'none';
+  if(estado!=='Anulada'){
+    var chk = document.getElementById('cob-anulada-cliente');
+    if(chk) chk.checked = false;
+    var mInp = document.getElementById('cob-anulada-motivo');
+    if(mInp) mInp.value = '';
+    var mWrap = document.getElementById('cob-anulada-motivo-wrap');
+    if(mWrap) mWrap.style.display = 'none';
+  }
+}
+function cobToggleAnulacionMotivo(){
+  var chk = document.getElementById('cob-anulada-cliente');
+  var mWrap = document.getElementById('cob-anulada-motivo-wrap');
+  if(mWrap) mWrap.style.display = (chk && chk.checked) ? 'block' : 'none';
+}
+
 function cobGuardarFactura(){
   var g = function(id){var el=document.getElementById(id);return el?el.value.trim():''};
   var fecha      = g('cob-fecha');
@@ -6025,6 +6085,8 @@ function cobGuardarFactura(){
   var gestEst    = g('cob-gestion-estado');
   var comentario = g('cob-comentario');
   var mes        = g('cob-mes-hidden')||cob_mesActivo;
+  var anuladaPorCliente = estado==='Anulada' && !!(document.getElementById('cob-anulada-cliente')||{}).checked;
+  var anuladaMotivo     = estado==='Anulada' ? g('cob-anulada-motivo') : '';
 
   if(!fecha||!numDoc||!cia||!razon){toast('Completa: fecha, N° documento, compañía y cliente',true);return;}
 
@@ -6039,7 +6101,8 @@ function cobGuardarFactura(){
     fechaEmision:fechaEm, fechaLimite:fechaLim, diasGracia:60,
     subtotal:subtotal, subtotal0:subtotal0, iva:iva, total:total,
     retenciones:ret, cancelado:canc, saldo:Math.max(0,saldo),
-    fechaCobro:fechaCobro, estadoGestion:gestEst, comentario:comentario, mes:mes
+    fechaCobro:fechaCobro, estadoGestion:gestEst, comentario:comentario, mes:mes,
+    anuladaPorCliente:anuladaPorCliente, anuladaMotivo:anuladaMotivo
   };
 
   if(cob_editIdx !== null){
@@ -6088,6 +6151,11 @@ function cobEditar(idx){
   s('cob-gestion-estado',f.estadoGestion||'');
   s('cob-comentario',   f.comentario||'');
   s('cob-mes-hidden',   f.mes||cob_mesActivo);
+  cobToggleAnulacion();
+  var chkAC = document.getElementById('cob-anulada-cliente');
+  if(chkAC) chkAC.checked = !!f.anuladaPorCliente;
+  s('cob-anulada-motivo', f.anuladaMotivo||'');
+  cobToggleAnulacionMotivo();
   cobCalcTotales();
   document.getElementById('cob-form-card').style.display = 'block';
   document.getElementById('cob-form-card').scrollIntoView({behavior:'smooth'});
@@ -6106,9 +6174,12 @@ function cobEliminar(idx){
 function cobLimpiarForm(){
   ['cob-fecha','cob-num-doc','cob-estado','cob-cia','cob-razon','cob-razon-manual','cob-fecha-emision',
    'cob-fecha-limite','cob-subtotal','cob-subtotal0','cob-retenciones','cob-cancelado',
-   'cob-fecha-cobro','cob-gestion-estado','cob-comentario'].forEach(function(id){
+   'cob-fecha-cobro','cob-gestion-estado','cob-comentario','cob-anulada-motivo'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
+  var chkAC = document.getElementById('cob-anulada-cliente');
+  if(chkAC) chkAC.checked = false;
+  cobToggleAnulacion();
   cobRazonResetManual();
   ['cob-iva-calc','cob-total-calc','cob-saldo-calc'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.textContent='$0.00';
@@ -6614,12 +6685,131 @@ function cobExportarExcel(){
 }
 
 // ── CONFIGURACIÓN DE CLIENTES ─────────────────────────────────────────────
+// ── CRUCE DE CLIENTES VS FACTURAS EMITIDAS ────────────────────────────────
+// Normaliza una razón social para poder comparar aunque cambien sufijos
+// societarios (S.A., C.A., CIA LTDA, etc.), acentos o puntuación.
+function cobNormalizarRazon(s){
+  if(!s) return '';
+  var t = s.toString().toUpperCase();
+  if(t.normalize) t = t.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  t = t.replace(/[.,]/g,'');
+  for(var i=0;i<2;i++){
+    t = t.replace(/\b(SAS|SA|CA|CIA LTDA|CIA|LTDA)\b/g,'');
+  }
+  t = t.replace(/\s+/g,' ').trim();
+  return t;
+}
+// Determina si una razón social facturada corresponde a un cliente del maestro
+function cobClienteCoincide(razonFactura, cliente){
+  if(!cliente) return false;
+  var a = cobNormalizarRazon(razonFactura);
+  var b = cobNormalizarRazon(cliente.razon);
+  if(!a||!b) return false;
+  if(a===b) return true;
+  if(a.length>=4 && b.length>=4 && (a.indexOf(b)===0 || b.indexOf(a)===0)) return true;
+  return false;
+}
+// Calcula, para cada cliente del maestro, cuántas facturas tiene y cuándo fue la última
+function cobCalcCruceClientes(){
+  var facturas = db.cobFacturas || [];
+  var hoy = new Date();
+  return (db.cobClientes||[]).map(function(c){
+    var matched = facturas.filter(function(f){ return f.cia===c.cia && cobClienteCoincide(f.razonSocial, c); });
+    var ultima = null;
+    matched.forEach(function(f){
+      var d = cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
+      if(d && !isNaN(d.getTime()) && (!ultima || d>ultima)) ultima = d;
+    });
+    var dias = ultima ? Math.round((hoy-ultima)/(1000*60*60*24)) : null;
+    var diag = matched.length===0 ? 'nunca' : (dias!==null && dias>90 ? 'estancado' : 'activo');
+    return {cliente:c, count:matched.length, ultima:ultima, dias:dias, diag:diag};
+  });
+}
+// Detecta razones sociales facturadas que no calzan con ningún cliente del maestro
+function cobCalcNoRegistrados(){
+  var facturas = db.cobFacturas || [];
+  var clientes = db.cobClientes || [];
+  var mapa = {};
+  facturas.forEach(function(f){
+    if(!f.razonSocial) return;
+    var coincide = clientes.some(function(c){ return f.cia===c.cia && cobClienteCoincide(f.razonSocial, c); });
+    if(coincide) return;
+    var k = f.cia+'||'+f.razonSocial.toUpperCase();
+    if(!mapa[k]) mapa[k] = {cia:f.cia, razon:f.razonSocial, count:0, ultima:null};
+    mapa[k].count++;
+    var d = cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
+    if(d && !isNaN(d.getTime()) && (!mapa[k].ultima || d>mapa[k].ultima)) mapa[k].ultima = d;
+  });
+  return Object.values(mapa).sort(function(a,b){return b.count-a.count;});
+}
+function cobFmtFechaObj(d){
+  if(!d) return '—';
+  return d.getDate().toString().padStart(2,'0')+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getFullYear();
+}
+function cobRenderCruceStats(cruce, noReg){
+  var el = document.getElementById('cob-cruce-stats');
+  if(!el) return;
+  var nunca = cruce.filter(function(r){return r.diag==='nunca';}).length;
+  var estancado = cruce.filter(function(r){return r.diag==='estancado';}).length;
+  var activos = cruce.filter(function(r){return r.diag==='activo';}).length;
+  el.innerHTML =
+     '<div class="sc st"><div class="l">Clientes en lista</div><div class="v">'+cruce.length+'</div></div>'
+    +'<div class="sc st"><div class="l">Con facturas recientes</div><div class="v" style="color:var(--teal)">'+activos+'</div><div class="s">≤90 días</div></div>'
+    +'<div class="sc sa"><div class="l">Sin facturas recientes</div><div class="v">'+estancado+'</div><div class="s">&gt;90 días sin facturar</div></div>'
+    +'<div class="sc sr"><div class="l">Nunca facturados</div><div class="v">'+nunca+'</div><div class="s">posible cliente que ya no está</div></div>'
+    +'<div class="sc'+(noReg.length?' sr':' st')+'"><div class="l">Facturados no registrados</div><div class="v">'+noReg.length+'</div><div class="s">razones sociales sin coincidencia</div></div>';
+}
+function cobRenderCruceNoRegistrados(noReg){
+  var card = document.getElementById('cob-cruce-noreg-card');
+  var body = document.getElementById('cob-cruce-noreg-body');
+  if(!card||!body) return;
+  if(!noReg.length){ card.style.display='none'; return; }
+  card.style.display='block';
+  body.innerHTML = noReg.map(function(r,i){
+    return '<tr>'
+      +'<td><span class="tag tbl" style="font-size:10px">'+cobCiaCorta(r.cia)+'</span></td>'
+      +'<td style="font-size:12px;font-weight:600">'+r.razon+'</td>'
+      +'<td style="text-align:center">'+r.count+'</td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+cobFmtFechaObj(r.ultima)+'</td>'
+      +'<td><button class="btn btn-p btn-sm" data-noreg-idx="'+i+'">+ Agregar a clientes</button></td>'
+      +'</tr>';
+  }).join('');
+  Array.prototype.forEach.call(body.querySelectorAll('[data-noreg-idx]'), function(btn){
+    btn.addEventListener('click', function(){
+      var r = noReg[parseInt(this.dataset.noregIdx)];
+      if(r) cobAgregarDesdeFactura(r.cia, r.razon);
+    });
+  });
+}
+function cobAgregarDesdeFactura(cia, razon){
+  if(!cia||!razon) return;
+  var prefijo = cia.includes('NOVA')?'NC':cia.includes('HOME')?'HC':'IC';
+  var max=0;
+  (db.cobClientes||[]).forEach(function(c){
+    if(c.id.startsWith(prefijo)){var n=parseInt(c.id.split('-')[1]);if(n>max)max=n;}
+  });
+  var newId = prefijo+'-'+String(max+1).padStart(3,'0');
+  if(!db.cobClientes) db.cobClientes=[];
+  db.cobClientes.push({id:newId, razon:razon.toUpperCase(), cia:cia, diasGracia:60, diaFactura:'01', activo:true});
+  saveDB();
+  cobRenderClientesConfig(); cobPopularFiltros();
+  toast('✅ Cliente "'+razon+'" agregado a la lista');
+}
 function cobRenderClientesConfig(){
   var body=document.getElementById('cob-clientes-body');
   if(!body) return;
-  var lista=db.cobClientes||[];
-  body.innerHTML=lista.map(function(c,i){
-    return '<tr style="'+(c.activo?'':'opacity:.5')+'">'
+  var cruce = cobCalcCruceClientes();
+  var noReg = cobCalcNoRegistrados();
+  cobRenderCruceStats(cruce, noReg);
+  cobRenderCruceNoRegistrados(noReg);
+  body.innerHTML=cruce.map(function(r,i){
+    var c = r.cliente;
+    var diagTxt = r.diag==='nunca'
+      ? '🔴 Sin facturas registradas — este cliente podría ya no estar activo'
+      : r.diag==='estancado'
+      ? '⚠️ Sin facturas en los últimos 90 días (última: '+cobFmtFechaObj(r.ultima)+')'
+      : '✅ Tiene facturas recientes (última: '+cobFmtFechaObj(r.ultima)+')';
+    return '<tr style="'+(c.activo?'':'opacity:.5')+'" title="'+diagTxt.replace(/"/g,'&quot;')+'">'
       +'<td><code style="font-size:10px;color:var(--teal)">'+c.id+'</code></td>'
       +'<td style="font-size:12px;font-weight:600">'+c.razon+'</td>'
       +'<td><span class="tag tbl" style="font-size:10px">'+cobCiaCorta(c.cia)+'</span></td>'
