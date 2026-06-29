@@ -2135,6 +2135,12 @@ function buildPanels(){
           <div class="fi"><label>Período</label>
             <select id="cob-mes-sel" onchange="cobCambiarMes()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;min-width:160px"></select>
           </div>
+          <div class="fi"><label>&nbsp;</label>
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 0">
+              <input type="checkbox" id="cob-ver-todos" onchange="cobToggleVerTodos()" style="accent-color:var(--teal)">
+              <span style="font-size:12px;color:var(--muted)">Ver todos los períodos</span>
+            </label>
+          </div>
           <div class="fi"><label>Compañía</label>
             <select id="cob-filtro-cia" onchange="cobCambiarFiltros()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></select>
           </div>
@@ -2143,6 +2149,10 @@ function buildPanels(){
               <input id="cob-filtro-cliente" type="search" placeholder="🔍 Buscar cliente..." oninput="cobCambiarFiltros()" autocomplete="off"
                 style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;min-width:200px;width:100%">
             </div>
+          </div>
+          <div class="fi"><label>N&#176; Documento</label>
+            <input id="cob-filtro-numdoc" type="search" placeholder="🔍 Ej: 002887..." oninput="cobCambiarFiltros()" autocomplete="off"
+              style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;min-width:140px">
           </div>
           <div class="fi"><label>Estado</label>
             <select id="cob-filtro-estado" onchange="cobCambiarFiltros()" style="padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
@@ -2247,7 +2257,7 @@ function buildPanels(){
       </div>
       <div class="tw"><table>
         <thead><tr>
-          <th>Fecha</th><th>N&#176; Documento</th><th>Estado Factura</th><th>Compañía</th><th>Razón Social</th>
+          <th>Fecha</th><th>Período</th><th>N&#176; Documento</th><th>Estado Factura</th><th>Compañía</th><th>Razón Social</th>
           <th style="text-align:center">T. Período<br>Gracia</th>
           <th style="text-align:right">Subtotal<br>IVA &gt;0%</th>
           <th style="text-align:right">Subtotal<br>IVA 0%</th>
@@ -2323,8 +2333,21 @@ function buildPanels(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
-        <div class="card-title" style="margin:0">Lista de Clientes <span class="badge" id="cob-cli-count">0</span></div>
-        <p style="font-size:11px;color:var(--muted);margin-top:3px">El día límite define cuándo debe emitirse la factura de cada cliente cada mes.</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div class="card-title" style="margin:0">Lista de Clientes <span class="badge" id="cob-cli-count">0</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="cob-cli-filtro-cia" onchange="cobRenderClientesConfig()" style="padding:7px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none">
+              <option value="">Todas las compañías</option>
+              <option value="NOVACLEAN S.A.">NOVACLEAN</option>
+              <option value="HOMECLEAN C.A">HOMECLEAN</option>
+              <option value="INMOCLEAN S.A">INMOCLEAN</option>
+            </select>
+            <input id="cob-cli-filtro-nombre" type="search" placeholder="🔍 Buscar cliente..." oninput="cobRenderClientesConfig()" autocomplete="off"
+              style="padding:7px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;min-width:200px">
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px">El día límite define cuándo debe emitirse la factura de cada cliente cada mes. Usa el filtro para revisar, compañía por compañía, que todos los clientes estén registrados.</p>
+        <p id="cob-cli-filtro-resumen" style="font-size:11px;color:var(--teal);margin-top:3px;display:none"></p>
       </div>
       <div class="tw"><table>
         <thead><tr>
@@ -5592,6 +5615,8 @@ let cob_mesActivo   = '';   // "YYYY-MM"
 let cob_filtroEstado= '';
 let cob_filtroCia   = '';
 let cob_filtroCliente='';
+let cob_filtroNumDoc = '';
+let cob_verTodosPeriodos = false;
 
 // ── INICIALIZACIÓN ────────────────────────────────────────────────────────
 function initCobranzas(){
@@ -5609,6 +5634,11 @@ function initCobranzas(){
   if(!db.cobFacturas)   db.cobFacturas   = [];
   if(!db.cobContadores) db.cobContadores = {nc:0, hc:0, ic:0};
   cob_clientes = db.cobClientes;
+
+  // Corregir automáticamente fechas mal guardadas (año a 2 dígitos, etc.)
+  cobNormalizarFechas();
+  // Completar automáticamente la Fecha Límite Emisión vacía con 60 días de crédito
+  cobBackfillFechaLimite();
 
   // Mes por defecto: mes actual
   if(!cob_mesActivo){
@@ -5672,10 +5702,34 @@ function cobCambiarFiltros(){
   var sc = document.getElementById('cob-filtro-cia');
   var sk = document.getElementById('cob-filtro-cliente');
   var se = document.getElementById('cob-filtro-estado');
+  var sn = document.getElementById('cob-filtro-numdoc');
   cob_filtroCia     = sc ? sc.value : '';
   cob_filtroCliente = sk ? sk.value.trim() : '';
   cob_filtroEstado  = se ? se.value : '';
+  cob_filtroNumDoc  = sn ? sn.value.trim() : '';
   cobPopularFiltros();
+  cobRenderTabla();
+}
+
+// ── VER TODOS LOS PERÍODOS (diagnóstico / búsqueda histórica) ─────────────
+function cobCorregirPeriodo(idx){
+  var f = db.cobFacturas && db.cobFacturas[idx];
+  if(!f){toast('Factura no encontrada',true);return;}
+  var d = cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
+  if(!d || isNaN(d.getTime())){toast('No se pudo determinar la fecha de esta factura',true);return;}
+  var mesCorrecto = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  f.mes = mesCorrecto;
+  saveDB();
+  cobPopularFiltros();
+  cobRenderTabla();
+  toast('✅ Período corregido a '+mesCorrecto+' para la factura '+f.numDoc);
+}
+
+function cobToggleVerTodos(){
+  var chk = document.getElementById('cob-ver-todos');
+  cob_verTodosPeriodos = !!(chk && chk.checked);
+  var selMes = document.getElementById('cob-mes-sel');
+  if(selMes) selMes.disabled = cob_verTodosPeriodos;
   cobRenderTabla();
 }
 
@@ -5700,7 +5754,9 @@ function cobRenderIndicadores(){
   var aTiempo = delMes.filter(function(f){
     if(f.estado==='Anulada') return false;
     if(!f.fechaEmision||!f.fechaLimite) return false;
-    return new Date(f.fechaEmision) <= new Date(f.fechaLimite);
+    var dEm = cobParseAnyDate(f.fechaEmision), dLim = cobParseAnyDate(f.fechaLimite);
+    if(!dEm||!dLim) return false;
+    return dEm <= dLim;
   }).length;
   var pctEmision = totalEmitir>0 ? Math.round((aTiempo/totalEmitir)*100) : 0;
 
@@ -5719,7 +5775,9 @@ function cobRenderIndicadores(){
   });
   var corrientes = abiertas.filter(function(f){
     if(!f.fechaEmision) return false;
-    var dias = Math.round((hoy - new Date(f.fechaEmision))/(1000*60*60*24));
+    var dEm = cobParseAnyDate(f.fechaEmision);
+    if(!dEm) return false;
+    var dias = Math.round((hoy - dEm)/(1000*60*60*24));
     return dias <= 60;
   });
   var totalCorrienteFact  = corrientes.reduce(function(s,f){return s+(+f.total||0);},0);
@@ -5729,14 +5787,18 @@ function cobRenderIndicadores(){
   // 4. RECUPERACIÓN CARTERA VENCIDA (>60 días)
   var vencidas = abiertas.filter(function(f){
     if(!f.fechaEmision) return false;
-    var dias = Math.round((hoy - new Date(f.fechaEmision))/(1000*60*60*24));
+    var dEm = cobParseAnyDate(f.fechaEmision);
+    if(!dEm) return false;
+    var dias = Math.round((hoy - dEm)/(1000*60*60*24));
     return dias > 60;
   });
   var vencidasAnt = delMesAnt.filter(function(f){
     return f.estado==='Abierta' && f.saldo>0;
   }).filter(function(f){
     if(!f.fechaEmision) return false;
-    var dias = Math.round((hoy - new Date(f.fechaEmision))/(1000*60*60*24));
+    var dEm = cobParseAnyDate(f.fechaEmision);
+    if(!dEm) return false;
+    var dias = Math.round((hoy - dEm)/(1000*60*60*24));
     return dias > 60;
   });
   var saldoVencido    = vencidas.reduce(function(s,f){return s+(+f.saldo||0);},0);
@@ -5819,9 +5881,10 @@ function cobRenderTabla(){
   if(!body) return;
 
   var lista = (db.cobFacturas||[]).filter(function(f){
-    if(f.mes !== cob_mesActivo) return false;
+    if(!cob_verTodosPeriodos && f.mes !== cob_mesActivo) return false;
     if(cob_filtroCia && f.cia !== cob_filtroCia) return false;
     if(cob_filtroCliente && !(f.razonSocial||'').toLowerCase().includes(cob_filtroCliente.toLowerCase())) return false;
+    if(cob_filtroNumDoc && !(f.numDoc||'').toLowerCase().includes(cob_filtroNumDoc.toLowerCase())) return false;
     if(cob_filtroEstado && f.estado !== cob_filtroEstado) return false;
     return true;
   });
@@ -5839,7 +5902,7 @@ function cobRenderTabla(){
   if(countEl) countEl.textContent = lista.length;
 
   if(!lista.length){
-    body.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px">Sin facturas para este período. Usa el botón ➕ para registrar.</td></tr>';
+    body.innerHTML='<tr><td colspan="19" style="text-align:center;color:var(--muted);padding:24px">Sin facturas para este período. Usa el botón ➕ para registrar.</td></tr>';
     return;
   }
 
@@ -5876,7 +5939,9 @@ function cobRenderTabla(){
       : f.estadoGestion==='Cliente sin respuesta'
       ? '<span class="tag ter" style="font-size:10px">📵 Sin resp.</span>'
       : '<span style="color:var(--muted);font-size:11px">—</span>';
-    var aTiempo = f.fechaEmision&&f.fechaLimite ? (new Date(f.fechaEmision)<=new Date(f.fechaLimite)) : null;
+    var dEmFila = f.fechaEmision ? cobParseAnyDate(f.fechaEmision) : null;
+    var dLimFila = f.fechaLimite ? cobParseAnyDate(f.fechaLimite) : null;
+    var aTiempo = (dEmFila&&dLimFila) ? (dEmFila<=dLimFila) : null;
     var tagEmision = aTiempo===null ? '—'
       : aTiempo ? '<span style="color:var(--teal);font-size:11px">✓ A tiempo</span>'
       : '<span style="color:var(--red);font-size:11px">⚠️ Tardía</span>';
@@ -5898,8 +5963,23 @@ function cobRenderTabla(){
     }
     var comentario = comentarioTxt ? '<span title="'+comentarioTxt.replace(/"/g,'&quot;')+'" style="font-size:10px;color:var(--muted);max-width:120px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+comentarioTxt+'</span>' : '<span style="color:var(--muted)">—</span>';
 
+    var nombresMes=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    var periodoLbl = '—';
+    var periodoSospechoso = false;
+    if(f.mes){
+      var pm = f.mes.split('-');
+      periodoLbl = (nombresMes[parseInt(pm[1])-1]||pm[1])+' '+pm[0];
+      // Si la fecha de emisión real cae en un mes distinto al período asignado, marcar como sospechoso
+      var dEm = cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
+      if(dEm && !isNaN(dEm.getTime())){
+        var mesReal = dEm.getFullYear()+'-'+String(dEm.getMonth()+1).padStart(2,'0');
+        if(mesReal !== f.mes) periodoSospechoso = true;
+      }
+    }
+
     return '<tr style="'+(f.estado==='Anulada'?'opacity:.6':'')+(saldo>0&&typeof dias==='number'&&dias>60?';background:rgba(224,82,99,.04)':'')+'"">'
       +'<td style="font-size:11px;white-space:nowrap">'+cobFmtFecha(f.fecha)+'</td>'
+      +'<td style="font-size:11px;white-space:nowrap'+(periodoSospechoso?';color:var(--amber);font-weight:700':'')+'" '+(periodoSospechoso?'title="La fecha de emisión no coincide con el período asignado — revisar"':'')+'>'+periodoLbl+(periodoSospechoso?' ⚠️ <button class="btn btn-a btn-sm" style="padding:1px 6px;font-size:9px" onclick="cobCorregirPeriodo('+idx+')" title="Reasignar el período según la fecha de emisión real">Corregir</button>':'')+'</td>'
       +'<td><code style="color:var(--teal);font-size:11px">'+f.numDoc+'</code></td>'
       +'<td>'+tagEstado+'</td>'
       +'<td style="font-size:11px;color:var(--muted)">'+cobCiaCorta(f.cia)+'</td>'
@@ -5968,17 +6048,38 @@ function cobActualizarFormClientes(){
 function cobActualizarFechaLimite(){
   var cia    = (document.getElementById('cob-cia')||{}).value||'';
   var razon  = (document.getElementById('cob-razon')||{}).value||'';
+  var razonManualWrap = document.getElementById('cob-razon-manual-wrap');
+  var razonManual = (razonManualWrap && razonManualWrap.style.display!=='none')
+    ? ((document.getElementById('cob-razon-manual')||{}).value||'') : '';
+  var razonReal = razonManual || razon;
   var mesVal = (document.getElementById('cob-mes-hidden')||{}).value||cob_mesActivo;
-  var cli = cob_clientes.find(function(c){return c.cia===cia && c.razon===razon;});
-  if(!cli || !mesVal) return;
-  var p = mesVal.split('-');
-  var anio = parseInt(p[0]), mes = parseInt(p[1]);
-  var dia  = parseInt(cli.diaFactura)||1;
-  // Límite = día de facturación del mes
-  var limite = new Date(anio, mes-1, dia);
-  var lStr = limite.getFullYear()+'-'+String(limite.getMonth()+1).padStart(2,'0')+'-'+String(limite.getDate()).padStart(2,'0');
+  var fechaEm = (document.getElementById('cob-fecha-emision')||{}).value||'';
   var el = document.getElementById('cob-fecha-limite');
-  if(el) el.value = lStr;
+  if(!el) return;
+
+  // Buscar al cliente: primero coincidencia exacta y, si no hay, coincidencia
+  // aproximada (por si la razón social de la factura no es idéntica a la del
+  // catálogo, ej: "FRUTADELI" en la lista vs "FRUTADELI S.A." en la factura).
+  var cli = cob_clientes.find(function(c){return c.cia===cia && c.razon===razonReal;});
+  if(!cli && razonReal) cli = cob_clientes.find(function(c){return c.cia===cia && cobClienteCoincide(razonReal, c);});
+
+  // 1) Lo que realmente define el indicador: el Día Límite configurado para
+  // ESE cliente (ej: "debe facturarse antes del día 10 de cada mes").
+  if(cli && cli.diaFactura && mesVal){
+    var p = mesVal.split('-');
+    var anio = parseInt(p[0]), mes = parseInt(p[1]);
+    var dia  = parseInt(cli.diaFactura)||1;
+    var limite = new Date(anio, mes-1, dia);
+    el.value = cobDateAIso(limite);
+    return;
+  }
+  // 2) Solo si el cliente no tiene Día Límite configurado, o no se encontró
+  // en el catálogo, se usan sus días de crédito (60 por defecto) desde la
+  // fecha de emisión, como respaldo.
+  if(fechaEm){
+    var dias = (cli && cli.diasGracia) ? parseInt(cli.diasGracia) : 60;
+    el.value = cobSumarDias(fechaEm, dias);
+  }
 }
 
 function cobCalcTotales(){
@@ -6143,6 +6244,7 @@ function cobEditar(idx){
   }
   s('cob-fecha-emision',f.fechaEmision);
   s('cob-fecha-limite', f.fechaLimite);
+  if(!f.fechaLimite) cobActualizarFechaLimite(); // sin fecha límite guardada → usar 60 días de crédito
   s('cob-subtotal',     f.subtotal);
   s('cob-subtotal0',    f.subtotal0||'');
   s('cob-retenciones',  f.retenciones||'');
@@ -6203,7 +6305,8 @@ function cobPreviewMes(){
 
   var rows = lista.map(function(f){
     var hoy=new Date();
-    var dias=f.fechaEmision?Math.round((hoy-new Date(f.fechaEmision))/(1000*60*60*24)):'—';
+    var dEmPv = f.fechaEmision ? cobParseAnyDate(f.fechaEmision) : null;
+    var dias = dEmPv ? Math.round((hoy-dEmPv)/(1000*60*60*24)) : '—';
     return '<tr>'
       +'<td>'+cobFmtFecha(f.fecha)+'</td>'
       +'<td>'+f.numDoc+'</td>'
@@ -6543,6 +6646,21 @@ function cobEjecutarImport(){
       if(auth)    comentario='Aut. SRI: '+auth;
       if(descRaw) comentario=(comentario?comentario+' · ':'')+descRaw.substring(0,120);
 
+      // Fecha límite: primero el Día Límite configurado para ese cliente
+      // (es lo que realmente mide el indicador de "Emisión a Tiempo"); si el
+      // cliente no tiene ese día configurado, se usan sus días de crédito
+      // (60 por defecto) desde la fecha de emisión, como respaldo.
+      var cliImp = (db.cobClientes||[]).find(function(c){return c.cia===cia && cobClienteCoincide(razon, c);});
+      var diasGraciaImp = (cliImp && cliImp.diasGracia) ? parseInt(cliImp.diasGracia) : 60;
+      var fechaLimImp = '';
+      if(cliImp && cliImp.diaFactura && mesFac){
+        var pImp = mesFac.split('-');
+        var limiteImpDate = new Date(parseInt(pImp[0]), parseInt(pImp[1])-1, parseInt(cliImp.diaFactura)||1);
+        fechaLimImp = cobDateAIso(limiteImpDate);
+      } else {
+        fechaLimImp = cobSumarDias(fechaEm||hoy, diasGraciaImp);
+      }
+
       if(!db.cobFacturas) db.cobFacturas=[];
       db.cobFacturas.push({
         fecha:        fechaEm||hoy,
@@ -6551,8 +6669,8 @@ function cobEjecutarImport(){
         cia:          cia,
         razonSocial:  razon,
         fechaEmision: fechaEm||hoy,
-        fechaLimite:  '',
-        diasGracia:   60,
+        fechaLimite:  fechaLimImp,
+        diasGracia:   diasGraciaImp,
         subtotal:     sub12,
         subtotal0:    sub0,
         iva:          iva,
@@ -6591,6 +6709,12 @@ function cobParseFecha(val){
   // dd/mm/yyyy
   var m1=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
   if(m1) return m1[3]+'-'+m1[2].padStart(2,'0')+'-'+m1[1].padStart(2,'0');
+  // dd/mm/yy (año de 2 dígitos — ej: 05/05/26 → 2026)
+  var m1b=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2})$/);
+  if(m1b){
+    var yr=parseInt(m1b[3],10); yr = yr<50 ? 2000+yr : 1900+yr;
+    return yr+'-'+m1b[2].padStart(2,'0')+'-'+m1b[1].padStart(2,'0');
+  }
   // yyyy-mm-dd
   var m2=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(m2) return s;
@@ -6620,6 +6744,84 @@ function cobParseAnyDate(val){
   var n = parseFloat(s);
   if(!isNaN(n) && n > 40000) return new Date(Math.round((n-25569)*864e5));
   return null;
+}
+// Convierte un objeto Date a texto ISO yyyy-mm-dd
+function cobDateAIso(d){
+  if(!d||isNaN(d.getTime())) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// Suma N días a una fecha (en cualquier formato reconocible) y devuelve texto ISO yyyy-mm-dd.
+// Se usa para calcular la Fecha Límite Emisión cuando está vacía, usando los
+// días de crédito del cliente (60 días por defecto para todos).
+function cobSumarDias(fechaVal, dias){
+  var d = cobParseAnyDate(fechaVal);
+  if(!d) return '';
+  d.setDate(d.getDate()+(parseInt(dias)||60));
+  return cobDateAIso(d);
+}
+
+// ── CORRECCIÓN AUTOMÁTICA DE FECHAS MAL GUARDADAS ──────────────────────────
+// Antes, las fechas con año de 2 dígitos (ej: 05/05/26) importadas desde Excel
+// quedaban guardadas como texto plano en vez de fecha real, y por eso el
+// indicador "Emisión a Tiempo" no las contabilizaba correctamente hasta que
+// alguien las editaba manualmente. Esta función corrige TODAS las facturas
+// ya guardadas de una sola vez, automáticamente, cada vez que se abre el
+// módulo — así no hay que entrar a editar factura por factura.
+function cobEsFechaISO(s){
+  return typeof s==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+function cobNormalizarFechas(){
+  var cambios = 0;
+  (db.cobFacturas||[]).forEach(function(f){
+    ['fecha','fechaEmision','fechaLimite','fechaCobro'].forEach(function(campo){
+      var val = f[campo];
+      if(!val || cobEsFechaISO(val)) return; // vacío o ya en formato correcto
+      var d = cobParseAnyDate(String(val));
+      if(d && !isNaN(d.getTime())){
+        f[campo] = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        cambios++;
+      }
+    });
+  });
+  if(cambios>0){
+    saveDB();
+    toast('🔧 Se corrigieron '+cambios+' fecha(s) con formato incorrecto (año a 2 dígitos)');
+  }
+  return cambios;
+}
+
+// Completa/corrige automáticamente la "Fecha Límite Emisión" de las facturas,
+// dando prioridad al Día Límite configurado para cada cliente (lo que de
+// verdad mide el indicador "Emisión a Tiempo"); solo si el cliente no tiene
+// ese día configurado se usan sus días de crédito (60 por defecto) desde la
+// fecha de emisión, como respaldo. Las facturas importadas se recalculan
+// siempre (por si quedaron vacías o mal calculadas en una versión anterior);
+// las creadas manualmente solo se completan si están vacías, para no pisar
+// un valor que el usuario haya definido a propósito.
+function cobBackfillFechaLimite(){
+  var cambios = 0;
+  (db.cobFacturas||[]).forEach(function(f){
+    var debeRecalcular = f.importado ? true : !f.fechaLimite;
+    if(!debeRecalcular) return;
+    var fechaBase = f.fechaEmision || f.fecha;
+    if(!fechaBase) return;
+    var cli = (db.cobClientes||[]).find(function(c){return c.cia===f.cia && cobClienteCoincide(f.razonSocial, c);});
+    var nuevoLim = '';
+    if(cli && cli.diaFactura && f.mes){
+      var p = f.mes.split('-');
+      var limiteDate = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(cli.diaFactura)||1);
+      nuevoLim = cobDateAIso(limiteDate);
+    } else {
+      var dias = (cli && cli.diasGracia) ? parseInt(cli.diasGracia) : 60;
+      nuevoLim = cobSumarDias(fechaBase, dias);
+    }
+    if(nuevoLim && nuevoLim!==f.fechaLimite){ f.fechaLimite = nuevoLim; cambios++; }
+  });
+  if(cambios>0){
+    saveDB();
+    toast('🔧 Se recalculó la fecha límite de '+cambios+' factura(s) según el día límite de cada cliente');
+  }
+  return cambios;
 }
 
 // Parsear número desde varios formatos ($1.234,56 / 1234.56 / etc.)
@@ -6713,7 +6915,7 @@ function cobClienteCoincide(razonFactura, cliente){
 function cobCalcCruceClientes(){
   var facturas = db.cobFacturas || [];
   var hoy = new Date();
-  return (db.cobClientes||[]).map(function(c){
+  return (db.cobClientes||[]).map(function(c, idx){
     var matched = facturas.filter(function(f){ return f.cia===c.cia && cobClienteCoincide(f.razonSocial, c); });
     var ultima = null;
     matched.forEach(function(f){
@@ -6722,7 +6924,7 @@ function cobCalcCruceClientes(){
     });
     var dias = ultima ? Math.round((hoy-ultima)/(1000*60*60*24)) : null;
     var diag = matched.length===0 ? 'nunca' : (dias!==null && dias>90 ? 'estancado' : 'activo');
-    return {cliente:c, count:matched.length, ultima:ultima, dias:dias, diag:diag};
+    return {cliente:c, idx:idx, count:matched.length, ultima:ultima, dias:dias, diag:diag};
   });
 }
 // Detecta razones sociales facturadas que no calzan con ningún cliente del maestro
@@ -6802,8 +7004,37 @@ function cobRenderClientesConfig(){
   var noReg = cobCalcNoRegistrados();
   cobRenderCruceStats(cruce, noReg);
   cobRenderCruceNoRegistrados(noReg);
-  body.innerHTML=cruce.map(function(r,i){
-    var c = r.cliente;
+
+  // ── Filtro de compañía + búsqueda por nombre (para verificar que estén todos los clientes de cada empresa) ──
+  var selCia = document.getElementById('cob-cli-filtro-cia');
+  var inpNom = document.getElementById('cob-cli-filtro-nombre');
+  var filtroCia = selCia ? selCia.value : '';
+  var filtroNom = inpNom ? inpNom.value.trim().toLowerCase() : '';
+  var visibles = cruce.filter(function(r){
+    if(filtroCia && r.cliente.cia!==filtroCia) return false;
+    if(filtroNom && !(r.cliente.razon||'').toLowerCase().includes(filtroNom)) return false;
+    return true;
+  });
+
+  var countBadge = document.getElementById('cob-cli-count');
+  if(countBadge) countBadge.textContent = cruce.length;
+  var resumen = document.getElementById('cob-cli-filtro-resumen');
+  if(resumen){
+    if(filtroCia || filtroNom){
+      resumen.style.display='block';
+      resumen.textContent = 'Mostrando '+visibles.length+' de '+cruce.length+' clientes'+(filtroCia?' de '+cobCiaCorta(filtroCia):'');
+    } else {
+      resumen.style.display='none';
+    }
+  }
+
+  if(!visibles.length){
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Ningún cliente coincide con el filtro.</td></tr>';
+    return;
+  }
+
+  body.innerHTML=visibles.map(function(r){
+    var c = r.cliente, i = r.idx;
     var diagTxt = r.diag==='nunca'
       ? '🔴 Sin facturas registradas — este cliente podría ya no estar activo'
       : r.diag==='estancado'
@@ -6868,7 +7099,8 @@ function cobAgregarCliente(){
 function cobFmtFecha(f){
   if(!f) return '—';
   var d=new Date(f+'T12:00:00');
-  if(isNaN(d)) return f;
+  if(isNaN(d)) d=cobParseAnyDate(f);
+  if(!d||isNaN(d.getTime())) return f;
   return d.getDate().toString().padStart(2,'0')+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getFullYear();
 }
 function cobCiaCorta(cia){
