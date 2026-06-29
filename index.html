@@ -2302,7 +2302,11 @@ function buildPanels(){
     <div class="card">
       <div class="card-title" style="margin-bottom:6px">🔄 Cruce de Clientes vs Facturas Emitidas</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Compara tu lista de clientes de facturación contra las facturas realmente emitidas, para detectar clientes que ya no facturan y clientes facturados que aún no están registrados aquí.</p>
-      <div class="sg" id="cob-cruce-stats" style="margin-bottom:0"></div>
+      <div class="sg" id="cob-cruce-stats" style="margin-bottom:14px"></div>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-s" onclick="cobActualizarNombresSimplificados()">🔄 Reemplazar nombres simplificados por la razón social completa (según facturas)</button>
+      </div>
+      <div id="cob-cruce-renombrados" style="display:none;margin-top:12px"></div>
     </div>
     <div class="card" id="cob-cruce-noreg-card" style="display:none">
       <div class="card-title">⚠️ Facturados sin registrar en la lista de clientes</div>
@@ -5637,6 +5641,9 @@ function initCobranzas(){
 
   // Corregir automáticamente fechas mal guardadas (año a 2 dígitos, etc.)
   cobNormalizarFechas();
+  // Reemplazar automáticamente nombres simplificados del maestro de clientes
+  // por la razón social completa con la que realmente se factura
+  cobActualizarNombresSimplificados(true);
   // Completar automáticamente la Fecha Límite Emisión vacía con 60 días de crédito
   cobBackfillFechaLimite();
 
@@ -6996,6 +7003,52 @@ function cobAgregarDesdeFactura(cia, razon){
   saveDB();
   cobRenderClientesConfig(); cobPopularFiltros();
   toast('✅ Cliente "'+razon+'" agregado a la lista');
+}
+// Reemplaza nombres "simplificados" del maestro de clientes (ej: "FRUTADELI")
+// por la razón social completa con la que realmente se factura (ej:
+// "FRUTADELI S.A."), cruzando contra las facturas emitidas. Para cada
+// cliente busca, entre las facturas que le hacen match, el texto de razón
+// social más usado; si ese texto es más completo (más largo) que el nombre
+// guardado, actualiza el nombre del cliente. No elimina ni duplica clientes
+// — solo corrige el nombre guardado para que sea la razón social real.
+function cobActualizarNombresSimplificados(silencioso){
+  var facturas = db.cobFacturas || [];
+  var cambios = [];
+  (db.cobClientes||[]).forEach(function(c){
+    var matched = facturas.filter(function(f){ return f.cia===c.cia && f.razonSocial && cobClienteCoincide(f.razonSocial, c); });
+    if(!matched.length) return;
+    var conteo = {};
+    matched.forEach(function(f){
+      var k = f.razonSocial.trim();
+      conteo[k] = (conteo[k]||0)+1;
+    });
+    var mejorNombre = Object.keys(conteo).sort(function(a,b){return conteo[b]-conteo[a];})[0];
+    if(mejorNombre && mejorNombre.toUpperCase()!==c.razon.toUpperCase() && mejorNombre.length>c.razon.length){
+      cambios.push({id:c.id, antes:c.razon, despues:mejorNombre.toUpperCase()});
+      c.razon = mejorNombre.toUpperCase();
+    }
+  });
+  var resBox = document.getElementById('cob-cruce-renombrados');
+  if(cambios.length){
+    saveDB();
+    cobRenderClientesConfig();
+    cobPopularFiltros();
+    toast('✅ Se actualizaron '+cambios.length+' nombre(s) a su razón social completa');
+    if(resBox){
+      resBox.style.display='block';
+      resBox.innerHTML = '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Nombres actualizados</div>'
+        + cambios.map(function(ch){
+            return '<div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)">'
+              +'<code style="font-size:10px;color:var(--teal)">'+ch.id+'</code> &nbsp; '
+              +'<span style="color:var(--muted);text-decoration:line-through">'+ch.antes+'</span>'
+              +' &nbsp;→&nbsp; <strong>'+ch.despues+'</strong></div>';
+          }).join('');
+    }
+  } else if(!silencioso){
+    toast('No se encontraron nombres simplificados para actualizar');
+    if(resBox){ resBox.style.display='block'; resBox.innerHTML='<p style="font-size:12px;color:var(--muted)">Todos los nombres del catálogo ya coinciden con la razón social facturada.</p>'; }
+  }
+  return cambios.length;
 }
 function cobRenderClientesConfig(){
   var body=document.getElementById('cob-clientes-body');
