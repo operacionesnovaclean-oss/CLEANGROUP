@@ -7640,31 +7640,33 @@ function campoPrintPDF(){
 
   if(!reqs.length){toast('No hay requisiciones para imprimir',true);return;}
 
-  // ── Consolidar por empresa → cliente ──────────────────────────────────────
-  const consolMap={};
-  reqs.forEach(function(r){
-    const emp=r.empresa||'—', cli=r.cliente||'—';
-    if(!consolMap[emp]) consolMap[emp]={};
-    if(!consolMap[emp][cli]) consolMap[emp][cli]={items:{},ops:new Set(),periodos:new Set()};
-    const block=consolMap[emp][cli];
-    block.ops.add(r.operativo||'?');
-    block.periodos.add(r.periodo||'?');
-    (r.items||[]).forEach(function(it){
-      if(!it.qty||+it.qty===0) return;
-      const key=it.prod+'|'+it.unidad;
-      if(!block.items[key]) block.items[key]={prod:it.prod,unidad:it.unidad,grupo:it.grupo||'INSUMOS',qty:0};
-      block.items[key].qty+=+it.qty;
+  // ── Consolidar por empresa → cliente, respetando la revisión ────────────────
+  // Usa el mismo consolidado que la vista en pantalla: los ítems rechazados
+  // se omiten, los ajustados usan la cantidad revisada y solo se listan
+  // ítems que ya fueron revisados/aprobados (no lo pendiente de revisar).
+  const consolMap=campoBuildConsolMap(reqs);
+
+  var sinRevisarCount=0;
+  Object.values(consolMap).forEach(function(clis){
+    Object.values(clis).forEach(function(data){
+      Object.values(data.items).forEach(function(it){
+        if(!it.revisado) sinRevisarCount++;
+      });
     });
   });
 
-  // ── Totales generales ──────────────────────────────────────────────────────
+  // ── Totales generales (solo ítems revisados, aprobados o ajustados) ────────
   var totalItems=0, numReq=0;
   Object.values(consolMap).forEach(function(clis){
     Object.values(clis).forEach(function(data){
+      var itemsRevisados=Object.values(data.items).filter(function(i){return i.qty>0&&i.revisado&&!i.rechazado;});
+      if(!itemsRevisados.length) return;
       numReq++;
-      totalItems+=Object.values(data.items).filter(function(i){return i.qty>0;}).length;
+      totalItems+=itemsRevisados.length;
     });
   });
+
+  if(!totalItems){toast('No hay ítems revisados/aprobados para imprimir todavía',true);return;}
 
   // ── Construir UNA tabla multi-cliente compacta por empresa ─────────────────
   // Cada empresa ocupa un bloque con una única tabla donde las filas de
@@ -7678,7 +7680,7 @@ function campoPrintPDF(){
 
     Object.entries(clis).forEach(function(cliEntry){
       var cli=cliEntry[0], data=cliEntry[1];
-      var itemsArr=Object.values(data.items).filter(function(i){return i.qty>0;});
+      var itemsArr=Object.values(data.items).filter(function(i){return i.qty>0&&i.revisado&&!i.rechazado;});
       if(!itemsArr.length) return;
       var periodoStr=[...data.periodos].join(', ');
       var opsStr=[...data.ops].join(', ');
@@ -7736,9 +7738,12 @@ function campoPrintPDF(){
       +'</div>';
   });
 
-  var filtroLabel='';
+  var filtroLabel='<div style="background:#e8f5e9;border-left:3px solid #2e7d32;padding:4px 10px;margin-bottom:10px;font-size:10px;color:#1b5e20">'
+    +'✅ Solo ítems ya <strong>revisados/aprobados</strong>'
+    +(sinRevisarCount?' &nbsp;|&nbsp; ⏳ '+sinRevisarCount+' ítem(s) sin revisar excluido(s) de esta impresión':'')
+    +'</div>';
   if(periodo||empresa||opF){
-    filtroLabel='<div style="background:#fff8e1;border-left:3px solid #f5a623;padding:4px 10px;margin-bottom:10px;font-size:10px;color:#7a5000">'
+    filtroLabel+='<div style="background:#fff8e1;border-left:3px solid #f5a623;padding:4px 10px;margin-bottom:10px;font-size:10px;color:#7a5000">'
       +'Filtro: '+(periodo?'<strong>'+periodo+'</strong> ':'')
       +(empresa?'<strong>'+empresa+'</strong> ':'')
       +(opF?'<strong>'+opF+'</strong>':'')
@@ -7755,7 +7760,7 @@ function campoPrintPDF(){
     +'</style></head><body>'
     +'<div style="text-align:center;margin-bottom:6px;padding-bottom:5px;border-bottom:2px solid #0a2e22">'
     +'<div style="font-size:13px;font-weight:700;color:#0a2e22">CLEAN GROUP CONSORCIO</div>'
-    +'<div style="font-size:9px;color:#555;margin-top:1px">REQUISICIONES DE CAMPO — CONSOLIDADO PARA BODEGA</div>'
+    +'<div style="font-size:9px;color:#555;margin-top:1px">REQUISICIONES DE CAMPO — CONSOLIDADO PARA BODEGA (REVISADAS)</div>'
     +'<div style="font-size:8px;color:#777;margin-top:4px">'
     +'📋 '+numReq+' requisiciones &nbsp;|&nbsp; 📦 '+totalItems+' ítems &nbsp;|&nbsp; 📅 '+new Date().toLocaleDateString('es-EC')
     +'</div></div>'
@@ -7770,7 +7775,7 @@ function campoPrintPDF(){
   if(!win){toast('Brave bloqueó la ventana — permite pop-ups para este sitio',true);return;}
   win.document.write(pdfHtml);
   win.document.close();
-  toast('📄 Impresión compacta lista — '+numReq+' requisiciones en menos hojas');
+  toast('📄 Impresión lista — '+numReq+' requisiciones revisadas'+(sinRevisarCount?' ('+sinRevisarCount+' ítem(s) sin revisar excluidos)':''));
 }
 
 // ── EXPORTAR REQUISICIONES A EXCEL CON COLORES (ExcelJS) ───────────────────
