@@ -479,7 +479,7 @@ function doLogout(){
 // ═══════════════════════════════
 // DB (estructura local igual que antes)
 // ═══════════════════════════════
-var db={reqMensuales:[],necesidades:[],ordenesCompra:[],actasIngreso:[],actasEntrega:[],inventario:[],counters:{rm:0,nec:0,oc:0,ai:0,ae:0}};
+var db={reqMensuales:[],necesidades:[],ordenesCompra:[],actasIngreso:[],actasEntrega:[],inventario:[],catalogoExtra:[],counters:{rm:0,nec:0,oc:0,ai:0,ae:0}};
 
 function setCloudStatus(msg,color){
   const el=document.getElementById('cloud-indicator');
@@ -495,6 +495,7 @@ function applyDBData(json){
     db.actasIngreso  = p.actasIngreso  || [];
     db.actasEntrega  = p.actasEntrega  || [];
     db.inventario    = p.inventario    || [];
+    db.catalogoExtra  = p.catalogoExtra  || [];
     db.counters      = p.counters      || {rm:0,nec:0,oc:0,ai:0,ae:0};
     if(p.cobFacturas)   db.cobFacturas   = p.cobFacturas;
     if(p.cobClientes)   db.cobClientes   = p.cobClientes;
@@ -512,6 +513,7 @@ function loadDB(){
 
   function ensureFields(){
     if(!db.inventario||!db.inventario.length) initInv();
+    if(!db.catalogoExtra) db.catalogoExtra=[];
     if(!db.cobFacturas)   db.cobFacturas=[];
     if(!db.cobClientes)   db.cobClientes=[];
     if(!db.cobContadores) db.cobContadores={nc:0,hc:0,ic:0};
@@ -836,6 +838,29 @@ const CATALOG=[
   {cod:'SUM-N-023',desc:'CARPETA PLASTICAS',u:'Unidad'},
   {cod:'SUM-N-024',desc:'CINTA DOBLE FAST',u:'Unidad'},
 ];
+
+// Catálogo completo = catálogo base + ítems creados desde la app (persistidos en db.catalogoExtra)
+function fullCatalog(){ return CATALOG.concat(db.catalogoExtra||[]); }
+
+// Crea un ítem nuevo (código + descripción + unidad) y lo agrega al catálogo
+// (db.catalogoExtra) y al inventario, para que quede reflejado en toda la app.
+function catalogCrearItem(sugerido){
+  const desc=(prompt('Nombre del nuevo ítem:',sugerido||'')||'').trim().toUpperCase();
+  if(!desc) return null;
+  const cod=(prompt('Código del nuevo ítem (ej: MAT-N-099):','')||'').trim().toUpperCase();
+  if(!cod){ toast('Código requerido — ítem no creado',true); return null; }
+  if(fullCatalog().some(c=>c.cod===cod)){ toast('Ya existe un ítem con ese código: '+cod,true); return null; }
+  const u=((prompt('Unidad de medida (ej: Unidad, Galón, Caja...):','Unidad')||'').trim())||'Unidad';
+  const nuevo={cod,desc,u};
+  db.catalogoExtra=db.catalogoExtra||[];
+  db.catalogoExtra.push(nuevo);
+  if(!db.inventario.some(it=>it.cod===cod)){
+    db.inventario.push({cod,desc,ubic:'',unidad:u,stockMin:null,ini:0,entradas:0,salidas:0,stock:0,estado:'OK',critico:false,fechaCreacion:new Date().toISOString().slice(0,10),validaciones:{}});
+  }
+  saveDB();
+  toast('✅ Ítem "'+desc+'" creado ('+cod+') — ya disponible en el catálogo e inventario');
+  return nuevo;
+}
 
 const PROVEEDORES=[
   {cod:'PROV-001',nom:'PROINMA CIA LTDA',ruc:'0991330763001',dir:'KM3,5 VIA DURAN TAMBO',cont:'POLET ESPINOZA',tel:'0993904690',email:'proinma.cia@hotmail.com'},
@@ -3999,10 +4024,10 @@ function ocCargarNec(){
   ocItems=itemsFiltrados.map(it=>{
     const descUp=(it.desc||'').toUpperCase().trim();
     let match=null;
-    match=CATALOG.find(c=>c.desc.toUpperCase()===descUp);
-    if(!match){match=CATALOG.find(c=>{const words=c.desc.toUpperCase().split(' ').filter(w=>w.length>3);return words.length>=2&&words.every(w=>descUp.includes(w));});}
-    if(!match){match=CATALOG.find(c=>{const words=descUp.split(' ').filter(w=>w.length>3);return words.length>=2&&words.every(w=>c.desc.toUpperCase().includes(w));});}
-    if(!match){const fw=descUp.split(' ').find(w=>w.length>4);if(fw)match=CATALOG.find(c=>c.desc.toUpperCase().startsWith(fw));}
+    match=fullCatalog().find(c=>c.desc.toUpperCase()===descUp);
+    if(!match){match=fullCatalog().find(c=>{const words=c.desc.toUpperCase().split(' ').filter(w=>w.length>3);return words.length>=2&&words.every(w=>descUp.includes(w));});}
+    if(!match){match=fullCatalog().find(c=>{const words=descUp.split(' ').filter(w=>w.length>3);return words.length>=2&&words.every(w=>c.desc.toUpperCase().includes(w));});}
+    if(!match){const fw=descUp.split(' ').find(w=>w.length>4);if(fw)match=fullCatalog().find(c=>c.desc.toUpperCase().startsWith(fw));}
     return {cant:it.porComprar,cod:match?match.cod:'',desc:it.desc,precio:0,descuento:0,iva:true};
   });
   ocRenderItems();
@@ -4014,7 +4039,7 @@ function ocCargarNec(){
 function ocAddItem(){ocItems.push({cant:1,cod:'',desc:'',precio:0,descuento:0,iva:true});ocRenderItems();}
 
 function ocBuildCodCell(it,i){
-  var opts=CATALOG.map(function(c){
+  var opts=fullCatalog().map(function(c){
     return '<option value="'+c.cod+'"'+(c.cod===it.cod?' selected':'')+'>'+c.cod+' — '+c.desc.substring(0,24)+'</option>';
   }).join('');
   if(it.cod&&it.cod.trim()){
@@ -4054,7 +4079,7 @@ function ocRenderItems(){
   ocCalc();
 }
 
-function ocPickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){ocItems[i].cod=c.cod;ocItems[i].desc=c.desc;}ocRenderItems();}
+function ocPickCod(i,sel){const c=fullCatalog().find(x=>x.cod===sel.value);if(c){ocItems[i].cod=c.cod;ocItems[i].desc=c.desc;}ocRenderItems();}
 
 function ocCalc(){
   const sub=ocItems.reduce((s,it)=>s+(it.cant*it.precio)-(it.descuento||0),0);
@@ -4409,7 +4434,7 @@ function aiCargarOC(){
   aiItems=oc.items.map(it=>{
     let cod=it.cod||'';
     if(!cod){
-      const match=CATALOG.find(c=>c.desc.toUpperCase()===it.desc.toUpperCase()||c.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ').slice(0,2).join(' '))||it.desc.toUpperCase().includes(c.desc.toUpperCase().split(' ').slice(0,2).join(' ')));
+      const match=fullCatalog().find(c=>c.desc.toUpperCase()===it.desc.toUpperCase()||c.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ').slice(0,2).join(' '))||it.desc.toUpperCase().includes(c.desc.toUpperCase().split(' ').slice(0,2).join(' ')));
       if(match)cod=match.cod;
     }
     return {cantOC:Number(it.cant),cant:Number(it.cant),cod,desc:it.desc,estado:'Nuevo',obs:'',fromOC:true};
@@ -4490,19 +4515,32 @@ function aiAcSearch(i,q){
   const list=document.getElementById('ai-ac-list-'+i);if(!list)return;
   const term=(q||'').trim().toUpperCase();
   if(!term){list.style.display='none';return;}
-  const hits=CATALOG.filter(c=>c.desc.toUpperCase().includes(term)||c.cod.toUpperCase().includes(term)).slice(0,10);
-  if(!hits.length){list.style.display='none';return;}
-  list.innerHTML=hits.map(c=>`<div onmousedown="aiAcPick(${i},'${c.cod}')"
+  const hits=fullCatalog().filter(c=>c.desc.toUpperCase().includes(term)||c.cod.toUpperCase().includes(term)).slice(0,10);
+  const termEsc=term.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  let html=hits.map(c=>`<div onmousedown="aiAcPick(${i},'${c.cod}')"
     style="padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)"
     onmouseover="this.style.background='rgba(0,201,167,.15)'" onmouseout="this.style.background=''">
     <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal)">${c.cod}</span>
     <span style="font-size:12px;color:var(--text);margin-left:8px">${c.desc}</span>
     <span style="font-size:10px;color:var(--muted);margin-left:6px">${c.u}</span>
   </div>`).join('');
+  html+=`<div onmousedown="aiAcCrear(${i},'${termEsc}')"
+    style="padding:8px 12px;cursor:pointer;background:rgba(245,166,35,.06);${hits.length?'border-top:1px solid rgba(255,255,255,.1)':''}"
+    onmouseover="this.style.background='rgba(245,166,35,.18)'" onmouseout="this.style.background='rgba(245,166,35,.06)'">
+    <span style="font-size:12px;color:var(--amber);font-weight:600">➕ Crear nuevo ítem "${term}"</span>
+  </div>`;
+  list.innerHTML=html;
   list.style.display='block';
 }
 function aiAcPick(i,cod){
-  const c=CATALOG.find(x=>x.cod===cod);if(!c)return;
+  const c=fullCatalog().find(x=>x.cod===cod);if(!c)return;
+  aiItems[i].cod=c.cod;
+  aiItems[i].desc=c.desc;
+  aiRenderItems();
+}
+function aiAcCrear(i,term){
+  const c=catalogCrearItem(term);
+  if(!c) return;
   aiItems[i].cod=c.cod;
   aiItems[i].desc=c.desc;
   aiRenderItems();
@@ -4688,7 +4726,7 @@ function aeCargarCliente(){
   const[cliente,empresa]=val.split('||');
   const cd=aeRMRef.data?.[empresa]?.[cliente];if(!cd)return;
   const items=Object.values(cd).filter(v=>(+v.qty||0)>0);
-  aeItems=items.map(it=>{const match=CATALOG.find(c=>c.desc.toUpperCase()===it.prod.toUpperCase()||c.desc.toUpperCase().includes(it.prod.toUpperCase().split(' ').slice(0,2).join(' '))||it.prod.toUpperCase().includes(c.desc.toUpperCase().split(' ').slice(0,2).join(' ')));return {cant:it.qty,cod:match?match.cod:'',desc:it.prod,unidad:it.unidad,obs:`Período: ${aeRMRef.periodo}`,fromRM:true};});
+  aeItems=items.map(it=>{const match=fullCatalog().find(c=>c.desc.toUpperCase()===it.prod.toUpperCase()||c.desc.toUpperCase().includes(it.prod.toUpperCase().split(' ').slice(0,2).join(' '))||it.prod.toUpperCase().includes(c.desc.toUpperCase().split(' ').slice(0,2).join(' ')));return {cant:it.qty,cod:match?match.cod:'',desc:it.prod,unidad:it.unidad,obs:`Período: ${aeRMRef.periodo}`,fromRM:true};});
   const ceInput=document.getElementById('ae-cliente');
   if(ceInput) ceInput.value=cliente;
   const badge=document.getElementById('ae-badge');
@@ -4736,26 +4774,40 @@ function aeAcSearch(i,q){
   const list=document.getElementById('ae-ac-list-'+i);if(!list)return;
   const term=(q||'').trim().toUpperCase();
   if(!term){list.style.display='none';return;}
-  const hits=CATALOG.filter(c=>c.desc.toUpperCase().includes(term)||c.cod.toUpperCase().includes(term)).slice(0,10);
-  if(!hits.length){list.style.display='none';return;}
-  list.innerHTML=hits.map(c=>`<div onmousedown="aeAcPick(${i},'${c.cod}')"
+  const hits=fullCatalog().filter(c=>c.desc.toUpperCase().includes(term)||c.cod.toUpperCase().includes(term)).slice(0,10);
+  const termEsc=term.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  let html=hits.map(c=>`<div onmousedown="aeAcPick(${i},'${c.cod}')"
     style="padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)"
     onmouseover="this.style.background='rgba(0,201,167,.15)'" onmouseout="this.style.background=''">
     <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal)">${c.cod}</span>
     <span style="font-size:12px;color:var(--text);margin-left:8px">${c.desc}</span>
     <span style="font-size:10px;color:var(--muted);margin-left:6px">${c.u}</span>
   </div>`).join('');
+  html+=`<div onmousedown="aeAcCrear(${i},'${termEsc}')"
+    style="padding:8px 12px;cursor:pointer;background:rgba(245,166,35,.06);${hits.length?'border-top:1px solid rgba(255,255,255,.1)':''}"
+    onmouseover="this.style.background='rgba(245,166,35,.18)'" onmouseout="this.style.background='rgba(245,166,35,.06)'">
+    <span style="font-size:12px;color:var(--amber);font-weight:600">➕ Crear nuevo ítem "${term}"</span>
+  </div>`;
+  list.innerHTML=html;
   list.style.display='block';
 }
 function aeAcPick(i,cod){
-  const c=CATALOG.find(x=>x.cod===cod);if(!c)return;
+  const c=fullCatalog().find(x=>x.cod===cod);if(!c)return;
+  aeItems[i].cod=c.cod;
+  aeItems[i].desc=c.desc;
+  aeItems[i].unidad=c.u;
+  aeRenderItems();
+}
+function aeAcCrear(i,term){
+  const c=catalogCrearItem(term);
+  if(!c) return;
   aeItems[i].cod=c.cod;
   aeItems[i].desc=c.desc;
   aeItems[i].unidad=c.u;
   aeRenderItems();
 }
 function aeAcHide(i){const l=document.getElementById('ae-ac-list-'+i);if(l)l.style.display='none';}
-function aePickCod(i,sel){const c=CATALOG.find(x=>x.cod===sel.value);if(c){aeItems[i].cod=c.cod;aeItems[i].desc=c.desc;aeItems[i].unidad=c.u;}aeRenderItems();}
+function aePickCod(i,sel){const c=fullCatalog().find(x=>x.cod===sel.value);if(c){aeItems[i].cod=c.cod;aeItems[i].desc=c.desc;aeItems[i].unidad=c.u;}aeRenderItems();}
 
 function aeGuardar(){
   const g=(id)=>{const el=document.getElementById(id);return el?el.value:'';};
@@ -5415,7 +5467,7 @@ function modalGuardarCliente(){
   const checked=[...document.querySelectorAll('#mnc-catalog-list input[type=checkbox]:checked')];
   const items=checked.map(cb=>{
     const [cod,u,desc]=cb.value.split('|');
-    const g=cod==='EXTRA'?'EXTRA':(CATALOG.find(c=>c.cod===cod)?.cod.split('-')[0]||'INSUMOS');
+    const g=cod==='EXTRA'?'EXTRA':(fullCatalog().find(c=>c.cod===cod)?.cod.split('-')[0]||'INSUMOS');
     const gMap={'QMC':'QUIMICOS','MAT':'INSUMOS','MAQ':'MAQUINAS','EPP':'EPP','SUM':'SUMINISTROS','EXTRA':'EXTRA'};
     return {g:gMap[g]||'INSUMOS',p:desc,u:u,r:0};
   });
@@ -5484,7 +5536,7 @@ function meiRenderList(){
 function meiFilterCatalog(){
   const buscar=(document.getElementById('mei-buscar')||{}).value?.toLowerCase()||'';
   const existing=new Set((rmCat()[rm_empresa]?.[rm_cliente]||[]).map(it=>it.p.toUpperCase()));
-  const filtered=CATALOG.filter(c=>!existing.has(c.desc.toUpperCase())&&(!buscar||c.desc.toLowerCase().includes(buscar)||c.cod.toLowerCase().includes(buscar)));
+  const filtered=fullCatalog().filter(c=>!existing.has(c.desc.toUpperCase())&&(!buscar||c.desc.toLowerCase().includes(buscar)||c.cod.toLowerCase().includes(buscar)));
   const el=document.getElementById('mei-catalog-list');if(!el)return;
   if(!filtered.length){el.innerHTML='<div style="color:var(--muted);font-size:11px;padding:4px">Sin resultados</div>';return;}
   el.innerHTML=filtered.slice(0,30).map(c=>`
