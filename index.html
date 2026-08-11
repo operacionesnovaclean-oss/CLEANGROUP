@@ -305,6 +305,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <button class="nav-item" onclick="nav('fundas')"><span class="nav-icon">&#128717;</span>Control de Fundas</button>      <button class="nav-item" onclick="nav('operativos')"><span class="nav-icon">👥</span>Usuarios de Campo</button>
       <button class="nav-item" onclick="nav('campo')"><span class="nav-icon">📥</span>Req. de Campo</button>
       <button class="nav-item" onclick="nav('catalogo')"><span class="nav-icon">🗂️</span>Editor de Catálogo</button>
+      <button class="nav-item" onclick="nav('roles-pago')"><span class="nav-icon">💰</span>Roles de Pago</button>
     </nav>
     <main class="content" id="main-content">
     <!-- panels injected by JS -->
@@ -2002,6 +2003,7 @@ function buildPanels(){
     </div>
     <div class="fg">
       <div class="fi"><label>Nombre completo</label><input id="nop-nombre" placeholder="Ej: Carlos Mendez"></div>
+      <div class="fi"><label>Cédula</label><input id="nop-cedula" placeholder="Ej: 0912345678" style="font-family:'JetBrains Mono',monospace"></div>
       <div class="fi"><label>Usuario (login)</label><input id="nop-usuario" placeholder="Ej: cmendez" style="font-family:'JetBrains Mono',monospace"></div>
       <div class="fi"><label>Contraseña</label><input id="nop-pass" type="text" placeholder="Mínimo 4 caracteres"></div>
       <div class="fi">
@@ -2159,6 +2161,31 @@ function buildPanels(){
       <div id="cat-mv-info" style="font-size:12px;color:var(--muted)"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- ROLES DE PAGO -->
+<div class="panel" id="panel-roles-pago">
+  <div class="ph">
+    <h2>💰 Roles de Pago</h2>
+    <p>Sube el archivo mensual de roles (el mismo formato que usas en tu Drive) y publícalo para que cada operativo vea su propio rol en el Portal de Campo.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">📤 Subir rol del mes</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Sube el Excel de rol tal como lo generas (formato FOR TAL 12: una fila por empleado con Cédula, Nombre, Punto, Sueldo, etc.). Puedes seleccionar varios archivos a la vez, uno por cliente (ej: todos los clientes de Homeclean juntos).</p>
+    <div class="fi" style="max-width:260px">
+      <label>Empresa de estos archivos</label>
+      <select id="rp-empresa" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">-- Seleccionar --</option>
+        <option>NOVACLEAN</option><option>HOMECLEAN</option><option>INMOCLEAN</option>
+      </select>
+    </div>
+    <input type="file" id="rp-file" accept=".xlsx,.xls" multiple onchange="rpLeerArchivo(this)" style="padding:8px 0;margin-top:10px">
+    <div id="rp-preview" style="margin-top:14px"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 Roles ya publicados <span class="badge" id="rp-hist-count">0</span></div>
+    <div id="rp-historial"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
   </div>
 </div>
 
@@ -2653,7 +2680,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas,'roles-pago':initRolesPago};
   if(fns[name]) fns[name]();
 }
 
@@ -7773,6 +7800,7 @@ function nopQuitarExtra(btn){
 }
 async function nopGuardar(){
   const nombre=document.getElementById('nop-nombre').value.trim();
+  const cedula=document.getElementById('nop-cedula').value.trim();
   const usuario=document.getElementById('nop-usuario').value.trim().toLowerCase();
   const pass=document.getElementById('nop-pass').value.trim();
   const empresa=document.getElementById('nop-empresa').value;
@@ -7780,10 +7808,11 @@ async function nopGuardar(){
   if(pass.length<4){toast('La contraseña debe tener al menos 4 caracteres',true);return;}
   if(!empresa){toast('Selecciona una empresa',true);return;}
   if(!nop_selClis.length){toast('Asigna al menos un cliente',true);return;}
+  if(!cedula){toast('⚠️ Sin cédula el operativo no podrá ver sus roles de pago. Puedes guardar igual y completarla después.',false);}
   if(!_sb){toast('Sin conexión Supabase',true);return;}
   try{
     const {error}=await _sb.from('operativos_usuarios').upsert(
-      {nombre,usuario,password:pass,empresa,clientes:nop_selClis,creado:new Date().toISOString()},
+      {nombre,cedula,usuario,password:pass,empresa,clientes:nop_selClis,creado:new Date().toISOString()},
       {onConflict:'usuario'}
     );
     if(error) throw error;
@@ -7792,7 +7821,7 @@ async function nopGuardar(){
   }catch(e){toast('Error: '+e.message,true);}
 }
 function nopLimpiar(){
-  ['nop-nombre','nop-usuario','nop-pass','nop-cli-manual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['nop-nombre','nop-cedula','nop-usuario','nop-pass','nop-cli-manual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('nop-empresa').value='';
   const ex=document.getElementById('nop-cli-extras');if(ex)ex.innerHTML='';
   nop_selClis=[]; nopRenderCliCheckboxes();
@@ -7807,6 +7836,7 @@ async function nopEditar(usuario){
   const {data}=await _sb.from('operativos_usuarios').select('*').eq('usuario',usuario).single();
   if(!data) return;
   document.getElementById('nop-nombre').value=data.nombre;
+  document.getElementById('nop-cedula').value=data.cedula||'';
   document.getElementById('nop-usuario').value=data.usuario;
   document.getElementById('nop-pass').value=data.password;
   document.getElementById('nop-empresa').value=data.empresa;
@@ -7826,7 +7856,7 @@ async function initOperativosPanel(){
   el.innerHTML='<div class="op-grid">'+data.map(u=>`
     <div class="op-card">
       <div class="op-card-head">
-        <div><div class="op-name">👤 ${u.nombre}</div><div class="op-meta">@${u.usuario} · ${u.empresa}</div></div>
+        <div><div class="op-name">👤 ${u.nombre}</div><div class="op-meta">@${u.usuario} · ${u.empresa}${u.cedula?' · CI '+u.cedula:' · <span style=\'color:var(--amber)\'>sin cédula</span>'}</div></div>
         <div style="display:flex;gap:5px">
           <button class="btn btn-s btn-sm" onclick="nopEditar('${u.usuario}')">✏️</button>
           <button class="btn btn-d btn-sm" onclick="nopEliminar('${u.usuario}')">🗑️</button>
@@ -7845,6 +7875,245 @@ async function opPublishCatalog(){
   const {error}=await _sb.from('campo_catalog').upsert({id:1,catalog:RM_CAT,updated:new Date().toISOString()},{onConflict:'id'});
   if(error){toast('Error: '+error.message,true);return;}
   toast('✅ Catálogo publicado al portal de campo');
+}
+
+// ════════════════════════════════════════════
+// ROLES DE PAGO — se sube el archivo tal como lo generas por cliente
+// (formato FOR TAL 12: una fila por empleado). El sistema lo convierte
+// automáticamente al formato de "LIQUIDACIÓN INDIVIDUAL" (Ingresos /
+// Egresos / Neto) para que cada operativo vea su rol individual en el
+// Portal de Campo, igual al formato que ya usan.
+// ════════════════════════════════════════════
+const MES_NOMBRES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+const ROL_EMPRESAS={
+  NOVACLEAN:{nombre:'NOVACLEAN S. A.',ruc:'0992575220001'},
+  HOMECLEAN:{nombre:'HOMECLEAN C. A.',ruc:'0993110221001'},
+  INMOCLEAN:{nombre:'INMOCLEAN S. A.',ruc:'0993110221001'}
+};
+// Palabras clave para clasificar cada columna del Excel como Ingreso o Egreso
+// (comparación por "empieza con", sin tildes, en mayúsculas).
+const ROL_ING_KEYS=['SUELDO','VACACIONES','OTROS INGRESOS','HORAS SUPLEMENTARIAS','HORAS EXTRAORDINARIAS','FONDO DE RESERVA','DECIMO TERCERO','DECIMO CUARTO'];
+const ROL_EGR_KEYS=['APORTE IESS','ANTICIPO','OTROS DESCUENTOS','PREST'];
+let _rpParsed=[];
+
+function rolesStripAccents(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function rolesNorm(v){ return (v===null||v===undefined)?'':String(v).trim(); }
+function rolesUp(v){ return rolesStripAccents(rolesNorm(v)).toUpperCase(); }
+
+function rolesFechaAPeriodo(d){
+  let dt=null;
+  if(d instanceof Date) dt=d;
+  else if(typeof d==='number'){ dt=new Date(Math.round((d-25569)*86400*1000)); }
+  else if(typeof d==='string' && d.trim()){ const p=new Date(d); if(!isNaN(p)) dt=p; }
+  if(!dt||isNaN(dt)) return {periodo:'',periodoKey:''};
+  const anio=dt.getUTCFullYear();
+  const mes=dt.getUTCMonth();
+  const mm=String(mes+1).padStart(2,'0');
+  return {periodo:(MES_NOMBRES[mes]||'')+' '+anio, periodoKey:anio+'-'+mm};
+}
+
+// Extrae todos los empleados de una hoja en formato "tabla" (1 fila = 1 empleado,
+// columnas = conceptos) y clasifica cada columna en Ingreso / Egreso, igual que
+// en la liquidación individual.
+function rolesParseSheetTabla(aoa, clienteFallback, empresa){
+  const up=rolesUp, norm=rolesNorm;
+  let headerRow=-1, cedCol=-1;
+  for(let r=0;r<aoa.length && headerRow<0;r++){
+    const row=aoa[r]||[];
+    for(let c=0;c<row.length;c++){
+      if(up(row[c])==='CEDULA'){ headerRow=r; cedCol=c; break; }
+    }
+  }
+  if(headerRow<0) return [];
+  const headers=(aoa[headerRow]||[]).map(h=>norm(h));
+  const nomCol=headers.findIndex(h=>up(h)==='NOMBRE');
+  const puntoCol=headers.findIndex(h=>up(h)==='PUNTO');
+  let totalIdx=headers.findIndex(h=>up(h)==='RECIBIDO');
+  if(totalIdx<0) totalIdx=headers.findIndex(h=>up(h)==='TOTAL');
+  let totalIngIdx=headers.findIndex(h=>up(h).indexOf('TOTAL INGRESOS')>=0);
+  let totalEgrIdx=headers.findIndex(h=>up(h)==='TOTAL' && false); // no existe columna "total egresos" en FOR TAL 12
+
+  let cliente=clienteFallback, desde=null, elaboradoPor='';
+  const firstNonEmpty=(row,fromCol,span)=>{ for(let cc=fromCol;cc<fromCol+span;cc++){ if(row[cc]!==undefined&&row[cc]!==''){ return row[cc]; } } return null; };
+  for(let r=0;r<headerRow;r++){
+    const row=aoa[r]||[];
+    for(let c=0;c<row.length;c++){
+      const label=up(row[c]);
+      if(label.indexOf('CLIENTE')>=0){ const v=firstNonEmpty(row,c+1,5); if(v!==null) cliente=norm(v); }
+      if(label.indexOf('DESDE')>=0){ const v=firstNonEmpty(row,c+1,5); if(v!==null) desde=v; }
+      if(label.indexOf('ELABORADO')>=0){ const v=firstNonEmpty(row,c+1,6); if(v!==null) elaboradoPor=norm(v); }
+    }
+  }
+  const {periodo,periodoKey}=rolesFechaAPeriodo(desde);
+  const CEDULA_RE=/^\d{9,13}$/;
+
+  const results=[];
+  for(let r=headerRow+1;r<aoa.length;r++){
+    const row=aoa[r]||[];
+    const nombre = nomCol>=0 ? norm(row[nomCol]) : '';
+    if(!nombre) continue; // fila vacía o de totales
+    let cedula = norm(row[cedCol]).replace(/[^\d]/g,'');
+    if(!CEDULA_RE.test(cedula)) cedula='';
+    const punto = puntoCol>=0 ? norm(row[puntoCol]) : '';
+
+    const ingresos=[], egresos=[], detalle=[];
+    let pendingHrs=null;
+    headers.forEach((h,ci)=>{
+      if(!h) return;
+      const hUp=up(h);
+      const val=row[ci];
+      if(hUp.indexOf('# HORAS')>=0 || hUp==='#HORAS'){
+        pendingHrs=(val!==undefined&&val!=='')?val:null;
+        return;
+      }
+      if(val===undefined||val===null||val==='') { if(hUp.indexOf('HORAS')<0) pendingHrs=null; return; }
+      const outVal=(val instanceof Date)?val.toISOString().slice(0,10):val;
+      detalle.push({label:h,valor:outVal});
+      if(ci===cedCol||ci===nomCol||ci===puntoCol) return;
+      const esIngreso=ROL_ING_KEYS.some(k=>hUp.indexOf(k)===0);
+      const esEgreso=!esIngreso && ROL_EGR_KEYS.some(k=>hUp.indexOf(k)===0);
+      if(esIngreso){
+        const item={label:h,valor:outVal};
+        if(hUp.indexOf('HORAS')>=0 && pendingHrs!==null) item.hrs=pendingHrs;
+        ingresos.push(item);
+        pendingHrs=null;
+      } else if(esEgreso){
+        egresos.push({label:h,valor:outVal});
+      }
+    });
+
+    let total=0;
+    if(totalIdx>=0){ const v=row[totalIdx]; total=typeof v==='number'?v:(parseFloat(v)||0); }
+    let totalIngresos=0;
+    if(totalIngIdx>=0){ const v=row[totalIngIdx]; totalIngresos=typeof v==='number'?v:(parseFloat(v)||0); }
+    else { totalIngresos=ingresos.reduce((s,it)=>s+(typeof it.valor==='number'?it.valor:0),0); }
+    const totalEgresos=egresos.reduce((s,it)=>s+(typeof it.valor==='number'?it.valor:0),0);
+
+    results.push({empresa, cliente, cedula, nombre, punto, periodo, periodoKey, elaboradoPor,
+      ingresos, egresos, detalle, totalIngresos, totalEgresos, total});
+  }
+  return results;
+}
+
+function rpLeerArchivo(input){
+  const files=Array.from(input.files||[]); if(!files.length) return;
+  const empresa=(document.getElementById('rp-empresa')||{}).value||'';
+  if(!empresa){ toast('Selecciona primero la empresa (Nova/Home/Inmo) de estos archivos',true); input.value=''; return; }
+  if(typeof XLSX==='undefined'){toast('⏳ Cargando librería Excel...',false);return;}
+  let pendientes=files.length, todos=[];
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        wb.SheetNames.forEach(sn=>{
+          const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});
+          todos=todos.concat(rolesParseSheetTabla(aoa, sn.trim().toUpperCase(), empresa));
+        });
+      }catch(err){ toast('Error leyendo "'+file.name+'": '+err.message,true); }
+      pendientes--;
+      if(pendientes===0){
+        _rpParsed=todos;
+        rpRenderPreview();
+        if(!_rpParsed.length) toast('No se detectaron empleados. Revisa que el archivo tenga una columna "CEDULA".',true);
+        else toast('✅ '+_rpParsed.length+' rol(es) detectado(s) — revisa la vista previa antes de publicar');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+const CEDULA_RE_UI=/^\d{9,13}$/;
+function rpEditarCedula(i,val){
+  const cedula=String(val||'').replace(/[^\d]/g,'');
+  _rpParsed[i].cedula=cedula;
+  rpRenderPreview();
+}
+function rpEditarPeriodo(i,val){
+  _rpParsed[i].periodo=(val||'').trim().toUpperCase();
+  // intenta derivar periodo_key a partir del texto "MES AAAA"
+  const parts=_rpParsed[i].periodo.split(/\s+/);
+  const idx=MES_NOMBRES.indexOf(parts[0]);
+  const anio=(parts[1]||'').replace(/\D/g,'');
+  _rpParsed[i].periodoKey=(idx>=0&&anio)?(anio+'-'+String(idx+1).padStart(2,'0')):_rpParsed[i].periodoKey;
+  rpRenderPreview();
+}
+function rpRenderPreview(){
+  const el=document.getElementById('rp-preview'); if(!el) return;
+  if(!_rpParsed.length){ el.innerHTML=''; return; }
+  const totalValidos=_rpParsed.filter(r=>r.cedula&&CEDULA_RE_UI.test(r.cedula)&&r.periodoKey).length;
+  el.innerHTML=`<div class="tw"><table><thead><tr><th>Nombre</th><th>Cédula</th><th>Empresa</th><th>Cliente</th><th>Punto</th><th>Período</th><th>Neto</th><th></th></tr></thead><tbody>`
+    +_rpParsed.map((r,i)=>{
+      const cedOk=r.cedula&&CEDULA_RE_UI.test(r.cedula);
+      const warn=!cedOk||!r.periodoKey;
+      return `<tr style="${warn?'background:rgba(224,82,99,.08)':''}">
+        <td>${r.nombre||'—'}</td>
+        <td><input value="${r.cedula||''}" placeholder="Escribe la cédula" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="rpEditarCedula(${i},this.value)" style="width:130px;padding:5px 8px;border-radius:6px;background:var(--navy);border:1px solid ${cedOk?'var(--teal)':(r.cedula?'var(--amber)':'var(--red)')};color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none"></td>
+        <td>${r.empresa}</td>
+        <td>${r.cliente||'—'}</td>
+        <td>${r.punto||'—'}</td>
+        <td><input value="${r.periodo||''}" placeholder="Ej: JULIO 2026" onchange="rpEditarPeriodo(${i},this.value)" style="width:130px;padding:5px 8px;border-radius:6px;background:var(--navy);border:1px solid ${r.periodoKey?'var(--teal)':'var(--red)'};color:var(--text);font-size:12px;outline:none"></td>
+        <td>$${(r.total||0).toFixed(2)}</td>
+        <td><button class="btn btn-d btn-sm" onclick="_rpParsed.splice(${i},1);rpRenderPreview()">✕</button></td>
+      </tr>`;
+    }).join('')
+    +`</tbody></table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="rpPublicar()">📤 Publicar ${totalValidos} de ${_rpParsed.length} rol(es) al portal</button>
+      <span style="font-size:11px;color:var(--muted)">Las filas en rojo no se publicarán todavía — completa la cédula (y el período si falta) escribiendo directamente en el campo.</span>
+    </div>`;
+}
+
+async function rpPublicar(){
+  if(!_sb){toast('Sin conexión Supabase',true);return;}
+  const validos=_rpParsed.filter(r=>r.cedula&&CEDULA_RE_UI.test(r.cedula)&&r.periodoKey);
+  if(!validos.length){toast('No hay roles válidos para publicar (falta cédula o período)',true);return;}
+  const records=validos.map(r=>({
+    cedula:r.cedula, nombre:r.nombre, empresa:r.empresa, cliente:r.cliente, punto:r.punto,
+    periodo:r.periodo, periodo_key:r.periodoKey, elaborado_por:r.elaboradoPor,
+    ingresos:r.ingresos, egresos:r.egresos, detalle:r.detalle,
+    total_ingresos:r.totalIngresos, total_egresos:r.totalEgresos, total:r.total
+  }));
+  try{
+    const {error}=await _sb.from('roles_pago').upsert(records,{onConflict:'cedula,periodo_key,cliente'});
+    if(error) throw error;
+    toast('✅ '+records.length+' rol(es) publicado(s) — ya disponibles en el Portal de Campo');
+    _rpParsed=[]; rpRenderPreview();
+    const fileInput=document.getElementById('rp-file'); if(fileInput) fileInput.value='';
+    rpRefreshHistorial();
+  }catch(e){
+    toast('Error al publicar: '+e.message+' — ¿ya actualizaste la tabla roles_pago en Supabase?',true);
+  }
+}
+
+async function rpRefreshHistorial(){
+  const el=document.getElementById('rp-historial'); if(!el||!_sb) return;
+  const {data,error}=await _sb.from('roles_pago').select('periodo,periodo_key,empresa,cliente,cedula').order('periodo_key',{ascending:false});
+  if(error){ el.innerHTML='<p style="color:var(--red);font-size:13px">Error: '+error.message+' — verifica que la tabla roles_pago exista en Supabase.</p>'; const c=document.getElementById('rp-hist-count'); if(c)c.textContent='0'; return; }
+  const countEl=document.getElementById('rp-hist-count'); if(countEl) countEl.textContent=data.length;
+  if(!data.length){ el.innerHTML='<p style="color:var(--muted);font-size:13px">Aún no hay roles publicados.</p>'; return; }
+  const grupos={};
+  data.forEach(r=>{ const k=r.periodo_key+'||'+r.empresa+'||'+r.cliente; if(!grupos[k]) grupos[k]={periodo:r.periodo,periodo_key:r.periodo_key,empresa:r.empresa,cliente:r.cliente,count:0}; grupos[k].count++; });
+  const list=Object.values(grupos).sort((a,b)=>b.periodo_key.localeCompare(a.periodo_key));
+  el.innerHTML='<div class="tw"><table><thead><tr><th>Período</th><th>Empresa</th><th>Cliente</th><th>Roles</th><th></th></tr></thead><tbody>'
+    +list.map(g=>`<tr>
+      <td>${g.periodo}</td><td>${g.empresa}</td><td>${g.cliente}</td><td>${g.count}</td>
+      <td><button class="btn btn-d btn-sm" onclick="rpEliminarPeriodo('${g.periodo_key}','${g.empresa}','${g.cliente}')">🗑️ Eliminar</button></td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+}
+
+async function rpEliminarPeriodo(periodoKey,empresa,cliente){
+  if(!confirm('¿Eliminar todos los roles de '+empresa+' — '+cliente+' — '+periodoKey+'? Los operativos dejarán de verlos.')) return;
+  const {error}=await _sb.from('roles_pago').delete().eq('periodo_key',periodoKey).eq('empresa',empresa).eq('cliente',cliente);
+  if(error){toast('Error: '+error.message,true);return;}
+  toast('Roles eliminados'); rpRefreshHistorial();
+}
+
+function initRolesPago(){
+  _rpParsed=[]; rpRenderPreview();
+  const fileInput=document.getElementById('rp-file'); if(fileInput) fileInput.value='';
+  rpRefreshHistorial();
 }
 
 // ════════════════════════════════════════════
