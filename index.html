@@ -1675,6 +1675,14 @@ function buildPanels(){
     <div id="ae-rm-info" style="display:none;margin-top:10px;background:rgba(0,201,167,.06);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px 14px;font-size:12px">
       <span style="color:var(--teal);font-weight:600">Req. cargada: </span><span id="ae-rm-desc"></span>
     </div>
+    <div id="ae-pendientes-wrap" style="display:none;margin-top:14px">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;font-weight:600;color:var(--text)">📋 Estado por cliente:</span>
+        <span class="tag twn" id="ae-pend-badge" style="font-size:11px">⏳ 0 pendientes</span>
+        <span class="tag tok" id="ae-env-badge" style="font-size:11px">✅ 0 enviados</span>
+      </div>
+      <div class="tw"><table><thead><tr><th>Cliente</th><th>Empresa</th><th>Ítems</th><th>Estado</th><th>Acta / Fecha</th><th></th></tr></thead><tbody id="ae-pendientes-body"></tbody></table></div>
+    </div>
   </div>
   <div class="card" id="ae-gen-card" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -1721,6 +1729,17 @@ function buildPanels(){
   <div class="card"><div class="card-title">📋 Actas de Entrega Guardadas <span class="badge" id="ae-count">0</span></div>
     <div class="sb"><input id="ae-search" placeholder="Buscar acta..." oninput="aeRenderList()"></div>
     <div class="tw"><table><thead><tr><th>N° Acta</th><th>Fecha</th><th>Cliente</th><th>Entregado a</th><th>Req. Origen</th><th>Ítems</th><th>Acciones</th></tr></thead><tbody id="ae-list"></tbody></table></div>
+  </div>
+  <div class="card"><div class="card-title">📊 Detalle de Envíos por Cliente / Mes</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Consulta qué se le envió a cada cliente en un mes específico (según la fecha del acta).</p>
+    <div class="fg">
+      <div class="fi"><label>Mes</label><select id="ae-rep-mes"></select></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-a" onclick="aeVerDetalleMes()">📄 Ver Detalle</button>
+      <button class="btn btn-s" onclick="aeExportDetalleExcel()">📥 Exportar Excel</button>
+    </div>
+    <div id="ae-detalle-mes-wrap" style="display:none;margin-top:14px"></div>
   </div>
 </div>
 
@@ -4690,14 +4709,15 @@ function aeRefreshSelects(){
   db.reqMensuales.forEach(r=>{const o=document.createElement('option');o.value=r.numero;o.textContent=`${r.numero} — ${r.periodo}`;sel.appendChild(o);});
 }
 
-function initAE(){aeRefreshSelects();aeRenderList();setNums();}
+function initAE(){aeRefreshSelects();aeRenderList();aeRefreshRepMeses();setNums();}
 
 function aeCargarRM(){
   const num=document.getElementById('ae-rm-sel').value;
   const info=document.getElementById('ae-rm-info');
   const cliGroup=document.getElementById('ae-cli-group');
   const genCard=document.getElementById('ae-gen-card');
-  if(!num){aeRMRef=null;info.style.display='none';cliGroup.style.display='none';genCard.style.display='none';return;}
+  const pendWrap=document.getElementById('ae-pendientes-wrap');
+  if(!num){aeRMRef=null;info.style.display='none';cliGroup.style.display='none';genCard.style.display='none';if(pendWrap)pendWrap.style.display='none';return;}
   const rm=db.reqMensuales.find(r=>r.numero===num);if(!rm)return;
   aeRMRef=rm;
   // Get all active clients across all empresas
@@ -4718,6 +4738,53 @@ function aeCargarRM(){
   } else {
     genCard.style.display='none';
   }
+  aeRenderPendientesTable(rm,activos);
+}
+
+// Tabla visible de qué clientes ya recibieron su acta y cuáles faltan, para la Req. Mensual cargada.
+function aeRenderPendientesTable(rm,activos){
+  const wrap=document.getElementById('ae-pendientes-wrap');
+  const body=document.getElementById('ae-pendientes-body');
+  if(!wrap||!body) return;
+  const actasRM=[];
+  db.actasEntrega.forEach((a,idx)=>{ if(a.rmId===rm.numero) actasRM.push(Object.assign({_idx:idx},a)); });
+  const porCliente={};
+  actasRM.forEach(a=>{ (porCliente[a.cliente]=porCliente[a.cliente]||[]).push(a); });
+  const filas=activos.slice().sort((x,y)=>x.cliente.localeCompare(y.cliente));
+  let pend=0, env=0;
+  body.innerHTML=filas.map(a=>{
+    const actas=porCliente[a.cliente];
+    if(actas&&actas.length){
+      env++;
+      const ultima=actas[actas.length-1];
+      return `<tr>
+        <td><strong>${a.cliente}</strong></td><td>${a.empresa}</td><td>${a.items.length}</td>
+        <td><span class="tag tok" style="font-size:10px">✅ Enviado</span></td>
+        <td><code style="font-size:11px;color:var(--teal)">${ultima.numero}</code> · ${ultima.fecha}</td>
+        <td><button class="btn btn-a btn-sm" onclick="aePreviewId(${ultima._idx})" title="Ver acta">🖨️</button></td>
+      </tr>`;
+    }
+    pend++;
+    return `<tr style="background:rgba(224,82,99,.05)">
+      <td><strong>${a.cliente}</strong></td><td>${a.empresa}</td><td>${a.items.length}</td>
+      <td><span class="tag ter" style="font-size:10px">⏳ Pendiente</span></td>
+      <td style="color:var(--muted);font-size:11px">—</td>
+      <td><button class="btn btn-s btn-sm" onclick="aeIrACliente('${a.cliente.replace(/'/g,"\\'")}||${a.empresa.replace(/'/g,"\\'")}')" title="Generar acta para este cliente">➕ Generar</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:12px">Sin clientes activos en esta requisición.</td></tr>';
+  const pendBadge=document.getElementById('ae-pend-badge');
+  const envBadge=document.getElementById('ae-env-badge');
+  if(pendBadge) pendBadge.textContent=`⏳ ${pend} pendiente(s)`;
+  if(envBadge) envBadge.textContent=`✅ ${env} enviado(s)`;
+  wrap.style.display='block';
+}
+
+// Selecciona un cliente pendiente en el combo y lo carga en el formulario, listo para generar su acta.
+function aeIrACliente(val){
+  const sel=document.getElementById('ae-cli-sel');
+  if(sel){ sel.value=val; aeCargarCliente(); }
+  const anchor=document.getElementById('ae-num');
+  if(anchor&&anchor.scrollIntoView) anchor.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 function aeCargarCliente(){
@@ -4931,6 +4998,7 @@ function aePreviewData(a){
 }
 
 function aeRenderList(){
+  aeRefreshRepMeses();
   const el=document.getElementById('ae-count');if(el)el.textContent=db.actasEntrega.length;
   const search=(document.getElementById('ae-search')||{}).value?.toLowerCase()||'';
   const list=db.actasEntrega.filter(a=>!search||a.numero.toLowerCase().includes(search)||a.cliente.toLowerCase().includes(search));
@@ -4949,6 +5017,109 @@ function aeRenderList(){
   }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
 }
 function aeEliminar(idx){if(!confirm('¿Eliminar?'))return;db.actasEntrega.splice(idx,1);saveDB();aeRenderList();toast('Eliminada');}
+
+// ── Reporte: qué se envió a cada cliente, por mes (según fecha del acta) ───
+function aeRefreshRepMeses(){
+  const sel=document.getElementById('ae-rep-mes');if(!sel)return;
+  const meses=[...new Set(db.actasEntrega.map(a=>(a.fecha||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  const nombres=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const fmt=ym=>{const p=ym.split('-');return `${nombres[+p[1]-1]||p[1]} ${p[0]}`;};
+  const cur=sel.value;
+  sel.innerHTML=meses.length?meses.map(m=>`<option value="${m}">${fmt(m)}</option>`).join(''):'<option value="">Sin actas registradas</option>';
+  if(meses.includes(cur)) sel.value=cur;
+}
+
+function aeVerDetalleMes(){
+  const mes=document.getElementById('ae-rep-mes').value;
+  const wrap=document.getElementById('ae-detalle-mes-wrap');
+  if(!wrap) return;
+  if(!mes){toast('No hay actas registradas para generar el detalle',true);return;}
+  const actas=db.actasEntrega.filter(a=>(a.fecha||'').startsWith(mes));
+  if(!actas.length){wrap.style.display='block';wrap.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">No hay envíos registrados para este mes.</p>';return;}
+  const porCliente={};
+  actas.forEach(a=>{ (porCliente[a.cliente]=porCliente[a.cliente]||[]).push(a); });
+  const clientes=Object.keys(porCliente).sort();
+  const nombres=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const p=mes.split('-'); const mesLbl=`${nombres[+p[1]-1]||p[1]} ${p[0]}`;
+  let totalItems=0;
+  const bloques=clientes.map(cli=>{
+    const actasCli=porCliente[cli];
+    const itemsCount=actasCli.reduce((s,a)=>s+a.items.length,0);
+    totalItems+=itemsCount;
+    const filas=actasCli.map(a=>`<tr style="background:rgba(0,201,167,.06)"><td colspan="4" style="font-size:11px;padding:4px 8px"><code style="color:var(--teal)">${a.numero}</code> · ${a.fecha} · ${a.items.length} ítems</td></tr>`
+      +a.items.map(it=>`<tr><td style="padding-left:20px;font-size:11px">${it.desc}</td><td style="font-size:11px">${it.cod||'—'}</td><td style="text-align:center;font-size:11px">${it.cant}</td><td style="font-size:11px">${it.unidad||'—'}</td></tr>`).join('')).join('');
+    return `<div style="margin-bottom:10px"><div style="font-weight:600;font-size:13px;color:var(--teal);margin-bottom:4px">${cli} <span style="color:var(--muted);font-weight:400;font-size:11px">(${actasCli.length} acta(s) · ${itemsCount} ítems)</span></div>
+    <div class="tw"><table><thead><tr><th>Ítem</th><th>Código</th><th>Cant.</th><th>Unidad</th></tr></thead><tbody>${filas}</tbody></table></div></div>`;
+  }).join('');
+  wrap.style.display='block';
+  wrap.innerHTML=`<div style="margin-bottom:10px;font-size:12px;color:var(--muted)">📅 <strong style="color:var(--text)">${mesLbl}</strong> — ${clientes.length} clientes atendidos · ${actas.length} actas · ${totalItems} ítems enviados
+  <button class="btn btn-a btn-sm" style="margin-left:8px" onclick="aeImprimirDetalleMes('${mes}')">🖨️ Imprimir / PDF</button></div>${bloques}`;
+}
+
+function aeImprimirDetalleMes(mes){
+  const actas=db.actasEntrega.filter(a=>(a.fecha||'').startsWith(mes));
+  if(!actas.length){toast('No hay envíos para este mes',true);return;}
+  const nombres=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const p=mes.split('-'); const mesLbl=`${nombres[+p[1]-1]||p[1]} ${p[0]}`;
+  const porCliente={};
+  actas.forEach(a=>{ (porCliente[a.cliente]=porCliente[a.cliente]||[]).push(a); });
+  const clientes=Object.keys(porCliente).sort();
+  let totalItems=0;
+  const filas=clientes.map(cli=>{
+    const actasCli=porCliente[cli];
+    const itemsCount=actasCli.reduce((s,a)=>s+a.items.length,0);
+    totalItems+=itemsCount;
+    return `<tr style="background:#f0f4f8"><td colspan="4" style="font-weight:700;padding:6px 8px">${cli} <span style="font-weight:400;color:#666">(${actasCli.length} acta(s) — ${itemsCount} ítems)</span></td></tr>`
+      +actasCli.map(a=>`<tr><td colspan="4" style="font-size:10px;color:#555;padding:2px 8px">Acta ${a.numero} · ${a.fecha}</td></tr>`
+        +a.items.map(it=>`<tr><td style="padding:1px 8px 1px 24px">${it.desc}</td><td>${it.cod||'—'}</td><td style="text-align:center">${it.cant}</td><td>${it.unidad||'—'}</td></tr>`).join('')).join('');
+  }).join('');
+  openPrint(`${dh('DETALLE DE ENVÍOS POR CLIENTE','FOR ALM 03')}
+    <div style="margin:10px 0;font-size:12px;color:#555">Mes: <strong>${mesLbl}</strong> — ${clientes.length} clientes · ${actas.length} actas · ${totalItems} ítems</div>
+    <table class="dt"><thead><tr><th>Producto</th><th>Código</th><th>Cant.</th><th>Unidad</th></tr></thead><tbody>${filas}</tbody></table>
+    ${df('FOR ALM 03')}`);
+}
+
+async function aeExportDetalleExcel(){
+  const mes=document.getElementById('ae-rep-mes').value;
+  if(!mes){toast('No hay mes seleccionado',true);return;}
+  const actas=db.actasEntrega.filter(a=>(a.fecha||'').startsWith(mes));
+  if(!actas.length){toast('No hay envíos registrados para este mes',true);return;}
+  if(typeof ExcelJS==='undefined'){toast('⏳ Cargando librería Excel...',false);return;}
+  toast('⏳ Generando Excel...');
+  const wb=new ExcelJS.Workbook();
+  wb.creator='Clean Group'; wb.created=new Date();
+  const ws=wb.addWorksheet('Detalle Envíos');
+  ws.columns=[{width:26},{width:34},{width:14},{width:10},{width:10},{width:14}];
+  ws.mergeCells(1,1,1,6);
+  ws.getCell(1,1).value='CLEAN GROUP CONSORCIO — DETALLE DE ENVÍOS POR CLIENTE ('+mes+')';
+  ws.getCell(1,1).font={bold:true,size:12,color:{argb:'FF00C9A7'}};
+  ws.getCell(1,1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0A2E22'}};
+  ws.getRow(1).height=20;
+  const head=ws.getRow(3);
+  ['Cliente','Producto','Código','Cant.','Unidad','N° Acta'].forEach((h,ci)=>{
+    const cell=head.getCell(ci+1);
+    cell.value=h;
+    cell.font={bold:true,color:{argb:'FFFFFFFF'}};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF263238'}};
+  });
+  ws.views=[{state:'frozen',ySplit:3}];
+  let row=4;
+  actas.slice().sort((a,b)=>a.cliente.localeCompare(b.cliente)).forEach(a=>{
+    a.items.forEach(it=>{
+      const r=ws.getRow(row);
+      r.values=[a.cliente,it.desc,it.cod||'—',it.cant,it.unidad||'—',a.numero];
+      row++;
+    });
+  });
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;link.download='Detalle_Envios_'+mes+'.xlsx';
+  document.body.appendChild(link);link.click();document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast('✅ Excel descargado');
+}
 
 // ═══════════════════════════════
 // INVENTARIO
