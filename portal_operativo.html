@@ -237,6 +237,19 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
         </div>
         <div class="mod-arrow" id="fn-card-arrow">›</div>
       </div>
+
+      <div class="mod-card" onclick="showModule('roles')">
+        <div class="mod-icon teal">💰</div>
+        <div class="mod-info">
+          <div class="mod-title">Mis Roles de Pago</div>
+          <div class="mod-desc">Consulta y descarga tu liquidación de cada mes.</div>
+          <div class="mod-steps">
+            <span class="mod-step-tag">📅 Por mes</span>
+            <span class="mod-step-tag">🖨️ Imprimir / PDF</span>
+          </div>
+        </div>
+        <div class="mod-arrow">›</div>
+      </div>
     </div>
 
     <!-- ══ MÓDULO 1: REQUISICIONES ══ -->
@@ -487,6 +500,23 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
       </div>
     </div>
 
+    <!-- ══ MÓDULO 3: ROLES DE PAGO ══ -->
+    <div id="mod-roles" style="display:none">
+      <div class="mod-header">
+        <button class="btn-back" onclick="backHome()">‹ Inicio</button>
+        <div class="mod-name">💰 Mis Roles de Pago</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📅 Selecciona el mes</div>
+        <div class="fi">
+          <select id="rpo-periodo-sel" onchange="rpoCargarRol()">
+            <option value="">-- Selecciona un mes --</option>
+          </select>
+        </div>
+      </div>
+      <div id="rpo-rol-wrap"></div>
+    </div>
+
   </div><!-- /main -->
 </div><!-- /app -->
 
@@ -598,15 +628,139 @@ function showModule(mod){
   document.getElementById('home-screen').style.display='none';
   document.getElementById('mod-req').style.display  = mod==='req'  ? 'block':'none';
   document.getElementById('mod-fn').style.display   = mod==='fn'   ? 'block':'none';
+  document.getElementById('mod-roles').style.display = mod==='roles' ? 'block':'none';
   if(mod==='req') goStep(1);
   if(mod==='fn')  { fnInitLugares(); tcInitLugares(); goFn(1); }
+  if(mod==='roles') rpoInit();
 }
 
 function backHome(){
   document.getElementById('home-screen').style.display='block';
   document.getElementById('mod-req').style.display='none';
   document.getElementById('mod-fn').style.display='none';
+  document.getElementById('mod-roles').style.display='none';
   document.getElementById('save-bar').style.display='none';
+}
+
+// ── MIS ROLES DE PAGO ──────────────────────────────────────────────────────
+async function rpoInit(){
+  const sel=document.getElementById('rpo-periodo-sel');
+  const wrap=document.getElementById('rpo-rol-wrap');
+  wrap.innerHTML='';
+  if(isMaster){
+    wrap.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">La cuenta MASTER no tiene rol de pago propio. Ingresa con un usuario de operativo para consultarlo.</p></div>';
+    sel.innerHTML='<option value="">—</option>'; sel.disabled=true;
+    return;
+  }
+  if(!currentUser.cedula){
+    wrap.innerHTML='<div class="card"><p style="color:var(--amber);font-size:13px">⚠️ Tu usuario no tiene cédula registrada todavía. Pide al administrador que la agregue en tu ficha para poder ver tus roles de pago.</p></div>';
+    sel.innerHTML='<option value="">—</option>'; sel.disabled=true;
+    return;
+  }
+  sel.disabled=false;
+  if(!_sb){wrap.innerHTML='<div class="card"><p style="color:var(--red);font-size:13px">Sin conexión.</p></div>';return;}
+  const{data,error}=await _sb.from('roles_pago').select('periodo,periodo_key,cliente').eq('cedula',currentUser.cedula).order('periodo_key',{ascending:false});
+  if(error){wrap.innerHTML='<div class="card"><p style="color:var(--red);font-size:13px">Error: '+error.message+'</p></div>';return;}
+  if(!data||!data.length){
+    sel.innerHTML='<option value="">Sin roles publicados aún</option>';
+    wrap.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Todavía no hay roles de pago publicados a tu nombre. Vuelve a revisar cuando el administrador los suba.</p></div>';
+    return;
+  }
+  sel.innerHTML=data.map(r=>`<option value="${r.periodo_key}|||${r.cliente}">${r.periodo} — ${r.cliente}</option>`).join('');
+  rpoCargarRol();
+}
+
+async function rpoCargarRol(){
+  const wrap=document.getElementById('rpo-rol-wrap');
+  const val=document.getElementById('rpo-periodo-sel').value;
+  if(!val){wrap.innerHTML='';return;}
+  const partes=val.split('|||'); const key=partes[0], cliente=partes[1];
+  wrap.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>';
+  const{data,error}=await _sb.from('roles_pago').select('*').eq('cedula',currentUser.cedula).eq('periodo_key',key).eq('cliente',cliente).single();
+  if(error||!data){wrap.innerHTML='<div class="card"><p style="color:var(--red);font-size:13px">No se pudo cargar el rol.</p></div>';return;}
+  window._rpoActual=data;
+  rpoRenderRol(data);
+}
+
+const ROL_EMPRESAS={
+  NOVACLEAN:{nombre:'NOVACLEAN S. A.',ruc:'0992575220001'},
+  HOMECLEAN:{nombre:'HOMECLEAN C. A.',ruc:'0993110221001'},
+  INMOCLEAN:{nombre:'INMOCLEAN S. A.',ruc:'0993110221001'}
+};
+function rpoNum(v){ return typeof v==='number'?v:(parseFloat(v)||0); }
+function rpoFilaIngreso(it){
+  const hrs=(it.hrs!==undefined&&it.hrs!==null&&it.hrs!=='')?it.hrs:'';
+  return `<tr><td style="padding:4px 0;font-size:12px">${it.label}</td><td style="padding:4px 0;text-align:center;font-size:11px;color:var(--muted)">${hrs}</td><td style="padding:4px 0;text-align:right;font-size:13px;font-weight:600">$${rpoNum(it.valor).toFixed(2)}</td></tr>`;
+}
+function rpoFilaEgreso(it){
+  return `<tr><td style="padding:4px 0;font-size:12px">${it.label}</td><td style="padding:4px 0;text-align:right;font-size:13px;font-weight:600">$${rpoNum(it.valor).toFixed(2)}</td></tr>`;
+}
+
+function rpoRenderRol(r){
+  const wrap=document.getElementById('rpo-rol-wrap'); if(!wrap) return;
+  const emp=ROL_EMPRESAS[r.empresa]||{nombre:r.empresa||'CLEAN GROUP',ruc:''};
+  const ingFilas=(r.ingresos||[]).map(rpoFilaIngreso).join('');
+  const egrFilas=(r.egresos||[]).map(rpoFilaEgreso).join('');
+  wrap.innerHTML=`
+    <div class="card">
+      <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:var(--teal)">${emp.nombre}</div>
+        ${emp.ruc?`<div style="font-size:10px;color:var(--muted)">R.U.C. ${emp.ruc}</div>`:''}
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:6px">Liquidación Individual</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Nombre</div>
+      <div style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">${r.nombre}</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px">
+        <div><div style="font-size:11px;color:var(--muted)">Cédula</div><div style="font-size:13px;color:var(--text)">${r.cedula}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Punto</div><div style="font-size:13px;color:var(--text)">${r.punto||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Mes</div><div style="font-size:13px;color:var(--text)">${r.periodo}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--teal);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px">Ingresos</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">${ingFilas}
+        <tr style="border-top:1px solid var(--border);font-weight:700"><td style="padding-top:6px">Total Ingresos</td><td></td><td style="text-align:right;padding-top:6px;color:var(--teal)">$${rpoNum(r.total_ingresos).toFixed(2)}</td></tr>
+      </table>
+      <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px">Egresos</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">${egrFilas}
+        <tr style="border-top:1px solid var(--border);font-weight:700"><td style="padding-top:6px">Total Egresos</td><td style="text-align:right;padding-top:6px;color:var(--red)">$${rpoNum(r.total_egresos).toFixed(2)}</td></tr>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.3);border-radius:9px;padding:12px 14px;margin-top:4px">
+        <span style="font-size:13px;font-weight:700;color:#fff">NETO A RECIBIR</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--teal)">$${rpoNum(r.total).toFixed(2)}</span>
+      </div>
+      <button class="btn-primary" style="margin-top:16px" onclick="rpoImprimir()">🖨️ Imprimir / Guardar PDF</button>
+    </div>`;
+}
+
+function rpoImprimir(){
+  const r=window._rpoActual; if(!r) return;
+  const emp=ROL_EMPRESAS[r.empresa]||{nombre:r.empresa||'CLEAN GROUP',ruc:''};
+  const ingRows=(r.ingresos||[]).map(it=>'<tr><td>'+it.label+'</td><td style="text-align:center;color:#777">'+((it.hrs!==undefined&&it.hrs!==null&&it.hrs!=='')?it.hrs:'')+'</td><td style="text-align:right">$'+rpoNum(it.valor).toFixed(2)+'</td></tr>').join('');
+  const egrRows=(r.egresos||[]).map(it=>'<tr><td>'+it.label+'</td><td style="text-align:right">$'+rpoNum(it.valor).toFixed(2)+'</td></tr>').join('');
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rol de Pago '+r.periodo+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;padding:24px;color:#222;font-size:13px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:14px}td{padding:3px 0}'
+    +'.tot{border-top:1px solid #333;font-weight:700}'
+    +'.neto{display:flex;justify-content:space-between;background:#e8f5e9;border:1px solid #2e7d32;border-radius:8px;padding:10px 14px;margin-top:10px;font-weight:700}'
+    +'.hdr{text-align:center;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #333}'
+    +'</style></head><body>'
+    +'<div class="hdr"><div style="font-size:15px;font-weight:700">'+emp.nombre+'</div>'
+    +(emp.ruc?'<div style="font-size:11px;color:#555">R.U.C. '+emp.ruc+'</div>':'')
+    +'<div style="font-size:12px;color:#555;margin-top:4px;text-transform:uppercase">Liquidación Individual</div></div>'
+    +'<div><strong>Nombre:</strong> '+r.nombre+' &nbsp;&nbsp; <strong>Cédula:</strong> '+r.cedula+' &nbsp;&nbsp; <strong>Mes:</strong> '+r.periodo+'</div>'
+    +'<div style="margin-bottom:14px"><strong>Punto:</strong> '+(r.punto||'—')+'</div>'
+    +'<div style="font-weight:700;color:#1b5e20;margin-bottom:4px">INGRESOS</div>'
+    +'<table>'+ingRows+'<tr class="tot"><td>Total Ingresos</td><td></td><td style="text-align:right">$'+rpoNum(r.total_ingresos).toFixed(2)+'</td></tr></table>'
+    +'<div style="font-weight:700;color:#b71c1c;margin-bottom:4px">EGRESOS</div>'
+    +'<table>'+egrRows+'<tr class="tot"><td>Total Egresos</td><td style="text-align:right">$'+rpoNum(r.total_egresos).toFixed(2)+'</td></tr></table>'
+    +'<div class="neto"><span>NETO A RECIBIR</span><span>$'+rpoNum(r.total).toFixed(2)+'</span></div>'
+    +'<div style="margin-top:40px;display:flex;justify-content:space-between;font-size:11px">'
+    +'<div>_________________________<br>ELABORADO</div>'
+    +'<div>_________________________<br>RECIBÍ CONFORME</div></div>'
+    +'<script>window.onload=function(){window.print()}<\/script>'
+    +'</body></html>';
+  const w=window.open('','_blank');
+  if(!w){alert('Permite las ventanas emergentes para poder imprimir.');return;}
+  w.document.write(html); w.document.close();
 }
 
 function poAplicarMes(){const mes=document.getElementById('po-mes').value;if(!mes)return;document.getElementById('po-periodo').value=mes+' '+new Date().getFullYear();}
