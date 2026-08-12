@@ -7981,10 +7981,10 @@ function rolesParseSheetTabla(aoa, clienteFallback, empresa){
   const headers=(aoa[headerRow]||[]).map(h=>norm(h));
   const nomCol=headers.findIndex(h=>up(h)==='NOMBRE');
   const puntoCol=headers.findIndex(h=>up(h)==='PUNTO');
-  let totalIdx=headers.findIndex(h=>up(h)==='RECIBIDO');
-  if(totalIdx<0) totalIdx=headers.findIndex(h=>up(h)==='TOTAL');
+  // Prioridad: columna "TOTAL" (U); si viene vacía o en 0, se usa "RECIBIDO" (V) como respaldo.
+  let totalIdx=headers.findIndex(h=>up(h)==='TOTAL');
+  let recibidoIdx=headers.findIndex(h=>up(h)==='RECIBIDO');
   let totalIngIdx=headers.findIndex(h=>up(h).indexOf('TOTAL INGRESOS')>=0);
-  let totalEgrIdx=headers.findIndex(h=>up(h)==='TOTAL' && false); // no existe columna "total egresos" en FOR TAL 12
 
   let cliente=clienteFallback, desde=null, elaboradoPor='';
   const firstNonEmpty=(row,fromCol,span)=>{ for(let cc=fromCol;cc<fromCol+span;cc++){ if(row[cc]!==undefined&&row[cc]!==''){ return row[cc]; } } return null; };
@@ -8037,6 +8037,7 @@ function rolesParseSheetTabla(aoa, clienteFallback, empresa){
 
     let total=0;
     if(totalIdx>=0){ const v=row[totalIdx]; total=typeof v==='number'?v:(parseFloat(v)||0); }
+    if(!total && recibidoIdx>=0){ const v=row[recibidoIdx]; const rv=typeof v==='number'?v:(parseFloat(v)||0); if(rv) total=rv; }
     let totalIngresos=0;
     if(totalIngIdx>=0){ const v=row[totalIngIdx]; totalIngresos=typeof v==='number'?v:(parseFloat(v)||0); }
     else { totalIngresos=ingresos.reduce((s,it)=>s+(typeof it.valor==='number'?it.valor:0),0); }
