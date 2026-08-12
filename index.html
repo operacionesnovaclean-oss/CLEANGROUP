@@ -8092,6 +8092,10 @@ function rpEditarPeriodo(i,val){
   _rpParsed[i].periodoKey=(idx>=0&&anio)?(anio+'-'+String(idx+1).padStart(2,'0')):_rpParsed[i].periodoKey;
   rpRenderPreview();
 }
+function rpEditarTotal(i,val){
+  _rpParsed[i].total=parseFloat(String(val||'').replace(',','.'))||0;
+  rpRenderPreview();
+}
 function rpRenderPreview(){
   const el=document.getElementById('rp-preview'); if(!el) return;
   if(!_rpParsed.length){ el.innerHTML=''; return; }
@@ -8107,7 +8111,7 @@ function rpRenderPreview(){
         <td>${r.cliente||'—'}</td>
         <td>${r.punto||'—'}</td>
         <td><input value="${r.periodo||''}" placeholder="Ej: JULIO 2026" onchange="rpEditarPeriodo(${i},this.value)" style="width:130px;padding:5px 8px;border-radius:6px;background:var(--navy);border:1px solid ${r.periodoKey?'var(--teal)':'var(--red)'};color:var(--text);font-size:12px;outline:none"></td>
-        <td>$${(r.total||0).toFixed(2)}</td>
+        <td><input type="number" step="0.01" value="${(r.total||0).toFixed(2)}" onchange="rpEditarTotal(${i},this.value)" style="width:95px;padding:5px 8px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none"></td>
         <td><button class="btn btn-d btn-sm" onclick="_rpParsed.splice(${i},1);rpRenderPreview()">✕</button></td>
       </tr>`;
     }).join('')
@@ -8181,7 +8185,7 @@ function rpRenderHistorial(){
         <td style="font-size:12px">${r.cliente||'—'}</td>
         <td style="font-size:12px">${r.punto||'—'}</td>
         <td style="font-size:12px">${r.periodo||'—'}</td>
-        <td style="font-size:12px">$${(r.total||0).toFixed(2)}</td>
+        <td><input type="number" step="0.01" value="${(r.total||0).toFixed(2)}" onchange="rpEditarTotalPublicado(${r.id},this)" style="width:95px;padding:5px 8px;border-radius:6px;background:var(--navy);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none"></td>
         <td><button class="btn btn-d btn-sm" onclick="rpEliminarRol(${r.id})" title="Eliminar este rol">✕</button></td>
       </tr>`;
     }).join('')
@@ -8197,6 +8201,15 @@ async function rpEditarCedulaPublicada(id,input){
   const ok=cedula&&CEDULA_RE_UI.test(cedula);
   input.style.borderColor=ok?'var(--teal)':(cedula?'var(--amber)':'var(--red)');
   toast('✅ Cédula actualizada — ya disponible en el portal de ese operativo');
+}
+
+async function rpEditarTotalPublicado(id,input){
+  const total=parseFloat(String(input.value||'').replace(',','.'))||0;
+  const {error}=await _sb.from('roles_pago').update({total}).eq('id',id);
+  if(error){ toast('Error al guardar: '+error.message,true); return; }
+  const rec=_rpPublicados.find(r=>r.id===id); if(rec) rec.total=total;
+  input.value=total.toFixed(2);
+  toast('✅ Monto actualizado — ya disponible en el portal de ese operativo');
 }
 
 async function rpEliminarRol(id){
