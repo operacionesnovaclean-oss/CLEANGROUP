@@ -2044,6 +2044,7 @@ function buildPanels(){
   </div>
   <div class="card">
     <div class="card-title">📋 Usuarios registrados <span class="badge" id="op-count">0</span></div>
+    <div class="sb"><input id="op-buscar" placeholder="🔍 Buscar por nombre, usuario, cédula, empresa o cliente..." oninput="opRenderList()"></div>
     <div id="op-list"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
   </div>
 </div>
@@ -2194,6 +2195,16 @@ function buildPanels(){
   </div>
   <div class="card">
     <div class="card-title">📋 Roles ya publicados <span class="badge" id="rp-hist-count">0</span></div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Busca a un empleado específico (ej: "Coello") para corregir su cédula u otros datos, sin tener que volver a subir el archivo.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <input id="rp-buscar" placeholder="🔍 Buscar por nombre, cédula, cliente o punto..." oninput="rpRenderHistorial()" style="flex:1;min-width:220px;padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+      <select id="rp-filtro-empresa" onchange="rpRenderHistorial()" style="padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">Todas las empresas</option><option>NOVACLEAN</option><option>HOMECLEAN</option><option>INMOCLEAN</option>
+      </select>
+      <select id="rp-filtro-periodo" onchange="rpRenderHistorial()" style="padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">Todos los períodos</option>
+      </select>
+    </div>
     <div id="rp-historial"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
   </div>
 </div>
@@ -7862,16 +7873,38 @@ async function nopTogglePermiso(usuario,checkbox){
   const {error}=await _sb.from('operativos_usuarios').update({puede_requisicion:puede}).eq('usuario',usuario);
   if(error){toast('Error: '+error.message,true);checkbox.checked=!puede;return;}
   toast(puede?'✅ '+usuario+' ya puede hacer la requisición':'🔒 '+usuario+' ya NO puede hacer la requisición');
-  initOperativosPanel();
+  const rec=_opUsuarios.find(u=>u.usuario===usuario); if(rec) rec.puede_requisicion=puede;
+  opRenderList();
 }
+let _opUsuarios=[];
 async function initOperativosPanel(){
   const el=document.getElementById('op-list');
   if(!_sb||!el) return;
   const {data,error}=await _sb.from('operativos_usuarios').select('*').order('creado',{ascending:false});
   if(error){el.innerHTML='<p style="color:var(--red);font-size:13px">Error: '+error.message+'</p>';return;}
+  _opUsuarios=data||[];
+  opRenderList();
+  const opSel=document.getElementById('campo-op-sel');
+  if(opSel){
+    const cur=opSel.value;
+    opSel.innerHTML='<option value="">Todos los operativos</option>'+_opUsuarios.map(u=>`<option${u.nombre===cur?' selected':''}>${u.nombre}</option>`).join('');
+  }
+}
+function opRenderList(){
+  const el=document.getElementById('op-list'); if(!el) return;
   const countEl=document.getElementById('op-count');
-  if(countEl) countEl.textContent=data.length;
-  if(!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No hay usuarios registrados aún.</p>';return;}
+  if(countEl) countEl.textContent=_opUsuarios.length;
+  if(!_opUsuarios.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No hay usuarios registrados aún.</p>';return;}
+  const term=((document.getElementById('op-buscar')||{}).value||'').trim().toLowerCase();
+  let data=_opUsuarios;
+  if(term){
+    data=data.filter(u=>(u.nombre||'').toLowerCase().includes(term)
+      ||(u.usuario||'').toLowerCase().includes(term)
+      ||(u.cedula||'').toLowerCase().includes(term)
+      ||(u.empresa||'').toLowerCase().includes(term)
+      ||(u.clientes||[]).some(c=>(c||'').toLowerCase().includes(term)));
+  }
+  if(!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">Sin resultados para "'+term+'".</p>';return;}
   el.innerHTML='<div class="op-grid">'+data.map(u=>{
     const puede=u.puede_requisicion!==false;
     return `
@@ -7889,11 +7922,6 @@ async function initOperativosPanel(){
         ${puede?'📋 Puede hacer requisición':'🔒 Requisición bloqueada'}
       </label>
     </div>`;}).join('')+'</div>';
-  const opSel=document.getElementById('campo-op-sel');
-  if(opSel){
-    const cur=opSel.value;
-    opSel.innerHTML='<option value="">Todos los operativos</option>'+data.map(u=>`<option${u.nombre===cur?' selected':''}>${u.nombre}</option>`).join('');
-  }
 }
 async function opPublishCatalog(){
   if(!_sb){toast('Sin conexión',true);return;}
@@ -8111,28 +8139,70 @@ async function rpPublicar(){
   }
 }
 
+let _rpPublicados=[];
+
 async function rpRefreshHistorial(){
   const el=document.getElementById('rp-historial'); if(!el||!_sb) return;
-  const {data,error}=await _sb.from('roles_pago').select('periodo,periodo_key,empresa,cliente,cedula').order('periodo_key',{ascending:false});
+  const {data,error}=await _sb.from('roles_pago').select('id,cedula,nombre,empresa,cliente,punto,periodo,periodo_key,total').order('periodo_key',{ascending:false}).order('nombre',{ascending:true});
   if(error){ el.innerHTML='<p style="color:var(--red);font-size:13px">Error: '+error.message+' — verifica que la tabla roles_pago exista en Supabase.</p>'; const c=document.getElementById('rp-hist-count'); if(c)c.textContent='0'; return; }
-  const countEl=document.getElementById('rp-hist-count'); if(countEl) countEl.textContent=data.length;
-  if(!data.length){ el.innerHTML='<p style="color:var(--muted);font-size:13px">Aún no hay roles publicados.</p>'; return; }
-  const grupos={};
-  data.forEach(r=>{ const k=r.periodo_key+'||'+r.empresa+'||'+r.cliente; if(!grupos[k]) grupos[k]={periodo:r.periodo,periodo_key:r.periodo_key,empresa:r.empresa,cliente:r.cliente,count:0}; grupos[k].count++; });
-  const list=Object.values(grupos).sort((a,b)=>b.periodo_key.localeCompare(a.periodo_key));
-  el.innerHTML='<div class="tw"><table><thead><tr><th>Período</th><th>Empresa</th><th>Cliente</th><th>Roles</th><th></th></tr></thead><tbody>'
-    +list.map(g=>`<tr>
-      <td>${g.periodo}</td><td>${g.empresa}</td><td>${g.cliente}</td><td>${g.count}</td>
-      <td><button class="btn btn-d btn-sm" onclick="rpEliminarPeriodo('${g.periodo_key}','${g.empresa}','${g.cliente}')">🗑️ Eliminar</button></td>
-    </tr>`).join('')
+  _rpPublicados=data||[];
+  const countEl=document.getElementById('rp-hist-count'); if(countEl) countEl.textContent=_rpPublicados.length;
+  const selP=document.getElementById('rp-filtro-periodo');
+  if(selP){
+    const cur=selP.value;
+    const mapa=new Map(_rpPublicados.map(r=>[r.periodo_key,r.periodo]));
+    const periodos=[...mapa.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+    selP.innerHTML='<option value="">Todos los períodos</option>'+periodos.map(p=>`<option value="${p[0]}">${p[1]}</option>`).join('');
+    if(periodos.some(p=>p[0]===cur)) selP.value=cur;
+  }
+  rpRenderHistorial();
+}
+
+function rpRenderHistorial(){
+  const el=document.getElementById('rp-historial'); if(!el) return;
+  if(!_rpPublicados.length){ el.innerHTML='<p style="color:var(--muted);font-size:13px">Aún no hay roles publicados.</p>'; return; }
+  const term=((document.getElementById('rp-buscar')||{}).value||'').trim().toLowerCase();
+  const empF=(document.getElementById('rp-filtro-empresa')||{}).value||'';
+  const perF=(document.getElementById('rp-filtro-periodo')||{}).value||'';
+  let list=_rpPublicados;
+  if(empF) list=list.filter(r=>r.empresa===empF);
+  if(perF) list=list.filter(r=>r.periodo_key===perF);
+  if(term) list=list.filter(r=>(r.nombre||'').toLowerCase().indexOf(term)>=0||(r.cedula||'').toLowerCase().indexOf(term)>=0||(r.cliente||'').toLowerCase().indexOf(term)>=0||(r.punto||'').toLowerCase().indexOf(term)>=0);
+  if(!list.length){ el.innerHTML='<p style="color:var(--muted);font-size:13px">Sin resultados para ese filtro.</p>'; return; }
+  el.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${list.length} de ${_rpPublicados.length} roles</div>
+    <div class="tw"><table><thead><tr><th>Nombre</th><th>Cédula</th><th>Empresa</th><th>Cliente</th><th>Punto</th><th>Período</th><th>Neto</th><th></th></tr></thead><tbody>`
+    +list.map(r=>{
+      const cedOk=r.cedula&&CEDULA_RE_UI.test(r.cedula);
+      return `<tr>
+        <td style="font-size:12px">${r.nombre||'—'}</td>
+        <td><input value="${r.cedula||''}" placeholder="Sin cédula" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="rpEditarCedulaPublicada(${r.id},this)" style="width:130px;padding:5px 8px;border-radius:6px;background:var(--navy);border:1px solid ${cedOk?'var(--teal)':(r.cedula?'var(--amber)':'var(--red)')};color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none"></td>
+        <td style="font-size:12px">${r.empresa||'—'}</td>
+        <td style="font-size:12px">${r.cliente||'—'}</td>
+        <td style="font-size:12px">${r.punto||'—'}</td>
+        <td style="font-size:12px">${r.periodo||'—'}</td>
+        <td style="font-size:12px">$${(r.total||0).toFixed(2)}</td>
+        <td><button class="btn btn-d btn-sm" onclick="rpEliminarRol(${r.id})" title="Eliminar este rol">✕</button></td>
+      </tr>`;
+    }).join('')
     +'</tbody></table></div>';
 }
 
-async function rpEliminarPeriodo(periodoKey,empresa,cliente){
-  if(!confirm('¿Eliminar todos los roles de '+empresa+' — '+cliente+' — '+periodoKey+'? Los operativos dejarán de verlos.')) return;
-  const {error}=await _sb.from('roles_pago').delete().eq('periodo_key',periodoKey).eq('empresa',empresa).eq('cliente',cliente);
+async function rpEditarCedulaPublicada(id,input){
+  const cedula=input.value.replace(/[^\d]/g,'');
+  if(cedula && !CEDULA_RE_UI.test(cedula)){ toast('⚠️ La cédula debe tener entre 9 y 13 dígitos',true); }
+  const {error}=await _sb.from('roles_pago').update({cedula}).eq('id',id);
+  if(error){ toast('Error al guardar: '+error.message,true); return; }
+  const rec=_rpPublicados.find(r=>r.id===id); if(rec) rec.cedula=cedula;
+  const ok=cedula&&CEDULA_RE_UI.test(cedula);
+  input.style.borderColor=ok?'var(--teal)':(cedula?'var(--amber)':'var(--red)');
+  toast('✅ Cédula actualizada — ya disponible en el portal de ese operativo');
+}
+
+async function rpEliminarRol(id){
+  if(!confirm('¿Eliminar este rol individual? El operativo dejará de verlo.')) return;
+  const {error}=await _sb.from('roles_pago').delete().eq('id',id);
   if(error){toast('Error: '+error.message,true);return;}
-  toast('Roles eliminados'); rpRefreshHistorial();
+  toast('Rol eliminado'); rpRefreshHistorial();
 }
 
 function initRolesPago(){
