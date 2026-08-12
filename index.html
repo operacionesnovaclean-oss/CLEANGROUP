@@ -2021,12 +2021,21 @@ function buildPanels(){
       </div>
       <!-- Agregar cliente que no está en la lista -->
       <div style="display:flex;gap:6px;margin-top:10px;align-items:center">
-        <input id="nop-cli-manual" placeholder="Agregar cliente no listado..." 
+        <input id="nop-cli-manual" placeholder="Agregar cliente no listado..."
           style="flex:1;padding:7px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none"
           onkeydown="if(event.key==='Enter'){nopAgregarManual();event.preventDefault()}">
         <button class="btn btn-s btn-sm" onclick="nopAgregarManual()" style="white-space:nowrap">＋ Agregar</button>
       </div>
       <div id="nop-cli-extras" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px"></div>
+    </div>
+    <div style="margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">📋 Puede hacer la Requisición Mensual</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Desactívalo para el personal que NO debe enviar requisiciones de su punto (evita duplicados cuando hay varios operativos en el mismo lugar).</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex-shrink:0">
+        <input type="checkbox" id="nop-puede-req" checked style="width:18px;height:18px;accent-color:var(--teal);cursor:pointer">
+      </label>
     </div>
     <div class="btn-row">
       <button class="btn btn-p" onclick="nopGuardar()">💾 Guardar usuario</button>
@@ -7804,6 +7813,7 @@ async function nopGuardar(){
   const usuario=document.getElementById('nop-usuario').value.trim().toLowerCase();
   const pass=document.getElementById('nop-pass').value.trim();
   const empresa=document.getElementById('nop-empresa').value;
+  const puedeReq=document.getElementById('nop-puede-req').checked;
   if(!nombre||!usuario||!pass){toast('Completa nombre, usuario y contraseña',true);return;}
   if(pass.length<4){toast('La contraseña debe tener al menos 4 caracteres',true);return;}
   if(!empresa){toast('Selecciona una empresa',true);return;}
@@ -7812,7 +7822,7 @@ async function nopGuardar(){
   if(!_sb){toast('Sin conexión Supabase',true);return;}
   try{
     const {error}=await _sb.from('operativos_usuarios').upsert(
-      {nombre,cedula,usuario,password:pass,empresa,clientes:nop_selClis,creado:new Date().toISOString()},
+      {nombre,cedula,usuario,password:pass,empresa,clientes:nop_selClis,puede_requisicion:puedeReq,creado:new Date().toISOString()},
       {onConflict:'usuario'}
     );
     if(error) throw error;
@@ -7823,6 +7833,7 @@ async function nopGuardar(){
 function nopLimpiar(){
   ['nop-nombre','nop-cedula','nop-usuario','nop-pass','nop-cli-manual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('nop-empresa').value='';
+  document.getElementById('nop-puede-req').checked=true;
   const ex=document.getElementById('nop-cli-extras');if(ex)ex.innerHTML='';
   nop_selClis=[]; nopRenderCliCheckboxes();
 }
@@ -7840,10 +7851,18 @@ async function nopEditar(usuario){
   document.getElementById('nop-usuario').value=data.usuario;
   document.getElementById('nop-pass').value=data.password;
   document.getElementById('nop-empresa').value=data.empresa;
+  document.getElementById('nop-puede-req').checked=data.puede_requisicion!==false;
   nop_selClis=[...(data.clientes||[])];
   nopRenderCliCheckboxes();
   nopRenderExtras();
   document.getElementById('nop-nombre').scrollIntoView({behavior:'smooth'});
+}
+async function nopTogglePermiso(usuario,checkbox){
+  const puede=checkbox.checked;
+  const {error}=await _sb.from('operativos_usuarios').update({puede_requisicion:puede}).eq('usuario',usuario);
+  if(error){toast('Error: '+error.message,true);checkbox.checked=!puede;return;}
+  toast(puede?'✅ '+usuario+' ya puede hacer la requisición':'🔒 '+usuario+' ya NO puede hacer la requisición');
+  initOperativosPanel();
 }
 async function initOperativosPanel(){
   const el=document.getElementById('op-list');
@@ -7853,7 +7872,9 @@ async function initOperativosPanel(){
   const countEl=document.getElementById('op-count');
   if(countEl) countEl.textContent=data.length;
   if(!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No hay usuarios registrados aún.</p>';return;}
-  el.innerHTML='<div class="op-grid">'+data.map(u=>`
+  el.innerHTML='<div class="op-grid">'+data.map(u=>{
+    const puede=u.puede_requisicion!==false;
+    return `
     <div class="op-card">
       <div class="op-card-head">
         <div><div class="op-name">👤 ${u.nombre}</div><div class="op-meta">@${u.usuario} · ${u.empresa}${u.cedula?' · CI '+u.cedula:' · <span style=\'color:var(--amber)\'>sin cédula</span>'}</div></div>
@@ -7863,7 +7884,11 @@ async function initOperativosPanel(){
         </div>
       </div>
       <div class="op-tags">${(u.clientes||[]).map(c=>`<span class="op-tag">${c}</span>`).join('')}</div>
-    </div>`).join('')+'</div>';
+      <label style="display:flex;align-items:center;gap:6px;margin-top:9px;cursor:pointer;font-size:11px;color:${puede?'var(--teal)':'var(--amber)'}">
+        <input type="checkbox" ${puede?'checked':''} onchange="nopTogglePermiso('${u.usuario}',this)" style="accent-color:var(--teal);width:14px;height:14px;cursor:pointer">
+        ${puede?'📋 Puede hacer requisición':'🔒 Requisición bloqueada'}
+      </label>
+    </div>`;}).join('')+'</div>';
   const opSel=document.getElementById('campo-op-sel');
   if(opSel){
     const cur=opSel.value;
