@@ -208,7 +208,7 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
         </div>
       </div>
 
-      <div class="mod-card" onclick="showModule('req')">
+      <div class="mod-card" id="mod-card-req" onclick="onClickReq()">
         <div class="mod-icon teal">📋</div>
         <div class="mod-info">
           <div class="mod-title">Requisición Mensual</div>
@@ -219,8 +219,9 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
             <span class="mod-step-tag">📦 Materiales</span>
             <span class="mod-step-tag">📤 Historial</span>
           </div>
+          <div class="mod-blocked-badge" id="req-blocked-badge" style="display:none">🔒 Solo el encargado de tu punto puede enviar la requisición</div>
         </div>
-        <div class="mod-arrow">›</div>
+        <div class="mod-arrow" id="req-card-arrow">›</div>
       </div>
 
       <div class="mod-card" id="mod-card-fn" onclick="onClickFundas()">
@@ -587,6 +588,30 @@ function showApp(){
   document.getElementById('home-screen').style.display='block';
   if(isMaster) document.getElementById('admin-panel').style.display='block';
   loadAppConfig();
+  applyReqPermission();
+}
+
+// ── Permiso individual para hacer la Requisición Mensual ───────────────────
+function applyReqPermission(){
+  const puede = isMaster || currentUser.puede_requisicion !== false;
+  const card  = document.getElementById('mod-card-req');
+  const badge = document.getElementById('req-blocked-badge');
+  const arrow = document.getElementById('req-card-arrow');
+  window._poPuedeRequisicion = puede;
+  if(card){
+    if(puede){ card.classList.remove('blocked'); }
+    else     { card.classList.add('blocked'); }
+  }
+  if(badge) badge.style.display = puede ? 'none' : 'inline-block';
+  if(arrow) arrow.textContent   = puede ? '›' : '🔒';
+}
+
+function onClickReq(){
+  if(!window._poPuedeRequisicion){
+    toast('🔒 Tu usuario no está habilitado para enviar la requisición de tu punto. Habla con el encargado o con el administrador.', true);
+    return;
+  }
+  showModule('req');
 }
 
 function doLogout(){
