@@ -510,9 +510,13 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
       <div class="card">
         <div class="card-title">📅 Selecciona el mes</div>
         <div class="fi">
-          <select id="rpo-periodo-sel" onchange="rpoCargarRol()">
+          <select id="rpo-periodo-sel" onchange="rpoSeleccionarPeriodo()">
             <option value="">-- Selecciona un mes --</option>
           </select>
+        </div>
+        <div class="fi" id="rpo-cliente-group" style="display:none">
+          <label>Ver</label>
+          <select id="rpo-cliente-sel" onchange="rpoCargarRol()"></select>
         </div>
       </div>
       <div id="rpo-rol-wrap"></div>
@@ -668,10 +672,13 @@ function backHome(){
 }
 
 // ── MIS ROLES DE PAGO ──────────────────────────────────────────────────────
+let _rpoTodos=[];
+
 async function rpoInit(){
   const sel=document.getElementById('rpo-periodo-sel');
+  const cliGroup=document.getElementById('rpo-cliente-group');
   const wrap=document.getElementById('rpo-rol-wrap');
-  wrap.innerHTML='';
+  wrap.innerHTML=''; cliGroup.style.display='none';
   if(isMaster){
     wrap.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">La cuenta MASTER no tiene rol de pago propio. Ingresa con un usuario de operativo para consultarlo.</p></div>';
     sel.innerHTML='<option value="">—</option>'; sel.disabled=true;
@@ -684,33 +691,69 @@ async function rpoInit(){
   }
   sel.disabled=false;
   if(!_sb){wrap.innerHTML='<div class="card"><p style="color:var(--red);font-size:13px">Sin conexión.</p></div>';return;}
-  const{data,error}=await _sb.from('roles_pago').select('periodo,periodo_key,cliente').eq('cedula',currentUser.cedula).order('periodo_key',{ascending:false});
+  const{data,error}=await _sb.from('roles_pago').select('*').eq('cedula',currentUser.cedula).order('periodo_key',{ascending:false});
   if(error){wrap.innerHTML='<div class="card"><p style="color:var(--red);font-size:13px">Error: '+error.message+'</p></div>';return;}
-  if(!data||!data.length){
+  _rpoTodos=data||[];
+  if(!_rpoTodos.length){
     sel.innerHTML='<option value="">Sin roles publicados aún</option>';
     wrap.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Todavía no hay roles de pago publicados a tu nombre. Vuelve a revisar cuando el administrador los suba.</p></div>';
     return;
   }
-  sel.innerHTML=data.map(r=>`<option value="${r.periodo_key}|||${r.cliente}">${r.periodo} — ${r.cliente}</option>`).join('');
+  // meses únicos (una persona puede tener varios clientes en el mismo mes)
+  const meses=[...new Map(_rpoTodos.map(r=>[r.periodo_key,r.periodo])).entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+  sel.innerHTML=meses.map(m=>`<option value="${m[0]}">${m[1]}</option>`).join('');
+  rpoSeleccionarPeriodo();
+}
+
+function rpoSeleccionarPeriodo(){
+  const key=document.getElementById('rpo-periodo-sel').value;
+  const cliGroup=document.getElementById('rpo-cliente-group');
+  const cliSel=document.getElementById('rpo-cliente-sel');
+  const wrap=document.getElementById('rpo-rol-wrap');
+  if(!key){ wrap.innerHTML=''; cliGroup.style.display='none'; return; }
+  const registros=_rpoTodos.filter(r=>r.periodo_key===key);
+  if(registros.length>1){
+    cliGroup.style.display='block';
+    cliSel.innerHTML='<option value="__TODOS__">🔷 Resumen general (todos los clientes)</option>'
+      +registros.map(r=>`<option value="${r.cliente}">${r.cliente}${r.punto?' — '+r.punto:''}</option>`).join('');
+    cliSel.value='__TODOS__';
+  } else {
+    cliGroup.style.display='none';
+  }
   rpoCargarRol();
 }
 
-async function rpoCargarRol(){
+function rpoCargarRol(){
+  const key=document.getElementById('rpo-periodo-sel').value;
   const wrap=document.getElementById('rpo-rol-wrap');
-  const val=document.getElementById('rpo-periodo-sel').value;
-  if(!val){wrap.innerHTML='';return;}
-  const partes=val.split('|||'); const key=partes[0], cliente=partes[1];
-  wrap.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>';
-  const{data,error}=await _sb.from('roles_pago').select('*').eq('cedula',currentUser.cedula).eq('periodo_key',key).eq('cliente',cliente).single();
-  if(error||!data){wrap.innerHTML='<div class="card"><p style="color:var(--red);font-size:13px">No se pudo cargar el rol.</p></div>';return;}
-  window._rpoActual=data;
-  rpoRenderRol(data);
+  if(!key){ wrap.innerHTML=''; return; }
+  const registros=_rpoTodos.filter(r=>r.periodo_key===key);
+  if(!registros.length){ wrap.innerHTML=''; return; }
+  const cliGroup=document.getElementById('rpo-cliente-group');
+  const cliVal = (cliGroup.style.display!=='none') ? document.getElementById('rpo-cliente-sel').value : registros[0].cliente;
+  if(registros.length>1 && cliVal==='__TODOS__'){
+    rpoRenderResumenGeneral(registros);
+  } else {
+    const reg = registros.find(r=>r.cliente===cliVal) || registros[0];
+    window._rpoActual=reg;
+    rpoRenderRol(reg);
+  }
+}
+
+function rpoAgruparPorLabel(items){
+  const map=new Map();
+  (items||[]).forEach(it=>{
+    const key=it.label;
+    const val=rpoNum(it.valor);
+    map.set(key, (map.get(key)||0)+val);
+  });
+  return [...map.entries()].map(([label,valor])=>({label,valor}));
 }
 
 const ROL_EMPRESAS={
   NOVACLEAN:{nombre:'NOVACLEAN S. A.',ruc:'0992575220001'},
   HOMECLEAN:{nombre:'HOMECLEAN C. A.',ruc:'0993110221001'},
-  INMOCLEAN:{nombre:'INMOCLEAN S. A.',ruc:'0993110221001'}
+  INMOCLEAN:{nombre:'INMOCLEAN S. A.',ruc:'0992785357001'}
 };
 function rpoNum(v){ return typeof v==='number'?v:(parseFloat(v)||0); }
 function rpoFilaIngreso(it){
@@ -778,6 +821,94 @@ function rpoImprimir(){
     +'<div style="font-weight:700;color:#b71c1c;margin-bottom:4px">EGRESOS</div>'
     +'<table>'+egrRows+'<tr class="tot"><td>Total Egresos</td><td style="text-align:right">$'+rpoNum(r.total_egresos).toFixed(2)+'</td></tr></table>'
     +'<div class="neto"><span>NETO A RECIBIR</span><span>$'+rpoNum(r.total).toFixed(2)+'</span></div>'
+    +'<div style="margin-top:40px;display:flex;justify-content:space-between;font-size:11px">'
+    +'<div>_________________________<br>ELABORADO</div>'
+    +'<div>_________________________<br>RECIBÍ CONFORME</div></div>'
+    +'<script>window.onload=function(){window.print()}<\/script>'
+    +'</body></html>';
+  const w=window.open('','_blank');
+  if(!w){alert('Permite las ventanas emergentes para poder imprimir.');return;}
+  w.document.write(html); w.document.close();
+}
+
+function rpoRenderResumenGeneral(registros){
+  const wrap=document.getElementById('rpo-rol-wrap'); if(!wrap) return;
+  const r0=registros[0];
+  const emp=ROL_EMPRESAS[r0.empresa]||{nombre:r0.empresa||'CLEAN GROUP',ruc:''};
+  const ingAgr=rpoAgruparPorLabel(registros.flatMap(r=>r.ingresos||[]));
+  const egrAgr=rpoAgruparPorLabel(registros.flatMap(r=>r.egresos||[]));
+  const totIng=ingAgr.reduce((s,it)=>s+rpoNum(it.valor),0);
+  const totEgr=egrAgr.reduce((s,it)=>s+rpoNum(it.valor),0);
+  const totNeto=registros.reduce((s,r)=>s+rpoNum(r.total),0);
+  const ingFilas=ingAgr.map(rpoFilaIngreso).join('');
+  const egrFilas=egrAgr.map(rpoFilaEgreso).join('');
+  const porCliente=registros.map(r=>`
+    <tr>
+      <td style="padding:5px 0;font-size:12px">${r.cliente}${r.punto?' — '+r.punto:''}</td>
+      <td style="padding:5px 0;text-align:right;font-size:13px;font-weight:600">$${rpoNum(r.total).toFixed(2)}</td>
+    </tr>`).join('');
+  window._rpoRegistrosActuales=registros;
+  wrap.innerHTML=`
+    <div class="card">
+      <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:var(--teal)">${emp.nombre}</div>
+        ${emp.ruc?`<div style="font-size:10px;color:var(--muted)">R.U.C. ${emp.ruc}</div>`:''}
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:6px">🔷 Resumen General — Todos los clientes</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Nombre</div>
+      <div style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">${r0.nombre}</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px">
+        <div><div style="font-size:11px;color:var(--muted)">Cédula</div><div style="font-size:13px;color:var(--text)">${r0.cedula}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Mes</div><div style="font-size:13px;color:var(--text)">${r0.periodo}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px">Por cliente / punto</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:16px">${porCliente}</table>
+      <div style="font-size:11px;color:var(--teal);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px">Ingresos (combinados)</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">${ingFilas}
+        <tr style="border-top:1px solid var(--border);font-weight:700"><td style="padding-top:6px">Total Ingresos</td><td></td><td style="text-align:right;padding-top:6px;color:var(--teal)">$${totIng.toFixed(2)}</td></tr>
+      </table>
+      <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px">Egresos (combinados)</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:12px">${egrFilas}
+        <tr style="border-top:1px solid var(--border);font-weight:700"><td style="padding-top:6px">Total Egresos</td><td style="text-align:right;padding-top:6px;color:var(--red)">$${totEgr.toFixed(2)}</td></tr>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.3);border-radius:9px;padding:12px 14px;margin-top:4px">
+        <span style="font-size:13px;font-weight:700;color:#fff">NETO TOTAL A RECIBIR</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--teal)">$${totNeto.toFixed(2)}</span>
+      </div>
+      <button class="btn-primary" style="margin-top:16px" onclick="rpoImprimirGeneral()">🖨️ Imprimir / Guardar PDF</button>
+    </div>`;
+}
+
+function rpoImprimirGeneral(){
+  const registros=window._rpoRegistrosActuales; if(!registros||!registros.length) return;
+  const r0=registros[0];
+  const emp=ROL_EMPRESAS[r0.empresa]||{nombre:r0.empresa||'CLEAN GROUP',ruc:''};
+  const ingAgr=rpoAgruparPorLabel(registros.flatMap(r=>r.ingresos||[]));
+  const egrAgr=rpoAgruparPorLabel(registros.flatMap(r=>r.egresos||[]));
+  const totIng=ingAgr.reduce((s,it)=>s+rpoNum(it.valor),0);
+  const totEgr=egrAgr.reduce((s,it)=>s+rpoNum(it.valor),0);
+  const totNeto=registros.reduce((s,r)=>s+rpoNum(r.total),0);
+  const porClienteRows=registros.map(r=>'<tr><td>'+r.cliente+(r.punto?' — '+r.punto:'')+'</td><td style="text-align:right">$'+rpoNum(r.total).toFixed(2)+'</td></tr>').join('');
+  const ingRows=ingAgr.map(it=>'<tr><td>'+it.label+'</td><td style="text-align:center;color:#777">'+((it.hrs!==undefined&&it.hrs!==null&&it.hrs!=='')?it.hrs:'')+'</td><td style="text-align:right">$'+rpoNum(it.valor).toFixed(2)+'</td></tr>').join('');
+  const egrRows=egrAgr.map(it=>'<tr><td>'+it.label+'</td><td style="text-align:right">$'+rpoNum(it.valor).toFixed(2)+'</td></tr>').join('');
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumen General '+r0.periodo+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;padding:24px;color:#222;font-size:13px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:14px}td{padding:3px 0}'
+    +'.tot{border-top:1px solid #333;font-weight:700}'
+    +'.neto{display:flex;justify-content:space-between;background:#e8f5e9;border:1px solid #2e7d32;border-radius:8px;padding:10px 14px;margin-top:10px;font-weight:700}'
+    +'.hdr{text-align:center;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #333}'
+    +'</style></head><body>'
+    +'<div class="hdr"><div style="font-size:15px;font-weight:700">'+emp.nombre+'</div>'
+    +(emp.ruc?'<div style="font-size:11px;color:#555">R.U.C. '+emp.ruc+'</div>':'')
+    +'<div style="font-size:12px;color:#555;margin-top:4px;text-transform:uppercase">Resumen General — Todos los clientes</div></div>'
+    +'<div><strong>Nombre:</strong> '+r0.nombre+' &nbsp;&nbsp; <strong>Cédula:</strong> '+r0.cedula+' &nbsp;&nbsp; <strong>Mes:</strong> '+r0.periodo+'</div>'
+    +'<div style="font-weight:700;color:#333;margin:14px 0 4px">POR CLIENTE / PUNTO</div>'
+    +'<table>'+porClienteRows+'</table>'
+    +'<div style="font-weight:700;color:#1b5e20;margin-bottom:4px">INGRESOS (combinados)</div>'
+    +'<table>'+ingRows+'<tr class="tot"><td>Total Ingresos</td><td></td><td style="text-align:right">$'+totIng.toFixed(2)+'</td></tr></table>'
+    +'<div style="font-weight:700;color:#b71c1c;margin-bottom:4px">EGRESOS (combinados)</div>'
+    +'<table>'+egrRows+'<tr class="tot"><td>Total Egresos</td><td style="text-align:right">$'+totEgr.toFixed(2)+'</td></tr></table>'
+    +'<div class="neto"><span>NETO TOTAL A RECIBIR</span><span>$'+totNeto.toFixed(2)+'</span></div>'
     +'<div style="margin-top:40px;display:flex;justify-content:space-between;font-size:11px">'
     +'<div>_________________________<br>ELABORADO</div>'
     +'<div>_________________________<br>RECIBÍ CONFORME</div></div>'
