@@ -8858,9 +8858,12 @@ async function campoPendientesRender(periodo, empresaFiltro, reqsRecibidas){
   // Cargar operativos registrados de Supabase (o usar caché si ya están)
   let operativos=[];
   if(_sb){
-    const {data}=await _sb.from('operativos_usuarios').select('nombre,empresa,clientes');
+    const {data}=await _sb.from('operativos_usuarios').select('nombre,empresa,clientes,puede_requisicion');
     operativos=data||[];
   }
+
+  // Solo operativos autorizados a hacer la requisición mensual (puede_requisicion !== false)
+  operativos=operativos.filter(op=>op.puede_requisicion!==false);
 
   // Filtrar por empresa si hay filtro
   if(empresaFiltro) operativos=operativos.filter(op=>op.empresa===empresaFiltro);
