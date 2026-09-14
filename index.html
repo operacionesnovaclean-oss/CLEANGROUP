@@ -5958,9 +5958,15 @@ function cobObtenerMeses(){
   var set = new Set();
   (db.cobFacturas||[]).forEach(function(f){ if(f.mes) set.add(f.mes); });
   var hoy = new Date();
+  // Ventana corta alrededor de hoy (por si el año cambia pronto, cubre diciembre/enero)
   for(var i=-2; i<=2; i++){
     var d = new Date(hoy.getFullYear(), hoy.getMonth()+i, 1);
     set.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  // Todo el año en curso, para poder cargar facturas de cualquier mes (ej: Junio)
+  // aunque todavía no tenga facturas registradas
+  for(var mIdx=0; mIdx<12; mIdx++){
+    set.add(hoy.getFullYear()+'-'+String(mIdx+1).padStart(2,'0'));
   }
   var arr = Array.from(set).sort().reverse();
   var nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
