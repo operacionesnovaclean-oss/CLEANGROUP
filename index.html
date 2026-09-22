@@ -304,6 +304,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
       <button class="nav-item" onclick="nav('fundas')"><span class="nav-icon">&#128717;</span>Control de Fundas</button>      <button class="nav-item" onclick="nav('operativos')"><span class="nav-icon">👥</span>Usuarios de Campo</button>
       <button class="nav-item" onclick="nav('campo')"><span class="nav-icon">📥</span>Req. de Campo</button>
+      <button class="nav-item" onclick="nav('inspecciones')"><span class="nav-icon">🔍</span>Inspecciones</button>
       <button class="nav-item" onclick="nav('catalogo')"><span class="nav-icon">🗂️</span>Editor de Catálogo</button>
       <button class="nav-item" onclick="nav('roles-pago')"><span class="nav-icon">💰</span>Roles de Pago</button>
     </nav>
@@ -448,8 +449,8 @@ const USER_ROLES={
   compras:'all',
   bodega:'all',
   supervisor:'all',
-  gerente:['dashboard','orden-compra','pagos-proveedores','cobranzas'],
-  gerencia:['dashboard','pagos-proveedores','inventario','cobranzas']
+  gerente:['dashboard','orden-compra','pagos-proveedores','cobranzas','inspecciones'],
+  gerencia:['dashboard','pagos-proveedores','inventario','cobranzas','inspecciones']
 };
 let currentUser=null;
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
@@ -2037,6 +2038,15 @@ function buildPanels(){
         <input type="checkbox" id="nop-puede-req" checked style="width:18px;height:18px;accent-color:var(--teal);cursor:pointer">
       </label>
     </div>
+    <div style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">🔍 Puede subir Inspecciones</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Actívalo solo para los supervisores autorizados a cargar inspecciones de punto. Está desactivado por defecto para todos.</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex-shrink:0">
+        <input type="checkbox" id="nop-puede-insp" style="width:18px;height:18px;accent-color:var(--amber);cursor:pointer">
+      </label>
+    </div>
     <div class="btn-row">
       <button class="btn btn-p" onclick="nopGuardar()">💾 Guardar usuario</button>
       <button class="btn btn-s" onclick="nopLimpiar()">🗑️ Limpiar</button>
@@ -2092,7 +2102,138 @@ function buildPanels(){
     <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha / Hora</th><th>Ítems</th><th></th></tr></thead><tbody id="campo-list"></tbody></table></div>
   </div>
 </div>
+<!-- INSPECCIONES -->
+<div class="panel" id="panel-inspecciones">
+  <div class="ph">
+    <h2>🔍 Inspecciones</h2>
+    <p>Inspecciones de punto cargadas por los supervisores habilitados, con costeo automático (materiales, mano de obra, suministros y maquinaria) y precios editables.</p>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+    <button id="insp-tab-registros" class="cat-tab active" onclick="inspTab('registros')">📋 Registros</button>
+    <button id="insp-tab-costeo"    class="cat-tab"        onclick="inspTab('costeo')">💲 Costeo y Precios</button>
+    <button id="insp-tab-ref"       class="cat-tab"        onclick="inspTab('ref')">📐 Valores Referenciales</button>
+  </div>
+
+  <!-- TAB: REGISTROS -->
+  <div id="insp-pane-registros">
+    <div class="card">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input id="insp-buscar-reg" placeholder="🔍 Buscar por cliente, operativo o período..." oninput="inspRegRender()"
+          style="flex:1;min-width:220px;padding:8px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <select id="insp-empresa-sel" onchange="inspRegRender()" style="padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          <option value="">Todas las empresas</option><option>INMOCLEAN</option><option>NOVACLEAN</option><option>HOMECLEAN</option>
+        </select>
+        <select id="insp-op-sel" onchange="inspRegRender()" style="flex:1;min-width:160px;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"><option value="">Todos los operativos</option></select>
+        <button class="btn btn-s btn-sm" onclick="initInspeccionesPanel()">🔄 Actualizar</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 Inspecciones cargadas <span class="badge" id="insp-reg-count">0</span></div>
+      <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha</th><th>Ítems</th><th>Total estimado</th><th></th></tr></thead><tbody id="insp-reg-list"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- TAB: COSTEO Y PRECIOS -->
+  <div id="insp-pane-costeo" style="display:none">
+    <div class="card">
+      <div class="card-title">⚙️ Parámetros generales de costeo</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div class="fi" style="flex:0 0 170px"><label>% Gastos Administrativos</label>
+          <input type="number" step="0.1" id="insp-cfg-admin" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 140px"><label>% Utilidad</label>
+          <input type="number" step="0.1" id="insp-cfg-utilidad" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 170px"><label>Tarifa auxiliar / día ($)</label>
+          <input type="number" step="0.01" id="insp-cfg-tarifa-aux" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 150px"><label>Costo almuerzo ($)</label>
+          <input type="number" step="0.01" id="insp-cfg-almuerzo" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 150px"><label>Costo botellón ($)</label>
+          <input type="number" step="0.01" id="insp-cfg-botellon" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 140px"><label>Horas laborables / mes</label>
+          <input type="number" step="1" id="insp-cfg-horasmes" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 190px"><label>Duración base del total (h)</label>
+          <select id="insp-cfg-duracion-base" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <option value="24">24 horas</option><option value="48">48 horas</option><option value="72">72 horas</option><option value="120">120 horas</option>
+          </select></div>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:10px">
+        La duración base es la que se usa para "Total Gastos Operativos", igual que en tu Excel original (columna de 24h).
+        Almuerzos y botellón se muestran como líneas informativas — en tu Excel original no sumaban al total, actívalo abajo si quieres incluirlos.
+      </p>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--muted)">
+        <input type="checkbox" id="insp-cfg-incluir-alm-bot" style="accent-color:var(--teal)">
+        Incluir almuerzos y botellón de agua dentro del Total de Gastos Operativos
+      </label>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0">🧰 Materiales <span class="badge" id="insp-mat-count">0</span></div>
+        <button class="btn btn-s btn-sm" onclick="inspAgregarItem('materiales')">➕ Agregar material</button>
+      </div>
+      <div class="tw"><table><thead><tr><th>Ítem</th><th>PVP ($)</th><th>Vida útil (meses/usos)</th><th></th></tr></thead><tbody id="insp-tabla-materiales"></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0">🧴 Suministros <span class="badge" id="insp-sum-count">0</span></div>
+        <button class="btn btn-s btn-sm" onclick="inspAgregarItem('suministros')">➕ Agregar suministro</button>
+      </div>
+      <div class="tw"><table><thead><tr><th>Ítem</th><th>PVP ($)</th><th></th></tr></thead><tbody id="insp-tabla-suministros"></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0">🛠️ Maquinaria y Equipos <span class="badge" id="insp-maq-count">0</span></div>
+        <button class="btn btn-s btn-sm" onclick="inspAgregarItem('maquinaria')">➕ Agregar maquinaria</button>
+      </div>
+      <div class="tw"><table><thead><tr><th>Ítem</th><th>PVP ($)</th><th>Vida útil (meses)</th><th></th></tr></thead><tbody id="insp-tabla-maquinaria"></tbody></table></div>
+    </div>
+
+    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="inspGuardarCatalogo()">💾 Guardar catálogo y precios</button>
+      <button class="btn btn-s" onclick="inspRestaurarDefaults()">↩️ Restaurar valores del Excel original</button>
+      <button class="btn btn-s" onclick="opPublishInspCatalog()" style="background:#1d7145;color:#fff" title="Vuelve a publicar el catálogo hacia el Portal de Campo">📤 Publicar al Portal de Campo</button>
+    </div>
+  </div>
+
+  <!-- TAB: VALORES REFERENCIALES -->
+  <div id="insp-pane-ref" style="display:none">
+    <div class="card">
+      <div class="card-title">📐 Valores referenciales</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Precios sugeridos de referencia rápida, según cantidad de personas del punto o rango de valor del contrato. No se calculan de la inspección: los defines tú manualmente para cotizar rápido.
+      </p>
+      <div class="tw"><table><thead><tr><th>Tipo</th><th>Desde</th><th>Hasta</th><th>Valor referencial ($)</th><th>Nota</th><th></th></tr></thead><tbody id="insp-tabla-referencias"></tbody></table></div>
+      <button class="btn btn-s btn-sm" style="margin-top:10px" onclick="inspAgregarReferencia()">➕ Agregar fila</button>
+    </div>
+    <div class="card">
+      <button class="btn btn-p" onclick="inspGuardarCatalogo()">💾 Guardar valores referenciales</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE DE INSPECCIÓN CON COSTEO -->
+<div id="modal-insp-detalle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:920px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="idet-titulo">🔍 Detalle de inspección</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px" id="idet-sub"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="idet-duracion" onchange="idetRenderCosteo()" style="padding:6px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none">
+          <option value="24">Servicio 24h</option><option value="48">Servicio 48h</option><option value="72">Servicio 72h</option><option value="120">Servicio 120h</option>
+        </select>
+        <button onclick="modalClose('modal-insp-detalle')" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+    </div>
+    <div style="padding:16px 22px;max-height:70vh;overflow-y:auto" id="idet-body"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-catalogo">
+
   <div class="panel-header"><h2>🗂️ Editor de Catálogo</h2></div>
   <div class="panel-body">
 
@@ -2700,7 +2841,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas,'roles-pago':initRolesPago};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,inspecciones:initInspeccionesPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas,'roles-pago':initRolesPago};
   if(fns[name]) fns[name]();
 }
 
@@ -7831,6 +7972,7 @@ async function nopGuardar(){
   const pass=document.getElementById('nop-pass').value.trim();
   const empresa=document.getElementById('nop-empresa').value;
   const puedeReq=document.getElementById('nop-puede-req').checked;
+  const puedeInsp=document.getElementById('nop-puede-insp').checked;
   if(!nombre||!usuario||!pass){toast('Completa nombre, usuario y contraseña',true);return;}
   if(pass.length<4){toast('La contraseña debe tener al menos 4 caracteres',true);return;}
   if(!empresa){toast('Selecciona una empresa',true);return;}
@@ -7839,7 +7981,7 @@ async function nopGuardar(){
   if(!_sb){toast('Sin conexión Supabase',true);return;}
   try{
     const {error}=await _sb.from('operativos_usuarios').upsert(
-      {nombre,cedula,usuario,password:pass,empresa,clientes:nop_selClis,puede_requisicion:puedeReq,creado:new Date().toISOString()},
+      {nombre,cedula,usuario,password:pass,empresa,clientes:nop_selClis,puede_requisicion:puedeReq,puede_inspeccion:puedeInsp,creado:new Date().toISOString()},
       {onConflict:'usuario'}
     );
     if(error) throw error;
@@ -7851,6 +7993,7 @@ function nopLimpiar(){
   ['nop-nombre','nop-cedula','nop-usuario','nop-pass','nop-cli-manual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('nop-empresa').value='';
   document.getElementById('nop-puede-req').checked=true;
+  document.getElementById('nop-puede-insp').checked=false;
   const ex=document.getElementById('nop-cli-extras');if(ex)ex.innerHTML='';
   nop_selClis=[]; nopRenderCliCheckboxes();
 }
@@ -7869,6 +8012,7 @@ async function nopEditar(usuario){
   document.getElementById('nop-pass').value=data.password;
   document.getElementById('nop-empresa').value=data.empresa;
   document.getElementById('nop-puede-req').checked=data.puede_requisicion!==false;
+  document.getElementById('nop-puede-insp').checked=data.puede_inspeccion===true;
   nop_selClis=[...(data.clientes||[])];
   nopRenderCliCheckboxes();
   nopRenderExtras();
@@ -7880,6 +8024,14 @@ async function nopTogglePermiso(usuario,checkbox){
   if(error){toast('Error: '+error.message,true);checkbox.checked=!puede;return;}
   toast(puede?'✅ '+usuario+' ya puede hacer la requisición':'🔒 '+usuario+' ya NO puede hacer la requisición');
   const rec=_opUsuarios.find(u=>u.usuario===usuario); if(rec) rec.puede_requisicion=puede;
+  opRenderList();
+}
+async function nopToggleInspeccion(usuario,checkbox){
+  const puede=checkbox.checked;
+  const {error}=await _sb.from('operativos_usuarios').update({puede_inspeccion:puede}).eq('usuario',usuario);
+  if(error){toast('Error: '+error.message,true);checkbox.checked=!puede;return;}
+  toast(puede?'✅ '+usuario+' ya puede subir inspecciones':'🔒 '+usuario+' ya NO puede subir inspecciones');
+  const rec=_opUsuarios.find(u=>u.usuario===usuario); if(rec) rec.puede_inspeccion=puede;
   opRenderList();
 }
 let _opUsuarios=[];
@@ -7894,6 +8046,11 @@ async function initOperativosPanel(){
   if(opSel){
     const cur=opSel.value;
     opSel.innerHTML='<option value="">Todos los operativos</option>'+_opUsuarios.map(u=>`<option${u.nombre===cur?' selected':''}>${u.nombre}</option>`).join('');
+  }
+  const inspOpSel=document.getElementById('insp-op-sel');
+  if(inspOpSel){
+    const cur=inspOpSel.value;
+    inspOpSel.innerHTML='<option value="">Todos los operativos</option>'+_opUsuarios.filter(u=>u.puede_inspeccion===true).map(u=>`<option${u.nombre===cur?' selected':''}>${u.nombre}</option>`).join('');
   }
 }
 function opRenderList(){
@@ -7913,6 +8070,7 @@ function opRenderList(){
   if(!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">Sin resultados para "'+term+'".</p>';return;}
   el.innerHTML='<div class="op-grid">'+data.map(u=>{
     const puede=u.puede_requisicion!==false;
+    const puedeInsp=u.puede_inspeccion===true;
     return `
     <div class="op-card">
       <div class="op-card-head">
@@ -7927,6 +8085,10 @@ function opRenderList(){
         <input type="checkbox" ${puede?'checked':''} onchange="nopTogglePermiso('${u.usuario}',this)" style="accent-color:var(--teal);width:14px;height:14px;cursor:pointer">
         ${puede?'📋 Puede hacer requisición':'🔒 Requisición bloqueada'}
       </label>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:11px;color:${puedeInsp?'var(--amber)':'var(--muted)'}">
+        <input type="checkbox" ${puedeInsp?'checked':''} onchange="nopToggleInspeccion('${u.usuario}',this)" style="accent-color:var(--amber);width:14px;height:14px;cursor:pointer">
+        ${puedeInsp?'🔍 Puede subir inspecciones':'🔍 Inspecciones no habilitadas'}
+      </label>
     </div>`;}).join('')+'</div>';
 }
 async function opPublishCatalog(){
@@ -7934,6 +8096,404 @@ async function opPublishCatalog(){
   const {error}=await _sb.from('campo_catalog').upsert({id:1,catalog:RM_CAT,updated:new Date().toISOString()},{onConflict:'id'});
   if(error){toast('Error: '+error.message,true);return;}
   toast('✅ Catálogo publicado al portal de campo');
+}
+
+// ════════════════════════════════════════════
+// INSPECCIONES — catálogo de costeo + registros de supervisores
+// Replica las fórmulas de la hoja "COTIZACION" del Excel original:
+//   valorTotal   = PVP × cantidad
+//   valorMensual = valorTotal ÷ vidaÚtil (meses/usos)   [suministros no amortizan: son consumibles]
+//   costoHora    = valorMensual ÷ horas laborables al mes (160 por defecto)
+//   servicio(h)  = costoHora × horas de servicio (24/48/72/120)
+//   Total Gastos Operativos = Σ materiales(servicio) + Sueldos + Σ suministros + Σ maquinaria(servicio)
+//   Gastos Administrativos  = Total Gastos Operativos × % administrativos (5% por defecto)
+//   Utilidad                = Total Gastos Operativos × % utilidad (25% por defecto)
+//   Total Servicio+Utilidad = Total Gastos Operativos + Gastos Administrativos + Utilidad
+// ════════════════════════════════════════════
+
+// Catálogo y precios tal como estaban en INSPECCIONES_.xlsx (hoja COTIZACION),
+// usado como semilla inicial y como "restaurar valores del Excel original".
+const INSP_CAT_DEFAULT = {
+  catalog:{
+    materiales:[
+      {nombre:'BARREDORAS COMPLETAS',pvp:40,vidaUtilMeses:1},
+      {nombre:'MOPAS DE MOÑO',pvp:3.5,vidaUtilMeses:3},
+      {nombre:'ESCOBAS PLASTICAS',pvp:3.5,vidaUtilMeses:3},
+      {nombre:'CARRITO CON EXPRIMIDOR',pvp:6.5,vidaUtilMeses:6},
+      {nombre:'RECOGEDOR',pvp:2.12,vidaUtilMeses:6},
+      {nombre:'BALDES',pvp:3.85,vidaUtilMeses:6},
+      {nombre:'MICROFIBRAS',pvp:1.19,vidaUtilMeses:12},
+      {nombre:'MOPA PLANA',pvp:0.78,vidaUtilMeses:1},
+      {nombre:'brochas',pvp:18.5,vidaUtilMeses:6},
+      {nombre:'CANECAS CORTADAS POR LA MITAD',pvp:8.25,vidaUtilMeses:3},
+      {nombre:'MANGUERA 30m',pvp:54,vidaUtilMeses:3},
+      {nombre:'espátulas',pvp:7.5,vidaUtilMeses:1},
+      {nombre:'ATOMIZADORES',pvp:1.16,vidaUtilMeses:1},
+      {nombre:'COMPRESOR',pvp:3.5,vidaUtilMeses:2},
+      {nombre:'CINTA DE BUENA ADERENCIA',pvp:1.9,vidaUtilMeses:1},
+      {nombre:'Botas de caucho',pvp:1.15,vidaUtilMeses:1},
+      {nombre:'GUANTES PLASTICO',pvp:1.89,vidaUtilMeses:1},
+      {nombre:'CEPILLO DE MANOS',pvp:1.15,vidaUtilMeses:3},
+      {nombre:'WAIPE POR FUNDA',pvp:9,vidaUtilMeses:1},
+      {nombre:'ESCURRIDORES',pvp:25,vidaUtilMeses:1},
+      {nombre:'LIMPIA VIDRIO METALICO',pvp:2.1,vidaUtilMeses:1},
+      {nombre:'LIJA DE AGUA',pvp:0.58,vidaUtilMeses:1},
+      {nombre:'FUNDAS DE BASURA 30X36',pvp:1.08,vidaUtilMeses:1},
+      {nombre:'EQUIPOS PARA ALTURAS',pvp:1.06,vidaUtilMeses:2},
+      {nombre:'CUERPOS DE ANDAMIOS GRANDES',pvp:50,vidaUtilMeses:2},
+      {nombre:'CUERPOS DE ANDAMIOS PEQUEÑOS',pvp:8,vidaUtilMeses:1},
+      {nombre:'CASCOS',pvp:13,vidaUtilMeses:1},
+      {nombre:'LINEA DE VIDA',pvp:47,vidaUtilMeses:1},
+      {nombre:'ARNES',pvp:8.35,vidaUtilMeses:6},
+      {nombre:'CINTA DE PELIGRO',pvp:3,vidaUtilMeses:6},
+      {nombre:'GAFAS DE SEGURIDAD',pvp:3,vidaUtilMeses:6}
+    ],
+    suministros:[
+      {nombre:'FORMULA-50 - galones',pvp:7.34},
+      {nombre:'FORMULA-100 -GL',pvp:10},
+      {nombre:'ALCOHOL -GL',pvp:2.32},
+      {nombre:'CLORO - GL',pvp:7.69},
+      {nombre:'SANITAIR - GL',pvp:8.52},
+      {nombre:'QUIDESOL',pvp:5.49},
+      {nombre:'JABON NEUTRO * CANECA',pvp:1.65},
+      {nombre:'SILITOR',pvp:11.5},
+      {nombre:'SHAMPOO DE ALFOMFRA',pvp:5.8},
+      {nombre:'LIMPIADOR DE ACERO INOXIDABLE',pvp:9.45},
+      {nombre:'FOAMY GO * GL',pvp:8.07},
+      {nombre:'CERA - litro',pvp:14},
+      {nombre:'DILUYENTE GL',pvp:9.25}
+    ],
+    maquinaria:[
+      {nombre:'HIDROLAVADORA ELECTRICA AMARILLA',pvp:900,vidaUtilMeses:12},
+      {nombre:'ASPIRADORA INDUSTRIAL',pvp:680,vidaUtilMeses:24},
+      {nombre:'ASPIRADORA PEQUEÑA',pvp:550,vidaUtilMeses:24},
+      {nombre:'ESCALERA DE TIJERA 2 m',pvp:92,vidaUtilMeses:24},
+      {nombre:'ESCALERA TELESCOPIA',pvp:158,vidaUtilMeses:12},
+      {nombre:'EXTENCION ELECTRICA',pvp:75,vidaUtilMeses:12},
+      {nombre:'PULIDORA 20” COMPLETA CON TANQUE',pvp:1560,vidaUtilMeses:24},
+      {nombre:'DISCO NEGRO',pvp:10.5,vidaUtilMeses:1},
+      {nombre:'DISCO BLANCO',pvp:10.5,vidaUtilMeses:1},
+      {nombre:'DISCOS ROJOS',pvp:10.5,vidaUtilMeses:1},
+      {nombre:'CEPILLO DE PULIDORA',pvp:34,vidaUtilMeses:12},
+      {nombre:'AMOLADORA',pvp:45,vidaUtilMeses:12},
+      {nombre:'ELEVADOR',pvp:12,vidaUtilMeses:12},
+      {nombre:'TWISTER+MANGUERA DE PRESION',pvp:15.75,vidaUtilMeses:1}
+    ]
+  },
+  config:{
+    pctAdministrativos:0.05,
+    pctUtilidad:0.25,
+    tarifaAuxiliarDia:25,
+    costoAlmuerzo:2.75,
+    costoBotellon:2,
+    horasMes:160,
+    duracionBase:24,
+    incluirAlmuerzoBotellon:false,
+    referencias:[]
+  }
+};
+
+let insp_catalog=JSON.parse(JSON.stringify(INSP_CAT_DEFAULT.catalog));
+let insp_config=JSON.parse(JSON.stringify(INSP_CAT_DEFAULT.config));
+let _inspRegistros=[];
+
+async function initInspeccionesPanel(){
+  await inspCargarCatalogo();
+  inspRenderTablaMateriales();
+  inspRenderTablaSuministros();
+  inspRenderTablaMaquinaria();
+  inspRenderTablaReferencias();
+  await inspCargarRegistros();
+}
+
+function inspTab(name){
+  ['registros','costeo','ref'].forEach(t=>{
+    const btn=document.getElementById('insp-tab-'+t);
+    const pane=document.getElementById('insp-pane-'+t);
+    if(btn) btn.className='cat-tab'+(t===name?' active':'');
+    if(pane) pane.style.display=(t===name?'block':'none');
+  });
+}
+
+async function inspCargarCatalogo(){
+  if(!_sb) return;
+  try{
+    const{data}=await _sb.from('inspecciones_catalog').select('catalog,config').eq('id',1).single();
+    if(data){
+      if(data.catalog) insp_catalog={
+        materiales:data.catalog.materiales||INSP_CAT_DEFAULT.catalog.materiales,
+        suministros:data.catalog.suministros||INSP_CAT_DEFAULT.catalog.suministros,
+        maquinaria:data.catalog.maquinaria||INSP_CAT_DEFAULT.catalog.maquinaria
+      };
+      if(data.config) insp_config=Object.assign({},INSP_CAT_DEFAULT.config,data.config);
+    }
+  }catch(e){ console.warn('inspecciones_catalog aún no existe, usando valores del Excel original',e); }
+  document.getElementById('insp-cfg-admin').value       = (insp_config.pctAdministrativos*100).toFixed(2);
+  document.getElementById('insp-cfg-utilidad').value    = (insp_config.pctUtilidad*100).toFixed(2);
+  document.getElementById('insp-cfg-tarifa-aux').value  = insp_config.tarifaAuxiliarDia;
+  document.getElementById('insp-cfg-almuerzo').value    = insp_config.costoAlmuerzo;
+  document.getElementById('insp-cfg-botellon').value    = insp_config.costoBotellon;
+  document.getElementById('insp-cfg-horasmes').value    = insp_config.horasMes;
+  document.getElementById('insp-cfg-duracion-base').value = String(insp_config.duracionBase);
+  document.getElementById('insp-cfg-incluir-alm-bot').checked = insp_config.incluirAlmuerzoBotellon===true;
+}
+
+function inspRenderTablaMateriales(){
+  const el=document.getElementById('insp-tabla-materiales'); if(!el)return;
+  document.getElementById('insp-mat-count').textContent=insp_catalog.materiales.length;
+  el.innerHTML=insp_catalog.materiales.map((it,i)=>`
+    <tr>
+      <td><input data-t="materiales" data-f="nombre" data-i="${i}" value="${(it.nombre||'').replace(/"/g,'&quot;')}" style="width:100%;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:12px;padding:4px"></td>
+      <td><input type="number" step="0.01" data-t="materiales" data-f="pvp" data-i="${i}" value="${it.pvp||0}" style="width:90px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><input type="number" step="1" data-t="materiales" data-f="vidaUtilMeses" data-i="${i}" value="${it.vidaUtilMeses||1}" style="width:80px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><button class="btn btn-d btn-sm" onclick="inspEliminarItem('materiales',${i})">🗑️</button></td>
+    </tr>`).join('');
+}
+function inspRenderTablaSuministros(){
+  const el=document.getElementById('insp-tabla-suministros'); if(!el)return;
+  document.getElementById('insp-sum-count').textContent=insp_catalog.suministros.length;
+  el.innerHTML=insp_catalog.suministros.map((it,i)=>`
+    <tr>
+      <td><input data-t="suministros" data-f="nombre" data-i="${i}" value="${(it.nombre||'').replace(/"/g,'&quot;')}" style="width:100%;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:12px;padding:4px"></td>
+      <td><input type="number" step="0.01" data-t="suministros" data-f="pvp" data-i="${i}" value="${it.pvp||0}" style="width:90px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><button class="btn btn-d btn-sm" onclick="inspEliminarItem('suministros',${i})">🗑️</button></td>
+    </tr>`).join('');
+}
+function inspRenderTablaMaquinaria(){
+  const el=document.getElementById('insp-tabla-maquinaria'); if(!el)return;
+  document.getElementById('insp-maq-count').textContent=insp_catalog.maquinaria.length;
+  el.innerHTML=insp_catalog.maquinaria.map((it,i)=>`
+    <tr>
+      <td><input data-t="maquinaria" data-f="nombre" data-i="${i}" value="${(it.nombre||'').replace(/"/g,'&quot;')}" style="width:100%;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:12px;padding:4px"></td>
+      <td><input type="number" step="0.01" data-t="maquinaria" data-f="pvp" data-i="${i}" value="${it.pvp||0}" style="width:90px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><input type="number" step="1" data-t="maquinaria" data-f="vidaUtilMeses" data-i="${i}" value="${it.vidaUtilMeses||1}" style="width:80px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><button class="btn btn-d btn-sm" onclick="inspEliminarItem('maquinaria',${i})">🗑️</button></td>
+    </tr>`).join('');
+}
+function inspRenderTablaReferencias(){
+  const el=document.getElementById('insp-tabla-referencias'); if(!el)return;
+  const refs=insp_config.referencias||[];
+  if(!refs.length){el.innerHTML='<tr><td colspan="6" style="color:var(--muted);font-size:12px">Sin valores referenciales todavía. Agrega una fila.</td></tr>';return;}
+  el.innerHTML=refs.map((r,i)=>`
+    <tr>
+      <td><select data-r="tipo" data-i="${i}" onchange="inspRefUpdate(${i},'tipo',this.value)" style="background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px">
+        <option value="personas" ${r.tipo==='personas'?'selected':''}>Cant. de personas</option>
+        <option value="precio" ${r.tipo==='precio'?'selected':''}>Rango de precio ($)</option>
+      </select></td>
+      <td><input type="number" step="0.01" value="${r.desde??0}" onchange="inspRefUpdate(${i},'desde',this.value)" style="width:80px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><input type="number" step="0.01" value="${r.hasta??0}" onchange="inspRefUpdate(${i},'hasta',this.value)" style="width:80px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><input type="number" step="0.01" value="${r.valor??0}" onchange="inspRefUpdate(${i},'valor',this.value)" style="width:100px;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><input value="${(r.nota||'').replace(/"/g,'&quot;')}" onchange="inspRefUpdate(${i},'nota',this.value)" placeholder="Ej: Punto pequeño / oficina" style="width:100%;background:var(--navy2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:12px;padding:4px 6px"></td>
+      <td><button class="btn btn-d btn-sm" onclick="inspEliminarReferencia(${i})">🗑️</button></td>
+    </tr>`).join('');
+}
+
+function inspEliminarItem(tipo,i){ insp_catalog[tipo].splice(i,1); ({materiales:inspRenderTablaMateriales,suministros:inspRenderTablaSuministros,maquinaria:inspRenderTablaMaquinaria})[tipo](); }
+function inspAgregarItem(tipo){
+  const nuevo = tipo==='suministros' ? {nombre:'',pvp:0} : {nombre:'',pvp:0,vidaUtilMeses:1};
+  insp_catalog[tipo].push(nuevo);
+  ({materiales:inspRenderTablaMateriales,suministros:inspRenderTablaSuministros,maquinaria:inspRenderTablaMaquinaria})[tipo]();
+}
+function inspRefUpdate(i,campo,val){
+  if(!insp_config.referencias[i])return;
+  insp_config.referencias[i][campo]= (campo==='tipo'||campo==='nota') ? val : parseFloat(val)||0;
+}
+function inspAgregarReferencia(){
+  if(!insp_config.referencias) insp_config.referencias=[];
+  insp_config.referencias.push({tipo:'personas',desde:0,hasta:0,valor:0,nota:''});
+  inspRenderTablaReferencias();
+}
+function inspEliminarReferencia(i){ insp_config.referencias.splice(i,1); inspRenderTablaReferencias(); }
+
+// Recolecta lo que el admin escribió en las tablas antes de guardar
+function inspLeerTablasEnMemoria(){
+  document.querySelectorAll('#insp-tabla-materiales input, #insp-tabla-suministros input, #insp-tabla-maquinaria input').forEach(inp=>{
+    const t=inp.dataset.t,f=inp.dataset.f,i=inp.dataset.i;
+    if(!t||!f||i===undefined||!insp_catalog[t][i])return;
+    insp_catalog[t][i][f] = (f==='nombre') ? inp.value.trim() : (parseFloat(inp.value)||0);
+  });
+  insp_config.pctAdministrativos = (parseFloat(document.getElementById('insp-cfg-admin').value)||0)/100;
+  insp_config.pctUtilidad        = (parseFloat(document.getElementById('insp-cfg-utilidad').value)||0)/100;
+  insp_config.tarifaAuxiliarDia  = parseFloat(document.getElementById('insp-cfg-tarifa-aux').value)||0;
+  insp_config.costoAlmuerzo      = parseFloat(document.getElementById('insp-cfg-almuerzo').value)||0;
+  insp_config.costoBotellon      = parseFloat(document.getElementById('insp-cfg-botellon').value)||0;
+  insp_config.horasMes           = parseFloat(document.getElementById('insp-cfg-horasmes').value)||160;
+  insp_config.duracionBase       = parseInt(document.getElementById('insp-cfg-duracion-base').value)||24;
+  insp_config.incluirAlmuerzoBotellon = document.getElementById('insp-cfg-incluir-alm-bot').checked;
+}
+
+async function inspGuardarCatalogo(){
+  if(!_sb){toast('Sin conexión',true);return;}
+  inspLeerTablasEnMemoria();
+  try{
+    const{error}=await _sb.from('inspecciones_catalog').upsert(
+      {id:1,catalog:insp_catalog,config:insp_config,updated:new Date().toISOString()},
+      {onConflict:'id'}
+    );
+    if(error) throw error;
+    toast('✅ Catálogo, precios y valores referenciales guardados');
+    inspRegRender();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+async function opPublishInspCatalog(){ await inspGuardarCatalogo(); toast('📤 Catálogo de inspección publicado al Portal de Campo'); }
+
+function inspRestaurarDefaults(){
+  if(!confirm('¿Restaurar todos los precios y catálogo a los valores originales del Excel? Esto NO borra los valores referenciales que hayas creado.')) return;
+  const refsActuales=insp_config.referencias||[];
+  insp_catalog=JSON.parse(JSON.stringify(INSP_CAT_DEFAULT.catalog));
+  insp_config=JSON.parse(JSON.stringify(INSP_CAT_DEFAULT.config));
+  insp_config.referencias=refsActuales;
+  inspCargarCatalogo().then(()=>{}); // no-op de red; solo para refrescar inputs de config abajo
+  document.getElementById('insp-cfg-admin').value       = (insp_config.pctAdministrativos*100).toFixed(2);
+  document.getElementById('insp-cfg-utilidad').value    = (insp_config.pctUtilidad*100).toFixed(2);
+  document.getElementById('insp-cfg-tarifa-aux').value  = insp_config.tarifaAuxiliarDia;
+  document.getElementById('insp-cfg-almuerzo').value    = insp_config.costoAlmuerzo;
+  document.getElementById('insp-cfg-botellon').value    = insp_config.costoBotellon;
+  document.getElementById('insp-cfg-horasmes').value    = insp_config.horasMes;
+  document.getElementById('insp-cfg-duracion-base').value = String(insp_config.duracionBase);
+  document.getElementById('insp-cfg-incluir-alm-bot').checked = insp_config.incluirAlmuerzoBotellon===true;
+  inspRenderTablaMateriales(); inspRenderTablaSuministros(); inspRenderTablaMaquinaria(); inspRenderTablaReferencias();
+  toast('↩️ Valores del Excel original restaurados — recuerda guardar');
+}
+
+// ── Motor de costeo (misma lógica que la hoja COTIZACION del Excel) ───────
+function inspCalcularCosteo(reg,horas){
+  horas=horas||insp_config.duracionBase||24;
+  const horasMes=insp_config.horasMes||160;
+  const buscar=(lista,nombre)=>lista.find(x=>(x.nombre||'').trim().toLowerCase()===(nombre||'').trim().toLowerCase());
+
+  const materialesLines=(reg.materiales||[]).map(i=>{
+    const cat=buscar(insp_catalog.materiales,i.nombre)||{pvp:0,vidaUtilMeses:1};
+    const valorTotal=cat.pvp*i.cant;
+    const valorMensual=valorTotal/(cat.vidaUtilMeses||1);
+    const costoHora=valorMensual/horasMes;
+    const servicio=costoHora*horas;
+    return{nombre:i.nombre,cant:i.cant,pvp:cat.pvp,valorTotal,servicio};
+  });
+  const suministrosLines=(reg.suministros||[]).map(i=>{
+    const cat=buscar(insp_catalog.suministros,i.nombre)||{pvp:0};
+    const valorTotal=cat.pvp*i.cant;
+    return{nombre:i.nombre,cant:i.cant,pvp:cat.pvp,valorTotal};
+  });
+  const maquinariaLines=(reg.maquinaria||[]).map(i=>{
+    const cat=buscar(insp_catalog.maquinaria,i.nombre)||{pvp:0,vidaUtilMeses:1};
+    const valorTotal=cat.pvp*i.cant;
+    const valorMensual=valorTotal/(cat.vidaUtilMeses||1);
+    const costoHora=valorMensual/horasMes;
+    const servicio=costoHora*horas;
+    return{nombre:i.nombre,cant:i.cant,pvp:cat.pvp,valorTotal,servicio};
+  });
+
+  const totalMateriales=materialesLines.reduce((s,l)=>s+l.servicio,0);
+  const totalSuministros=suministrosLines.reduce((s,l)=>s+l.valorTotal,0);
+  const totalMaquinaria=maquinariaLines.reduce((s,l)=>s+l.servicio,0);
+
+  const mo=reg.mano_obra||{};
+  const sueldos = (insp_config.tarifaAuxiliarDia||0) * (mo.auxiliares_cant||0) * (mo.auxiliares_dias||0);
+  const almuerzos = (insp_config.costoAlmuerzo||0) * (mo.almuerzos_cant||0);
+  const botellon  = (insp_config.costoBotellon||0) * (mo.botellon_cant||0);
+
+  const totalGastosOperativos = totalMateriales + sueldos + totalSuministros + totalMaquinaria
+    + (insp_config.incluirAlmuerzoBotellon ? (almuerzos+botellon) : 0);
+  const gastosAdmin = totalGastosOperativos * (insp_config.pctAdministrativos||0);
+  const utilidad     = totalGastosOperativos * (insp_config.pctUtilidad||0);
+  const totalServicioUtilidad = totalGastosOperativos + gastosAdmin + utilidad;
+
+  return{horas,materialesLines,suministrosLines,maquinariaLines,totalMateriales,totalSuministros,totalMaquinaria,
+    sueldos,almuerzos,botellon,totalGastosOperativos,gastosAdmin,utilidad,totalServicioUtilidad};
+}
+
+async function inspCargarRegistros(){
+  if(!_sb) return;
+  try{
+    const{data,error}=await _sb.from('inspecciones_registros').select('*').order('fecha_iso',{ascending:false}).limit(500);
+    if(error) throw error;
+    _inspRegistros=data||[];
+  }catch(e){ console.warn('inspecciones_registros aún no existe',e); _inspRegistros=[]; }
+  const opSel=document.getElementById('insp-op-sel');
+  if(opSel){
+    const cur=opSel.value;
+    const nombres=[...new Set(_inspRegistros.map(r=>r.operativo).filter(Boolean))].sort();
+    opSel.innerHTML='<option value="">Todos los operativos</option>'+nombres.map(n=>`<option${n===cur?' selected':''}>${n}</option>`).join('');
+  }
+  inspRegRender();
+}
+
+function inspRegRender(){
+  const el=document.getElementById('insp-reg-list'); if(!el)return;
+  const term=(document.getElementById('insp-buscar-reg').value||'').toLowerCase();
+  const emp=document.getElementById('insp-empresa-sel').value;
+  const op=document.getElementById('insp-op-sel').value;
+  let data=_inspRegistros;
+  if(term) data=data.filter(r=>(r.cliente||'').toLowerCase().includes(term)||(r.operativo||'').toLowerCase().includes(term)||(r.periodo||'').toLowerCase().includes(term));
+  if(emp) data=data.filter(r=>r.empresa===emp);
+  if(op) data=data.filter(r=>r.operativo===op);
+  document.getElementById('insp-reg-count').textContent=data.length;
+  if(!data.length){el.innerHTML='<tr><td colspan="8" style="color:var(--muted);font-size:13px">Sin inspecciones para este filtro.</td></tr>';return;}
+  el.innerHTML=data.map(r=>{
+    const cnt=(r.materiales||[]).length+(r.suministros||[]).length+(r.maquinaria||[]).length;
+    const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
+    let totalEst=0;
+    try{ totalEst=inspCalcularCosteo(r,insp_config.duracionBase).totalServicioUtilidad; }catch(e){}
+    return`<tr>
+      <td>${r.operativo||''}</td><td>${r.empresa||''}</td><td>${r.cliente||''}</td><td>${r.periodo||''}</td>
+      <td style="font-size:11px;color:var(--muted)">${fecha}</td><td>${cnt}</td>
+      <td>$${totalEst.toFixed(2)}</td>
+      <td><button class="btn btn-s btn-sm" onclick="idetAbrir('${r.id}')">🔍 Ver costeo</button></td>
+    </tr>`;
+  }).join('');
+}
+
+let _idetActual=null;
+function idetAbrir(id){
+  _idetActual=_inspRegistros.find(r=>String(r.id)===String(id));
+  if(!_idetActual){toast('No se encontró el registro',true);return;}
+  document.getElementById('idet-duracion').value=String(insp_config.duracionBase||24);
+  modalOpen('modal-insp-detalle');
+  idetRenderCosteo();
+}
+function idetRenderCosteo(){
+  const r=_idetActual; if(!r)return;
+  const horas=parseInt(document.getElementById('idet-duracion').value)||24;
+  const c=inspCalcularCosteo(r,horas);
+  document.getElementById('idet-titulo').textContent='🔍 '+(r.cliente||'')+' — '+(r.periodo||'');
+  document.getElementById('idet-sub').textContent=(r.operativo||'')+' · '+(r.empresa||'')+' · '+(r.lugar||'')+(r.obra?' · '+r.obra:'');
+  const fila=l=>`<tr><td>${l.nombre}</td><td style="text-align:center">${l.cant}</td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${l.valorTotal.toFixed(2)}</td>${l.servicio!==undefined?`<td style="text-align:right">$${l.servicio.toFixed(2)}</td>`:''}</tr>`;
+  document.getElementById('idet-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;font-size:12px;color:var(--muted)">
+      <div><strong style="color:var(--text)">Supervisor:</strong> ${r.supervisor||'—'}</div>
+      <div><strong style="color:var(--text)">Tipo de limpieza:</strong> ${r.tipo_limpieza||'—'}</div>
+    </div>
+    ${c.materialesLines.length?`<div class="card-title" style="font-size:13px">🧰 Materiales</div>
+    <div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th><th>Servicio ${horas}h</th></tr></thead>
+    <tbody>${c.materialesLines.map(fila).join('')}</tbody></table></div>`:''}
+    ${c.suministrosLines.length?`<div class="card-title" style="font-size:13px;margin-top:14px">🧴 Suministros</div>
+    <div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th></tr></thead>
+    <tbody>${c.suministrosLines.map(fila).join('')}</tbody></table></div>`:''}
+    ${c.maquinariaLines.length?`<div class="card-title" style="font-size:13px;margin-top:14px">🛠️ Maquinaria y equipos</div>
+    <div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th><th>Servicio ${horas}h</th></tr></thead>
+    <tbody>${c.maquinariaLines.map(fila).join('')}</tbody></table></div>`:''}
+    ${(r.correcciones||r.observaciones||r.propuesta_limpieza)?`<div class="card-title" style="font-size:13px;margin-top:14px">📝 Notas</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6">
+      ${r.correcciones?`<div><strong style="color:var(--text)">Correcciones:</strong> ${r.correcciones}</div>`:''}
+      ${r.observaciones?`<div><strong style="color:var(--text)">Observaciones:</strong> ${r.observaciones}</div>`:''}
+      ${r.propuesta_limpieza?`<div><strong style="color:var(--text)">Propuesta de limpieza:</strong> ${r.propuesta_limpieza}</div>`:''}
+    </div>`:''}
+    <div style="margin-top:18px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>👷 Sueldos (auxiliares × días)</span><strong>$${c.sueldos.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:11px"><span>🍽️ Almuerzos (informativo${insp_config.incluirAlmuerzoBotellon?'':' — no incluido en el total'})</span><span>$${c.almuerzos.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:11px"><span>💧 Botellón de agua (informativo${insp_config.incluirAlmuerzoBotellon?'':' — no incluido en el total'})</span><span>$${c.botellon.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>🧰 Total materiales (servicio ${horas}h)</span><strong>$${c.totalMateriales.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>🧴 Total suministros</span><strong>$${c.totalSuministros.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>🛠️ Total maquinaria (servicio ${horas}h)</span><strong>$${c.totalMaquinaria.toFixed(2)}</strong></div>
+      <hr style="border-color:var(--border);margin:8px 0">
+      <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:14px"><span>TOTAL GASTOS OPERATIVOS</span><strong style="color:var(--teal)">$${c.totalGastosOperativos.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Gastos Administrativos (${(insp_config.pctAdministrativos*100).toFixed(1)}%)</span><strong>$${c.gastosAdmin.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Utilidad (${(insp_config.pctUtilidad*100).toFixed(1)}%)</span><strong>$${c.utilidad.toFixed(2)}</strong></div>
+      <hr style="border-color:var(--border);margin:8px 0">
+      <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:16px"><span>TOTAL SERVICIO + UTILIDAD</span><strong style="color:var(--amber)">$${c.totalServicioUtilidad.toFixed(2)}</strong></div>
+    </div>
+  `;
 }
 
 // ════════════════════════════════════════════
