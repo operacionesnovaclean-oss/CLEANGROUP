@@ -560,8 +560,9 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
             <input id="insp-periodo" placeholder="Ej: ABRIL 2026">
           </div>
           <div class="fi">
-            <label>Cliente / Punto</label>
-            <div class="clientes-grid" id="insp-clientes-btns"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+            <label>Cliente / Punto a inspeccionar</label>
+            <input id="insp-cliente-txt" placeholder="Ej: Casa Sra. Pérez, Jardines Plaza, cliente potencial..." oninput="insp_cliente=this.value;document.getElementById('insp-cliente-lbl').textContent=this.value;">
+            <p style="font-size:11px;color:var(--muted);margin-top:4px">Escribe el nombre del cliente o del lugar. No tiene que estar registrado como cliente todavía — puede ser una limpieza de casa o un cliente potencial.</p>
           </div>
           <div class="fi">
             <label>Lugar</label>
@@ -846,7 +847,7 @@ function showModule(mod){
   if(mod==='req') goStep(1);
   if(mod==='fn')  { fnInitLugares(); tcInitLugares(); goFn(1); }
   if(mod==='roles') rpoInit();
-  if(mod==='insp'){ renderInspClientesBtns(); goInsp(1); }
+  if(mod==='insp'){ inspPrellenar(); goInsp(1); }
 }
 
 function backHome(){
@@ -1436,31 +1437,17 @@ function goInsp(n){
 
 function inspIrAMateriales(){
   if(!document.getElementById('insp-periodo').value.trim()){toast('Ingresa el período',true);return;}
-  if(!insp_cliente){toast('Selecciona un cliente / punto',true);return;}
+  insp_cliente=document.getElementById('insp-cliente-txt').value.trim();
+  if(!insp_cliente){toast('Escribe el nombre del cliente o punto a inspeccionar',true);return;}
+  document.getElementById('insp-cliente-lbl').textContent=insp_cliente;
   goInsp(2);
 }
 
-function renderInspClientesBtns(){
-  const el=document.getElementById('insp-clientes-btns');
-  if(!el||!currentUser)return;
-  let clientes=[];
-  if(isMaster){
-    Object.values(po_catalog).forEach(emp=>Object.keys(emp).forEach(c=>{if(!clientes.includes(c))clientes.push(c);}));
-    clientes.sort();
-  }else{
-    clientes=currentUser.clientes||[];
-  }
-  if(!clientes.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No tienes clientes asignados.</p>';return;}
+function inspPrellenar(){
+  if(!currentUser)return;
   const meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
   if(!document.getElementById('insp-periodo').value) document.getElementById('insp-periodo').value=meses[new Date().getMonth()]+' '+new Date().getFullYear();
   if(!document.getElementById('insp-supervisor').value) document.getElementById('insp-supervisor').value=currentUser.nombre||'';
-  el.innerHTML=clientes.map(c=>`<button class="cli-btn${c===insp_cliente?' active':''}" onclick="selInspCliente('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
-}
-
-function selInspCliente(c){
-  insp_cliente=c;
-  document.getElementById('insp-cliente-lbl').textContent=c;
-  renderInspClientesBtns();
 }
 
 function inspSetQty(store,el){
@@ -1532,11 +1519,11 @@ goInsp=function(n){
 async function inspGuardar(){
   if(!currentUser)return;
   const periodo=document.getElementById('insp-periodo').value.trim();
+  insp_cliente=document.getElementById('insp-cliente-txt').value.trim();
   if(!periodo){toast('Ingresa el período',true);goInsp(1);return;}
-  if(!insp_cliente){toast('Selecciona un cliente',true);goInsp(1);return;}
+  if(!insp_cliente){toast('Escribe el nombre del cliente o punto',true);goInsp(1);return;}
   if(!_sb){toast('Sin conexión',true);return;}
-  let emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][insp_cliente]);
-  if(!emp) emp=currentUser.empresa;
+  const emp=(isMaster&&window._editingInspEmpresa)?window._editingInspEmpresa:(currentUser.empresa||'');
 
   const materiales=Object.entries(insp_mat_data).filter(([,q])=>q>0).map(([nombre,cant])=>({nombre,cant}));
   const suministros=Object.entries(insp_sum_data).filter(([,q])=>q>0).map(([nombre,cant])=>({nombre,cant}));
@@ -1578,9 +1565,14 @@ async function inspGuardar(){
     }
     const{error}=await _sb.from('inspecciones_registros').insert(payload);
     if(error)throw error;
-    window._editingInspOperativo=null;window._editingInspUsuario=null;
+    window._editingInspOperativo=null;window._editingInspUsuario=null;window._editingInspEmpresa=null;
     toast(isEdit?'✅ Cambios guardados':'✅ Inspección enviada correctamente');
     insp_mat_data={};insp_sum_data={};insp_maq_data={};
+    insp_cliente='';
+    document.getElementById('insp-cliente-txt').value='';
+    document.getElementById('insp-lugar').value='';
+    document.getElementById('insp-obra').value='';
+    document.getElementById('insp-tipo-limpieza').value='';
     document.getElementById('insp-correcciones').value='';
     document.getElementById('insp-observaciones').value='';
     document.getElementById('insp-propuesta').value='';
@@ -1698,7 +1690,8 @@ async function inspHistEditar(id){
     window._editingInspId=String(id).trim();
     window._editingInspOperativo=data.operativo||'';
     window._editingInspUsuario=data.usuario||'';
-    renderInspClientesBtns();
+    window._editingInspEmpresa=data.empresa||'';
+    document.getElementById('insp-cliente-txt').value=data.cliente||'';
     document.getElementById('insp-cliente-lbl').textContent=data.cliente||'';
     goInsp(3);
     const btn=document.getElementById('insp-btn-guardar');
