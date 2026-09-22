@@ -8395,12 +8395,20 @@ function inspCalcularCosteo(reg,horas){
 
   const totalGastosOperativos = totalMateriales + sueldos + totalSuministros + totalMaquinaria
     + (insp_config.incluirAlmuerzoBotellon ? (almuerzos+botellon) : 0);
-  const gastosAdmin = totalGastosOperativos * (insp_config.pctAdministrativos||0);
-  const utilidad     = totalGastosOperativos * (insp_config.pctUtilidad||0);
+
+  // Ajustes propios de ESTA inspección (los define gerencia; si no hay, se usan los % globales del catálogo)
+  const ajustes = reg.ajustes||{};
+  const pctAdmin = ajustes.pctAdministrativos!=null ? ajustes.pctAdministrativos : (insp_config.pctAdministrativos||0);
+  const pctUtil  = ajustes.pctUtilidad!=null      ? ajustes.pctUtilidad      : (insp_config.pctUtilidad||0);
+  const gastosAdmin = totalGastosOperativos * pctAdmin;
+  const utilidad     = totalGastosOperativos * pctUtil;
   const totalServicioUtilidad = totalGastosOperativos + gastosAdmin + utilidad;
+  // Si gerencia puso un valor manual fijo, ese manda sobre el cálculo automático
+  const totalManual = (ajustes.totalManual!=null && ajustes.totalManual>0) ? ajustes.totalManual : null;
+  const totalFinal = totalManual!=null ? totalManual : totalServicioUtilidad;
 
   return{horas,materialesLines,suministrosLines,maquinariaLines,totalMateriales,totalSuministros,totalMaquinaria,
-    sueldos,almuerzos,botellon,totalGastosOperativos,gastosAdmin,utilidad,totalServicioUtilidad};
+    mo,sueldos,almuerzos,botellon,totalGastosOperativos,pctAdmin,pctUtil,gastosAdmin,utilidad,totalServicioUtilidad,totalManual,totalFinal};
 }
 
 async function inspCargarRegistros(){
@@ -8434,11 +8442,12 @@ function inspRegRender(){
     const cnt=(r.materiales||[]).length+(r.suministros||[]).length+(r.maquinaria||[]).length;
     const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
     let totalEst=0;
-    try{ totalEst=inspCalcularCosteo(r,insp_config.duracionBase).totalServicioUtilidad; }catch(e){}
+    try{ totalEst=inspCalcularCosteo(r,insp_config.duracionBase).totalFinal; }catch(e){}
+    const tieneAjuste = !!(r.ajustes && (r.ajustes.pctAdministrativos!=null || r.ajustes.pctUtilidad!=null || r.ajustes.totalManual!=null));
     return`<tr>
       <td>${r.operativo||''}</td><td>${r.empresa||''}</td><td>${r.cliente||''}</td><td>${r.periodo||''}</td>
       <td style="font-size:11px;color:var(--muted)">${fecha}</td><td>${cnt}</td>
-      <td>$${totalEst.toFixed(2)}</td>
+      <td>$${totalEst.toFixed(2)}${tieneAjuste?' <span title="Tiene ajuste manual de gerencia" style="color:var(--amber)">🔧</span>':''}</td>
       <td><button class="btn btn-s btn-sm" onclick="idetAbrir('${r.id}')">🔍 Ver costeo</button></td>
     </tr>`;
   }).join('');
@@ -8452,13 +8461,17 @@ function idetAbrir(id){
   modalOpen('modal-insp-detalle');
   idetRenderCosteo();
 }
+let _idetTotalOperativos=0;
 function idetRenderCosteo(){
   const r=_idetActual; if(!r)return;
   const horas=parseInt(document.getElementById('idet-duracion').value)||24;
   const c=inspCalcularCosteo(r,horas);
+  _idetTotalOperativos=c.totalGastosOperativos;
+  const mo=c.mo||{};
   document.getElementById('idet-titulo').textContent='🔍 '+(r.cliente||'')+' — '+(r.periodo||'');
   document.getElementById('idet-sub').textContent=(r.operativo||'')+' · '+(r.empresa||'')+' · '+(r.lugar||'')+(r.obra?' · '+r.obra:'');
   const fila=l=>`<tr><td>${l.nombre}</td><td style="text-align:center">${l.cant}</td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${l.valorTotal.toFixed(2)}</td>${l.servicio!==undefined?`<td style="text-align:right">$${l.servicio.toFixed(2)}</td>`:''}</tr>`;
+  const manualVal = c.totalManual!=null ? c.totalManual : '';
   document.getElementById('idet-body').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;font-size:12px;color:var(--muted)">
       <div><strong style="color:var(--text)">Supervisor:</strong> ${r.supervisor||'—'}</div>
@@ -8480,20 +8493,97 @@ function idetRenderCosteo(){
       ${r.propuesta_limpieza?`<div><strong style="color:var(--text)">Propuesta de limpieza:</strong> ${r.propuesta_limpieza}</div>`:''}
     </div>`:''}
     <div style="margin-top:18px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:13px">
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>👷 Sueldos (auxiliares × días)</span><strong>$${c.sueldos.toFixed(2)}</strong></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:11px"><span>🍽️ Almuerzos (informativo${insp_config.incluirAlmuerzoBotellon?'':' — no incluido en el total'})</span><span>$${c.almuerzos.toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:11px"><span>💧 Botellón de agua (informativo${insp_config.incluirAlmuerzoBotellon?'':' — no incluido en el total'})</span><span>$${c.botellon.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>👷 Sueldos — ${mo.auxiliares_cant||0} persona(s) × ${mo.auxiliares_dias||0} día(s)</span><strong>$${c.sueldos.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:11px"><span>🍽️ Almuerzos (${mo.almuerzos_cant||0} — informativo${insp_config.incluirAlmuerzoBotellon?'':', no incluido en el total'})</span><span>$${c.almuerzos.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:11px"><span>💧 Botellón de agua (${mo.botellon_cant||0} — informativo${insp_config.incluirAlmuerzoBotellon?'':', no incluido en el total'})</span><span>$${c.botellon.toFixed(2)}</span></div>
       <div style="display:flex;justify-content:space-between;padding:3px 0"><span>🧰 Total materiales (servicio ${horas}h)</span><strong>$${c.totalMateriales.toFixed(2)}</strong></div>
       <div style="display:flex;justify-content:space-between;padding:3px 0"><span>🧴 Total suministros</span><strong>$${c.totalSuministros.toFixed(2)}</strong></div>
       <div style="display:flex;justify-content:space-between;padding:3px 0"><span>🛠️ Total maquinaria (servicio ${horas}h)</span><strong>$${c.totalMaquinaria.toFixed(2)}</strong></div>
       <hr style="border-color:var(--border);margin:8px 0">
       <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:14px"><span>TOTAL GASTOS OPERATIVOS</span><strong style="color:var(--teal)">$${c.totalGastosOperativos.toFixed(2)}</strong></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Gastos Administrativos (${(insp_config.pctAdministrativos*100).toFixed(1)}%)</span><strong>$${c.gastosAdmin.toFixed(2)}</strong></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Utilidad (${(insp_config.pctUtilidad*100).toFixed(1)}%)</span><strong>$${c.utilidad.toFixed(2)}</strong></div>
-      <hr style="border-color:var(--border);margin:8px 0">
-      <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:16px"><span>TOTAL SERVICIO + UTILIDAD</span><strong style="color:var(--amber)">$${c.totalServicioUtilidad.toFixed(2)}</strong></div>
+    </div>
+
+    <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--amber);border-radius:10px;padding:14px 16px;font-size:13px">
+      <div style="font-weight:700;color:var(--amber);margin-bottom:10px">🔧 Ajuste de gerencia para esta inspección</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">Solo afecta a esta inspección. Si lo dejas igual, se usan los % generales definidos en "Costeo y Precios".</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="fi" style="flex:0 0 160px"><label>% Gastos Administrativos</label>
+          <input type="number" step="0.1" id="idet-pct-admin" value="${(c.pctAdmin*100).toFixed(2)}" oninput="idetRecalc()"
+            style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 140px"><label>% Utilidad</label>
+          <input type="number" step="0.1" id="idet-pct-util" value="${(c.pctUtil*100).toFixed(2)}" oninput="idetRecalc()"
+            style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:1 1 220px"><label>Valor total manual ($) — opcional</label>
+          <input type="number" step="0.01" id="idet-total-manual" value="${manualVal}" placeholder="Dejar vacío para usar el cálculo automático" oninput="idetRecalc()"
+            style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;width:100%"></div>
+      </div>
+      <div style="padding-top:8px;border-top:1px dashed var(--border)">
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Gastos Administrativos</span><strong id="idet-val-admin">$${c.gastosAdmin.toFixed(2)}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Utilidad</span><strong id="idet-val-util">$${c.utilidad.toFixed(2)}</strong></div>
+        <div id="idet-nota-manual" style="font-size:11px;color:var(--muted);margin-top:4px;display:${c.totalManual!=null?'block':'none'}">Cálculo automático: $${c.totalServicioUtilidad.toFixed(2)} — se está usando el valor manual.</div>
+        <hr style="border-color:var(--border);margin:8px 0">
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:16px"><span>TOTAL SERVICIO + UTILIDAD</span><strong id="idet-val-total" style="color:var(--amber)">$${c.totalFinal.toFixed(2)}</strong></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="idetGuardarAjuste()">💾 Guardar ajuste para esta inspección</button>
+        <button class="btn btn-s btn-sm" onclick="idetQuitarAjuste()">↩️ Quitar ajuste (usar valores generales)</button>
+      </div>
     </div>
   `;
+}
+
+function idetRecalc(){
+  const pctAdmin=(parseFloat(document.getElementById('idet-pct-admin').value)||0)/100;
+  const pctUtil =(parseFloat(document.getElementById('idet-pct-util').value)||0)/100;
+  const manualRaw=document.getElementById('idet-total-manual').value;
+  const manual=manualRaw!==''?parseFloat(manualRaw):null;
+  const gastosAdmin=_idetTotalOperativos*pctAdmin;
+  const utilidad=_idetTotalOperativos*pctUtil;
+  const totalCalc=_idetTotalOperativos+gastosAdmin+utilidad;
+  const usaManual = manual!=null && !isNaN(manual) && manual>0;
+  const totalFinal = usaManual ? manual : totalCalc;
+  document.getElementById('idet-val-admin').textContent='$'+gastosAdmin.toFixed(2);
+  document.getElementById('idet-val-util').textContent='$'+utilidad.toFixed(2);
+  document.getElementById('idet-val-total').textContent='$'+totalFinal.toFixed(2);
+  const nota=document.getElementById('idet-nota-manual');
+  if(nota){
+    nota.style.display=usaManual?'block':'none';
+    nota.textContent='Cálculo automático: $'+totalCalc.toFixed(2)+' — se está usando el valor manual.';
+  }
+}
+
+async function idetGuardarAjuste(){
+  if(!_idetActual||!_sb)return;
+  const pctAdmin=(parseFloat(document.getElementById('idet-pct-admin').value)||0)/100;
+  const pctUtil =(parseFloat(document.getElementById('idet-pct-util').value)||0)/100;
+  const manualRaw=document.getElementById('idet-total-manual').value;
+  const manual=manualRaw!==''?(parseFloat(manualRaw)||0):null;
+  const ajustes={pctAdministrativos:pctAdmin,pctUtilidad:pctUtil,totalManual:(manual&&manual>0)?manual:null};
+  try{
+    const{error}=await _sb.from('inspecciones_registros').update({ajustes}).eq('id',_idetActual.id);
+    if(error) throw error;
+    _idetActual.ajustes=ajustes;
+    const idx=_inspRegistros.findIndex(x=>String(x.id)===String(_idetActual.id));
+    if(idx>=0) _inspRegistros[idx].ajustes=ajustes;
+    toast('✅ Ajuste guardado para esta inspección');
+    idetRenderCosteo();
+    inspRegRender();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
+async function idetQuitarAjuste(){
+  if(!_idetActual||!_sb)return;
+  if(!confirm('¿Quitar el ajuste manual y volver a usar los % generales de "Costeo y Precios" para esta inspección?')) return;
+  try{
+    const{error}=await _sb.from('inspecciones_registros').update({ajustes:{}}).eq('id',_idetActual.id);
+    if(error) throw error;
+    _idetActual.ajustes={};
+    const idx=_inspRegistros.findIndex(x=>String(x.id)===String(_idetActual.id));
+    if(idx>=0) _inspRegistros[idx].ajustes={};
+    toast('↩️ Ajuste eliminado, usando valores generales');
+    idetRenderCosteo();
+    inspRegRender();
+  }catch(e){toast('Error: '+e.message,true);}
 }
 
 // ════════════════════════════════════════════
