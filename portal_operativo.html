@@ -251,6 +251,22 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
         </div>
         <div class="mod-arrow">›</div>
       </div>
+
+      <div class="mod-card" id="mod-card-insp" onclick="onClickInsp()">
+        <div class="mod-icon amber">🔍</div>
+        <div class="mod-info">
+          <div class="mod-title">Inspección de Punto</div>
+          <div class="mod-desc">Registra materiales, mano de obra, suministros y maquinaria encontrados en tu punto.</div>
+          <div class="mod-steps">
+            <span class="mod-step-tag">🧰 Materiales</span>
+            <span class="mod-step-tag">👷 Mano de obra</span>
+            <span class="mod-step-tag">🧴 Suministros</span>
+            <span class="mod-step-tag">📤 Historial</span>
+          </div>
+          <div class="mod-blocked-badge" id="insp-blocked-badge" style="display:none">🔒 Tu usuario no está habilitado para subir inspecciones</div>
+        </div>
+        <div class="mod-arrow" id="insp-card-arrow">🔒</div>
+      </div>
     </div>
 
     <!-- ══ MÓDULO 1: REQUISICIONES ══ -->
@@ -522,6 +538,146 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
       <div id="rpo-rol-wrap"></div>
     </div>
 
+    <!-- ══ MÓDULO 3: INSPECCIÓN DE PUNTO ══ -->
+    <div id="mod-insp" style="display:none">
+      <div class="mod-header">
+        <button class="btn-back" onclick="backHome()">‹ Inicio</button>
+        <div class="mod-name">🔍 Inspección de Punto</div>
+      </div>
+      <div class="mod-tabs">
+        <div class="mod-tab active" id="tab-i-1" onclick="goInsp(1)">📅 Datos</div>
+        <div class="mod-tab"        id="tab-i-2" onclick="goInsp(2)">🧰 Materiales</div>
+        <div class="mod-tab"        id="tab-i-3" onclick="goInsp(3)">👷 Obra / Suministros</div>
+        <div class="mod-tab"        id="tab-i-4" onclick="goInsp(4)">📤 Historial</div>
+      </div>
+
+      <!-- PASO 1: DATOS GENERALES -->
+      <div id="insp-step-1">
+        <div class="card">
+          <div class="card-title">📅 Datos generales de la inspección</div>
+          <div class="fi">
+            <label>Período</label>
+            <input id="insp-periodo" placeholder="Ej: ABRIL 2026">
+          </div>
+          <div class="fi">
+            <label>Cliente / Punto</label>
+            <div class="clientes-grid" id="insp-clientes-btns"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+          </div>
+          <div class="fi">
+            <label>Lugar</label>
+            <input id="insp-lugar" placeholder="Ej: Torre B, piso 3">
+          </div>
+          <div class="fi">
+            <label>Obra</label>
+            <input id="insp-obra" placeholder="Ej: Mantenimiento general">
+          </div>
+          <div class="fi">
+            <label>Supervisor</label>
+            <input id="insp-supervisor" placeholder="Nombre del supervisor">
+          </div>
+          <div class="fi">
+            <label>Tipo de limpieza</label>
+            <input id="insp-tipo-limpieza" placeholder="Ej: Profunda, mantenimiento, post-obra...">
+          </div>
+          <button class="btn-primary" style="padding:11px;margin-top:4px" onclick="inspIrAMateriales()">Siguiente →</button>
+        </div>
+      </div>
+
+      <!-- PASO 2: MATERIALES -->
+      <div id="insp-step-2" style="display:none">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <div class="card-title" style="margin:0">🧰 <span id="insp-cliente-lbl" style="color:var(--amber)"></span></div>
+            <button class="btn-out" onclick="goInsp(1)">← Editar datos</button>
+          </div>
+          <div class="search-row">
+            <input type="search" id="insp-buscar-mat" placeholder="🔍 Buscar material..." oninput="inspRenderMateriales()">
+            <label class="cb-label">
+              <input type="checkbox" id="insp-solo-qty-mat" onchange="inspRenderMateriales()" style="accent-color:var(--teal)">
+              Solo con cantidad
+            </label>
+          </div>
+          <div id="insp-materiales-body"></div>
+          <p style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Deja en blanco o 0 lo que el punto no tenga</p>
+          <button class="btn-primary" style="padding:11px;margin-top:14px" onclick="goInsp(3)">Siguiente →</button>
+        </div>
+      </div>
+
+      <!-- PASO 3: MANO DE OBRA / SUMINISTROS / MAQUINARIA -->
+      <div id="insp-step-3" style="display:none">
+        <div class="card">
+          <div class="card-title">👷 Mano de obra</div>
+          <div class="fi">
+            <label>Auxiliares — cantidad de personas</label>
+            <input type="number" min="0" id="insp-aux-cant" placeholder="0">
+          </div>
+          <div class="fi">
+            <label>Auxiliares — # días</label>
+            <input type="number" min="0" id="insp-aux-dias" placeholder="0">
+          </div>
+          <div class="fi">
+            <label>Almuerzos — cantidad</label>
+            <input type="number" min="0" id="insp-almuerzos" placeholder="0">
+          </div>
+          <div class="fi">
+            <label>Botellón de agua — cantidad</label>
+            <input type="number" min="0" id="insp-botellon" placeholder="0">
+          </div>
+          <div class="fi">
+            <label>Correcciones</label>
+            <textarea id="insp-correcciones" placeholder="Novedades o correcciones encontradas en el punto"
+              style="padding:10px 12px;border-radius:8px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;min-height:60px;width:100%"></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="card-title" style="margin:0">🧴 Suministros</div>
+          </div>
+          <div class="search-row">
+            <input type="search" id="insp-buscar-sum" placeholder="🔍 Buscar suministro..." oninput="inspRenderSuministros()">
+          </div>
+          <div id="insp-suministros-body"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="card-title" style="margin:0">🛠️ Maquinaria y equipos</div>
+          </div>
+          <div class="search-row">
+            <input type="search" id="insp-buscar-maq" placeholder="🔍 Buscar maquinaria..." oninput="inspRenderMaquinaria()">
+          </div>
+          <div id="insp-maquinaria-body"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📝 Observaciones y propuesta de limpieza</div>
+          <div class="fi">
+            <label>Observaciones</label>
+            <textarea id="insp-observaciones" placeholder="Observaciones generales del punto"
+              style="padding:10px 12px;border-radius:8px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;min-height:60px;width:100%"></textarea>
+          </div>
+          <div class="fi">
+            <label>Propuesta de limpieza</label>
+            <textarea id="insp-propuesta" placeholder="Propuesta o recomendación para el cliente"
+              style="padding:10px 12px;border-radius:8px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;min-height:60px;width:100%"></textarea>
+          </div>
+          <button class="btn-primary" id="insp-btn-guardar" style="padding:13px;margin-top:6px" onclick="inspGuardar()">💾 Enviar Inspección</button>
+        </div>
+      </div>
+
+      <!-- PASO 4: HISTORIAL -->
+      <div id="insp-step-4" style="display:none">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div class="card-title" style="margin:0">📤 Mis inspecciones enviadas</div>
+            <button class="btn-out" style="font-size:11px" onclick="loadInspHistorial()">🔄 Actualizar</button>
+          </div>
+          <div id="insp-historial"><p style="color:var(--muted);font-size:13px">Cargando...</p></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /main -->
 </div><!-- /app -->
 
@@ -538,6 +694,9 @@ body{font-family:'Sora',sans-serif;background:var(--navy);color:var(--text);min-
 const SB_URL='https://qrdfxksbaoosguxdtolk.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZGZ4a3NiYW9vc2d1eGR0b2xrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODE0MzcsImV4cCI6MjA5MDQ1NzQzN30.LlnuNX4VMQR7EZ00zSGRzJ8PzUHR8bq0yGVoXOvxKg0';
 let _sb=null,_ready=false,currentUser=null,po_cliente='',po_data={},po_catalog={},po_extras={};
+let insp_cliente='',insp_mat_data={},insp_sum_data={},insp_maq_data={};
+let insp_catalog={materiales:[],suministros:[],maquinaria:[]};
+window._editingInspId=null;
 const MASTER_USER='admin',MASTER_PASS='1234';
 let isMaster=false;
 
@@ -593,6 +752,8 @@ function showApp(){
   if(isMaster) document.getElementById('admin-panel').style.display='block';
   loadAppConfig();
   applyReqPermission();
+  applyInspPermission();
+  loadInspCatalog();
 }
 
 // ── Permiso individual para hacer la Requisición Mensual ───────────────────
@@ -616,6 +777,29 @@ function onClickReq(){
     return;
   }
   showModule('req');
+}
+
+// ── Permiso individual para subir Inspecciones (deshabilitado por defecto) ─
+function applyInspPermission(){
+  const puede = isMaster || currentUser.puede_inspeccion===true;
+  const card  = document.getElementById('mod-card-insp');
+  const badge = document.getElementById('insp-blocked-badge');
+  const arrow = document.getElementById('insp-card-arrow');
+  window._poPuedeInspeccion = puede;
+  if(card){
+    if(puede){ card.classList.remove('blocked'); }
+    else     { card.classList.add('blocked'); }
+  }
+  if(badge) badge.style.display = puede ? 'none' : 'inline-block';
+  if(arrow) arrow.textContent   = puede ? '›' : '🔒';
+}
+
+function onClickInsp(){
+  if(!window._poPuedeInspeccion){
+    toast('🔒 Tu usuario no está habilitado para subir inspecciones. Pide al administrador que te active el permiso.', true);
+    return;
+  }
+  showModule('insp');
 }
 
 function doLogout(){
@@ -658,9 +842,11 @@ function showModule(mod){
   document.getElementById('mod-req').style.display  = mod==='req'  ? 'block':'none';
   document.getElementById('mod-fn').style.display   = mod==='fn'   ? 'block':'none';
   document.getElementById('mod-roles').style.display = mod==='roles' ? 'block':'none';
+  document.getElementById('mod-insp').style.display = mod==='insp' ? 'block':'none';
   if(mod==='req') goStep(1);
   if(mod==='fn')  { fnInitLugares(); tcInitLugares(); goFn(1); }
   if(mod==='roles') rpoInit();
+  if(mod==='insp'){ renderInspClientesBtns(); goInsp(1); }
 }
 
 function backHome(){
@@ -668,6 +854,7 @@ function backHome(){
   document.getElementById('mod-req').style.display='none';
   document.getElementById('mod-fn').style.display='none';
   document.getElementById('mod-roles').style.display='none';
+  document.getElementById('mod-insp').style.display='none';
   document.getElementById('save-bar').style.display='none';
 }
 
@@ -1217,6 +1404,309 @@ async function histEditar(id){
 
 function toast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');clearTimeout(window._tt);window._tt=setTimeout(()=>el.className='toast',3200);}
 function setCloud(msg,color){const el=document.getElementById('cloud-status');if(el){el.textContent=msg;el.style.color=color;el.style.background=color==='var(--teal)'?'rgba(0,201,167,.12)':'rgba(245,166,35,.12)';}}
+
+
+// ════════════════════════════════════════
+// MÓDULO INSPECCIÓN DE PUNTO
+// ════════════════════════════════════════
+
+async function loadInspCatalog(){
+  if(!_sb)return;
+  try{
+    const{data}=await _sb.from('inspecciones_catalog').select('catalog').eq('id',1).single();
+    if(data&&data.catalog){
+      insp_catalog={
+        materiales:data.catalog.materiales||[],
+        suministros:data.catalog.suministros||[],
+        maquinaria:data.catalog.maquinaria||[]
+      };
+    }
+  }catch(e){console.warn('inspecciones_catalog no disponible aún',e);}
+}
+
+function goInsp(n){
+  [1,2,3,4].forEach(i=>{
+    const s=document.getElementById('insp-step-'+i);
+    if(s) s.style.display=i===n?'block':'none';
+    const t=document.getElementById('tab-i-'+i);
+    if(t) t.className='mod-tab'+(i===n?' active':i<n?' done':'');
+  });
+  if(n===4) loadInspHistorial();
+}
+
+function inspIrAMateriales(){
+  if(!document.getElementById('insp-periodo').value.trim()){toast('Ingresa el período',true);return;}
+  if(!insp_cliente){toast('Selecciona un cliente / punto',true);return;}
+  goInsp(2);
+}
+
+function renderInspClientesBtns(){
+  const el=document.getElementById('insp-clientes-btns');
+  if(!el||!currentUser)return;
+  let clientes=[];
+  if(isMaster){
+    Object.values(po_catalog).forEach(emp=>Object.keys(emp).forEach(c=>{if(!clientes.includes(c))clientes.push(c);}));
+    clientes.sort();
+  }else{
+    clientes=currentUser.clientes||[];
+  }
+  if(!clientes.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No tienes clientes asignados.</p>';return;}
+  const meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  if(!document.getElementById('insp-periodo').value) document.getElementById('insp-periodo').value=meses[new Date().getMonth()]+' '+new Date().getFullYear();
+  if(!document.getElementById('insp-supervisor').value) document.getElementById('insp-supervisor').value=currentUser.nombre||'';
+  el.innerHTML=clientes.map(c=>`<button class="cli-btn${c===insp_cliente?' active':''}" onclick="selInspCliente('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
+}
+
+function selInspCliente(c){
+  insp_cliente=c;
+  document.getElementById('insp-cliente-lbl').textContent=c;
+  renderInspClientesBtns();
+}
+
+function inspSetQty(store,el){
+  const key=el.dataset.key;const val=parseFloat(el.value);
+  if(val>0){store[key]=val;el.classList.add('hv');}else{delete store[key];el.classList.remove('hv');}
+}
+
+function inspRenderMateriales(){
+  const el=document.getElementById('insp-materiales-body');
+  if(!el)return;
+  const buscar=(document.getElementById('insp-buscar-mat').value||'').toLowerCase();
+  const soloQty=document.getElementById('insp-solo-qty-mat').checked;
+  let items=insp_catalog.materiales||[];
+  if(buscar)items=items.filter(it=>it.nombre.toLowerCase().includes(buscar));
+  if(soloQty)items=items.filter(it=>+insp_mat_data[it.nombre]>0);
+  if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ítems. Pide al administrador que publique el catálogo de inspección.</p>';return;}
+  el.innerHTML=items.map(it=>{
+    const qty=insp_mat_data[it.nombre]||'';
+    return`<div class="item-row">
+      <div class="item-name">${it.nombre}</div>
+      <input class="item-qty${qty>0?' hv':''}" type="number" min="0" step="1" value="${qty}" placeholder="0"
+        data-key="${it.nombre.replace(/"/g,'&quot;')}" oninput="inspSetQty(insp_mat_data,this)">
+    </div>`;
+  }).join('');
+}
+
+function inspRenderSuministros(){
+  const el=document.getElementById('insp-suministros-body');
+  if(!el)return;
+  const buscar=(document.getElementById('insp-buscar-sum').value||'').toLowerCase();
+  let items=insp_catalog.suministros||[];
+  if(buscar)items=items.filter(it=>it.nombre.toLowerCase().includes(buscar));
+  if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ítems.</p>';return;}
+  el.innerHTML=items.map(it=>{
+    const qty=insp_sum_data[it.nombre]||'';
+    return`<div class="item-row">
+      <div class="item-name">${it.nombre}</div>
+      <input class="item-qty${qty>0?' hv':''}" type="number" min="0" step="1" value="${qty}" placeholder="0"
+        data-key="${it.nombre.replace(/"/g,'&quot;')}" oninput="inspSetQty(insp_sum_data,this)">
+    </div>`;
+  }).join('');
+}
+
+function inspRenderMaquinaria(){
+  const el=document.getElementById('insp-maquinaria-body');
+  if(!el)return;
+  const buscar=(document.getElementById('insp-buscar-maq').value||'').toLowerCase();
+  let items=insp_catalog.maquinaria||[];
+  if(buscar)items=items.filter(it=>it.nombre.toLowerCase().includes(buscar));
+  if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ítems.</p>';return;}
+  el.innerHTML=items.map(it=>{
+    const qty=insp_maq_data[it.nombre]||'';
+    return`<div class="item-row">
+      <div class="item-name">${it.nombre}</div>
+      <input class="item-qty${qty>0?' hv':''}" type="number" min="0" step="1" value="${qty}" placeholder="0"
+        data-key="${it.nombre.replace(/"/g,'&quot;')}" oninput="inspSetQty(insp_maq_data,this)">
+    </div>`;
+  }).join('');
+}
+
+// Al abrir el paso 2/3 nos aseguramos de tener el catálogo más reciente
+const _origGoInsp=goInsp;
+goInsp=function(n){
+  _origGoInsp(n);
+  if(n===2) inspRenderMateriales();
+  if(n===3){ inspRenderSuministros(); inspRenderMaquinaria(); }
+};
+
+async function inspGuardar(){
+  if(!currentUser)return;
+  const periodo=document.getElementById('insp-periodo').value.trim();
+  if(!periodo){toast('Ingresa el período',true);goInsp(1);return;}
+  if(!insp_cliente){toast('Selecciona un cliente',true);goInsp(1);return;}
+  if(!_sb){toast('Sin conexión',true);return;}
+  let emp=Object.keys(po_catalog).find(e=>po_catalog[e]&&po_catalog[e][insp_cliente]);
+  if(!emp) emp=currentUser.empresa;
+
+  const materiales=Object.entries(insp_mat_data).filter(([,q])=>q>0).map(([nombre,cant])=>({nombre,cant}));
+  const suministros=Object.entries(insp_sum_data).filter(([,q])=>q>0).map(([nombre,cant])=>({nombre,cant}));
+  const maquinaria=Object.entries(insp_maq_data).filter(([,q])=>q>0).map(([nombre,cant])=>({nombre,cant}));
+  const mano_obra={
+    auxiliares_cant:parseFloat(document.getElementById('insp-aux-cant').value)||0,
+    auxiliares_dias:parseFloat(document.getElementById('insp-aux-dias').value)||0,
+    almuerzos_cant:parseFloat(document.getElementById('insp-almuerzos').value)||0,
+    botellon_cant:parseFloat(document.getElementById('insp-botellon').value)||0
+  };
+
+  const payload={
+    usuario:isMaster?(window._editingInspUsuario||currentUser.usuario):currentUser.usuario,
+    operativo:isMaster?(window._editingInspOperativo||'ADMINISTRADOR'):currentUser.nombre,
+    empresa:emp,cliente:insp_cliente,periodo,
+    lugar:document.getElementById('insp-lugar').value.trim(),
+    obra:document.getElementById('insp-obra').value.trim(),
+    supervisor:document.getElementById('insp-supervisor').value.trim(),
+    tipo_limpieza:document.getElementById('insp-tipo-limpieza').value.trim(),
+    materiales,mano_obra,suministros,maquinaria,
+    correcciones:document.getElementById('insp-correcciones').value.trim(),
+    observaciones:document.getElementById('insp-observaciones').value.trim(),
+    propuesta_limpieza:document.getElementById('insp-propuesta').value.trim(),
+    estado:'enviada',
+    fecha_iso:new Date().toISOString()
+  };
+
+  const btn=document.getElementById('insp-btn-guardar');
+  const isEdit=!!window._editingInspId;
+  btn.disabled=true;btn.textContent='⏳ '+(isEdit?'Guardando cambios...':'Enviando...');
+  try{
+    if(isEdit){
+      const editId=String(window._editingInspId).trim();
+      let delQ=_sb.from('inspecciones_registros').delete().eq('id',editId);
+      if(!isMaster) delQ=delQ.eq('usuario',currentUser.usuario);
+      const{error:delErr}=await delQ.select();
+      if(delErr)throw delErr;
+      window._editingInspId=null;
+    }
+    const{error}=await _sb.from('inspecciones_registros').insert(payload);
+    if(error)throw error;
+    window._editingInspOperativo=null;window._editingInspUsuario=null;
+    toast(isEdit?'✅ Cambios guardados':'✅ Inspección enviada correctamente');
+    insp_mat_data={};insp_sum_data={};insp_maq_data={};
+    document.getElementById('insp-correcciones').value='';
+    document.getElementById('insp-observaciones').value='';
+    document.getElementById('insp-propuesta').value='';
+    document.getElementById('insp-aux-cant').value='';
+    document.getElementById('insp-aux-dias').value='';
+    document.getElementById('insp-almuerzos').value='';
+    document.getElementById('insp-botellon').value='';
+    btn.style.background='var(--teal)';
+    btn.textContent='💾 Enviar Inspección';
+    setTimeout(()=>goInsp(4),900);
+  }catch(e){toast('Error: '+e.message,true);}
+  finally{btn.disabled=false;}
+}
+
+async function loadInspHistorial(){
+  const el=document.getElementById('insp-historial');
+  if(!el||!currentUser||!_sb){el.innerHTML='<p style="color:var(--muted);font-size:13px">Sin conexión</p>';return;}
+
+  el.onclick=function(e){
+    const btn=e.target.closest('button[data-action]');
+    if(!btn||btn.disabled)return;
+    const action=btn.dataset.action,id=btn.dataset.id,cliente=btn.dataset.cliente||'';
+    if(action==='ver')       inspHistVer(id);
+    if(action==='editar')    inspHistEditar(id);
+    if(action==='eliminar')  inspHistEliminar(id,cliente);
+  };
+
+  el.innerHTML='<p style="color:var(--muted);font-size:13px">Cargando...</p>';
+  try{
+    let query=_sb.from('inspecciones_registros').select('*').order('fecha_iso',{ascending:false});
+    if(!isMaster)query=query.eq('usuario',currentUser.usuario);
+    query=query.limit(200);
+    const{data,error}=await query;
+    if(error)throw error;
+    if(!data||!data.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No has enviado inspecciones aún.</p>';return;}
+    window._inspHistCache=data;
+    el.innerHTML=data.map(r=>{
+      const totItems=(r.materiales||[]).length+(r.suministros||[]).length+(r.maquinaria||[]).length;
+      const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
+      return`<div class="hist-row" data-id="${r.id}" data-cliente="${(r.cliente||'').replace(/"/g,'&quot;')}">
+        <div class="hist-row-top">
+          <div>
+            <div style="font-weight:600;font-size:13px">${r.cliente||''}</div>
+            <div style="color:var(--muted);font-size:11px;margin-top:2px">${r.empresa||''} · ${r.periodo||''} · ${r.operativo||''}</div>
+            <div style="color:var(--muted);font-size:10px;margin-top:1px">${fecha}</div>
+          </div>
+          <span class="tag-ok">${totItems} ítems</span>
+        </div>
+        <div class="hist-row-actions">
+          <button class="btn-hist btn-edit" data-action="ver" data-id="${r.id}">👁️ Ver detalle</button>
+          <button class="btn-hist btn-edit" data-action="editar" data-id="${r.id}">✏️ Editar</button>
+          <button class="btn-hist btn-del" data-action="eliminar" data-id="${r.id}" data-cliente="${(r.cliente||'').replace(/"/g,'&quot;')}">🗑️ Eliminar</button>
+        </div>
+        <div class="hist-detail" id="insp-det-${r.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--muted)"></div>
+      </div>`;
+    }).join('');
+  }catch(e){el.innerHTML='<p style="color:var(--red);font-size:13px">Error al cargar.</p>';}
+}
+
+function inspHistVer(id){
+  const det=document.getElementById('insp-det-'+id);
+  if(!det)return;
+  if(det.style.display==='block'){det.style.display='none';return;}
+  const r=(window._inspHistCache||[]).find(x=>String(x.id)===String(id));
+  if(!r)return;
+  const lista=(arr)=>arr&&arr.length?arr.map(i=>`${i.nombre}: <strong style="color:var(--text)">${i.cant}</strong>`).join(' · '):'—';
+  det.innerHTML=`
+    <div><strong style="color:var(--text)">Lugar:</strong> ${r.lugar||'—'} &nbsp; <strong style="color:var(--text)">Obra:</strong> ${r.obra||'—'}</div>
+    <div style="margin-top:4px"><strong style="color:var(--text)">Supervisor:</strong> ${r.supervisor||'—'} &nbsp; <strong style="color:var(--text)">Tipo de limpieza:</strong> ${r.tipo_limpieza||'—'}</div>
+    <div style="margin-top:6px"><strong style="color:var(--text)">🧰 Materiales:</strong> ${lista(r.materiales)}</div>
+    <div style="margin-top:6px"><strong style="color:var(--text)">🧴 Suministros:</strong> ${lista(r.suministros)}</div>
+    <div style="margin-top:6px"><strong style="color:var(--text)">🛠️ Maquinaria:</strong> ${lista(r.maquinaria)}</div>
+    <div style="margin-top:6px"><strong style="color:var(--text)">👷 Mano de obra:</strong> Auxiliares ${(r.mano_obra||{}).auxiliares_cant||0} × ${(r.mano_obra||{}).auxiliares_dias||0} días · Almuerzos ${(r.mano_obra||{}).almuerzos_cant||0} · Botellones ${(r.mano_obra||{}).botellon_cant||0}</div>
+    ${r.correcciones?`<div style="margin-top:6px"><strong style="color:var(--text)">Correcciones:</strong> ${r.correcciones}</div>`:''}
+    ${r.observaciones?`<div style="margin-top:6px"><strong style="color:var(--text)">Observaciones:</strong> ${r.observaciones}</div>`:''}
+    ${r.propuesta_limpieza?`<div style="margin-top:6px"><strong style="color:var(--text)">Propuesta de limpieza:</strong> ${r.propuesta_limpieza}</div>`:''}
+  `;
+  det.style.display='block';
+}
+
+async function inspHistEliminar(id,cliente){
+  if(!confirm('¿Eliminar la inspección de "'+cliente+'"?')) return;
+  if(!_sb) return;
+  try{
+    let q=_sb.from('inspecciones_registros').delete().eq('id',String(id).trim());
+    if(!isMaster) q=q.eq('usuario',currentUser.usuario);
+    const{error}=await q.select();
+    if(error){toast('Error: '+error.message,true);return;}
+    toast('🗑️ Eliminado correctamente');
+    loadInspHistorial();
+  }catch(e){toast('Error: '+e.message,true);}
+}
+
+async function inspHistEditar(id){
+  if(!_sb)return;
+  try{
+    const{data,error}=await _sb.from('inspecciones_registros').select('*').eq('id',String(id).trim()).single();
+    if(error||!data){toast('No se pudo cargar: '+(error?.message||'sin datos'),true);return;}
+    insp_cliente=data.cliente;
+    insp_mat_data={};(data.materiales||[]).forEach(i=>{if(i.cant>0)insp_mat_data[i.nombre]=i.cant;});
+    insp_sum_data={};(data.suministros||[]).forEach(i=>{if(i.cant>0)insp_sum_data[i.nombre]=i.cant;});
+    insp_maq_data={};(data.maquinaria||[]).forEach(i=>{if(i.cant>0)insp_maq_data[i.nombre]=i.cant;});
+    document.getElementById('insp-periodo').value=data.periodo||'';
+    document.getElementById('insp-lugar').value=data.lugar||'';
+    document.getElementById('insp-obra').value=data.obra||'';
+    document.getElementById('insp-supervisor').value=data.supervisor||'';
+    document.getElementById('insp-tipo-limpieza').value=data.tipo_limpieza||'';
+    document.getElementById('insp-aux-cant').value=(data.mano_obra||{}).auxiliares_cant||'';
+    document.getElementById('insp-aux-dias').value=(data.mano_obra||{}).auxiliares_dias||'';
+    document.getElementById('insp-almuerzos').value=(data.mano_obra||{}).almuerzos_cant||'';
+    document.getElementById('insp-botellon').value=(data.mano_obra||{}).botellon_cant||'';
+    document.getElementById('insp-correcciones').value=data.correcciones||'';
+    document.getElementById('insp-observaciones').value=data.observaciones||'';
+    document.getElementById('insp-propuesta').value=data.propuesta_limpieza||'';
+    window._editingInspId=String(id).trim();
+    window._editingInspOperativo=data.operativo||'';
+    window._editingInspUsuario=data.usuario||'';
+    renderInspClientesBtns();
+    document.getElementById('insp-cliente-lbl').textContent=data.cliente||'';
+    goInsp(3);
+    const btn=document.getElementById('insp-btn-guardar');
+    btn.textContent='💾 Guardar cambios';
+    btn.style.background='var(--amber)';
+    toast('✏️ Modifica los datos y guarda');
+  }catch(e){toast('Error: '+e.message,true);}
+}
 
 
 // ════════════════════════════════════════
