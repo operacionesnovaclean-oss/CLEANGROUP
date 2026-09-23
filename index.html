@@ -575,6 +575,7 @@ function loadDB(){
           if(typeof necRefreshSelects==='function') necRefreshSelects();
           if(typeof aeRefreshSelects==='function') aeRefreshSelects();
           if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+          if(typeof pagosRender==='function') pagosRender();
         }
       } else if(!localJson){ ensureFields(); buildPanels(); initApp(); }
       setCloudStatus('☁️ En línea','var(--teal)');
@@ -589,6 +590,9 @@ function loadDB(){
       // Polling cada 30s en vez de realtime (evita DataCloneError del postMessage del SDK)
       setInterval(async ()=>{
         try{
+          // Si hay cambios locales que aún no se confirmaron guardados en la nube,
+          // NO traer datos de la nube ahora — se perderían esos cambios.
+          if(window._savePending || window._saving) return;
           const {data:pd}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
           if(pd && pd.db && pd.db!==window._lastSavedJson){
             applyDBData(pd.db);
@@ -603,6 +607,7 @@ function loadDB(){
             if(typeof necRefreshSelects==='function') necRefreshSelects();
             if(typeof aeRefreshSelects==='function') aeRefreshSelects();
             if(typeof aiPopulateOCSelect==='function') aiPopulateOCSelect();
+            if(typeof pagosRender==='function') pagosRender();
             setCloudStatus('☁️ En línea','var(--teal)');
           }
         }catch(e){ /* silencioso — no spamear consola */ }
@@ -618,11 +623,12 @@ function loadDB(){
 }
 
 // ── Guardado optimizado con debounce ──
-window._saveTimer=null; window._saveQueue=false; window._saving=false;
+window._saveTimer=null; window._saveQueue=false; window._saving=false; window._savePending=false; window._saveFailCount=0;
 
 function saveDB(){
   const json=JSON.stringify(db);
   localStorage.setItem('cg_iso_v3',json);
+  window._savePending=true; // hay cambios que todavía no se confirman guardados en la nube
   setCloudStatus('💾 Local ✓  ☁️ pendiente...','var(--muted)');
   if(!_sb){ setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)'); return; }
   clearTimeout(window._saveTimer);
@@ -634,30 +640,40 @@ async function _flushToSupabase(){
   const json=localStorage.getItem('cg_iso_v3');
   if(!json) return;
   window._saving=true; window._saveQueue=false;
-  window._lastSavedJson=json;
   setCloudStatus('☁️ Sincronizando...','var(--muted)');
   try{
     const {error}=await _sb.from('maindb').upsert({id:1,db:json,updated:new Date().toISOString()},{onConflict:'id'});
     window._saving=false;
-    setCloudStatus('☁️ Guardado ✓','var(--teal)');
-    clearTimeout(window._cloudTimer);
     if(error){
-      window._saving=false;
       const msg=error.message||error.code||JSON.stringify(error);
       console.warn('Supabase save error:',msg);
+      window._saveFailCount++;
       setCloudStatus('⚠️ Error guardando — reintentando...','var(--amber)');
+      // Si falla varias veces seguidas, avisar de forma visible (no solo en la consola)
+      if(window._saveFailCount>=3 && typeof toast==='function'){
+        toast('⚠️ Tus últimos cambios no se han podido guardar en la nube. Revisa tu conexión a internet. ('+msg+')', true);
+        window._saveFailCount=0;
+      }
       setTimeout(()=>_flushToSupabase(),3000);
-      return;
+      return; // OJO: NO marcar _lastSavedJson ni _savePending=false — el guardado realmente falló
     }
-    window._saving=false;
+    // Solo aquí, con la confirmación de Supabase, damos el guardado por hecho.
+    window._lastSavedJson=json;
+    window._saveFailCount=0;
+    if(!window._saveQueue) window._savePending=false;
     setCloudStatus('☁️ Guardado ✓','var(--teal)');
     clearTimeout(window._cloudTimer);
     window._cloudTimer=setTimeout(()=>setCloudStatus('☁️ En línea','var(--teal)'),2000);
     if(window._saveQueue) _flushToSupabase();
   }catch(err){
     window._saving=false;
+    window._saveFailCount++;
     console.warn('Supabase save error:',err?.message||JSON.stringify(err)||err);
     setCloudStatus('⚠️ Error — reintentando...','var(--amber)');
+    if(window._saveFailCount>=3 && typeof toast==='function'){
+      toast('⚠️ Tus últimos cambios no se han podido guardar en la nube. Revisa tu conexión a internet.', true);
+      window._saveFailCount=0;
+    }
     setTimeout(()=>_flushToSupabase(),3000);
   }
 }
