@@ -1790,6 +1790,7 @@ function buildPanels(){
       </select>
       <button class="btn btn-p btn-sm" onclick="invShowAdd()">+ Agregar</button>
       <button class="btn btn-s btn-sm" onclick="invExportExcel()">⬇️ Excel</button>
+      <button class="btn btn-s btn-sm" style="border:1px solid var(--amber);color:var(--amber)" onclick="invDetectarCruces()">🔍 Detectar posibles cruces</button>
     </div>
     <!-- Form agregar/editar -->
     <div class="card" id="inv-add" style="display:none">
@@ -2245,6 +2246,20 @@ function buildPanels(){
       </div>
     </div>
     <div style="padding:16px 22px;max-height:70vh;overflow-y:auto" id="idet-body"></div>
+  </div>
+</div>
+
+<!-- MODAL: DETECTOR DE POSIBLES CRUCES EN INVENTARIO -->
+<div id="modal-inv-cruces" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:960px;max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0">🔍 Posibles cruces en Inventario</h3>
+        <p style="font-size:11px;color:var(--muted);margin-top:3px">Revisa esto y ajusta el stock manualmente donde corresponda (botón ⚖️ en cada ítem)</p>
+      </div>
+      <button onclick="modalClose('modal-inv-cruces')" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px 22px;max-height:75vh;overflow-y:auto" id="invc-body"></div>
   </div>
 </div>
 
@@ -3572,7 +3587,7 @@ function necFiltrarEmpresa(){
   });
   if(!Object.keys(consolidated).length){toast(`No hay cantidades para ${empresa} en esta requisición`,true);return;}
   necItems=Object.values(consolidated).map(it=>{
-    const inv=db.inventario.find(i=>i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0]));
+    const inv=invBuscarItem(null,it.desc);
     const enStock=inv?inv.stock:0;
     // Auto-asignar grupo según grupo_nec del catálogo
     let grupoSugerido='Sin asignar';
@@ -4788,7 +4803,7 @@ function aiGuardar(){
     // Revertir entradas al inventario del acta anterior
     const prev=db.actasIngreso[ai_editIdx];
     prev.items.forEach(it=>{
-      const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
+      const inv=invBuscarItem(it.cod,it.desc);
       if(inv){inv.entradas-=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
     });
     // Si el acta cambió de OC vinculada (o se quitó), limpiar la referencia en la OC anterior
@@ -4806,13 +4821,16 @@ function aiGuardar(){
     if(ocNum){const oc=db.ordenesCompra.find(o=>o.numero===ocNum);if(oc)oc.aiId=num;}
   }
   // Aplicar entradas al inventario
+  let _nuevosInv=0;
   aiItems.forEach(it=>{
     if(!it.cod&&!it.desc)return;
-    const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
+    const existiaAntes=!!invBuscarItem(it.cod,it.desc);
+    const inv=invBuscarOCrear(it.cod,it.desc,it.unidad);
+    if(!existiaAntes) _nuevosInv++;
     if(inv){inv.entradas+=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
   });
-  saveDB();aiRenderList();aiLimpiar();
-  toast(`✅ Acta de Ingreso ${num} guardada — inventario actualizado`);
+  saveDB();aiRenderList();aiLimpiar();invStatsRender();invRender();
+  toast(`✅ Acta de Ingreso ${num} guardada — inventario actualizado`+(_nuevosInv?` (${_nuevosInv} ítem(s) nuevo(s) creado(s) en Inventario)`:''));
 }
 
 function aiEditar(idx){
@@ -5109,7 +5127,7 @@ function aeGuardar(){
     const prev=db.actasEntrega[ae_editIdx];
     prev.items.forEach(it=>{
       if(!it.cod&&!it.desc)return;
-      const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
+      const inv=invBuscarItem(it.cod,it.desc);
       if(inv){inv.salidas-=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
     });
     db.actasEntrega[ae_editIdx]=acta;
@@ -5118,14 +5136,16 @@ function aeGuardar(){
   } else {
     db.actasEntrega.push(acta);db.counters.ae++;
   }
-  // Aplicar salidas al inventario
+  // Aplicar salidas al inventario (si el producto no existe en Inventario, se avisa en vez de perderse el movimiento)
+  const _noEncontrados=[];
   aeItems.forEach(it=>{
     if(!it.cod&&!it.desc)return;
-    const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
+    const inv=invBuscarItem(it.cod,it.desc);
     if(inv){inv.salidas+=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
+    else _noEncontrados.push(it.desc||it.cod);
   });
-  saveDB();aeRenderList();aeLimpiar();
-  toast(`✅ Acta de Entrega ${num} guardada`);
+  saveDB();aeRenderList();aeLimpiar();invStatsRender();invRender();
+  toast(`✅ Acta de Entrega ${num} guardada`+(_noEncontrados.length?` — ⚠️ no encontrados en Inventario: ${_noEncontrados.join(', ')}`:''), _noEncontrados.length>0);
   if(aeRMRef)aeCargarRM();
 }
 
@@ -5172,6 +5192,7 @@ function aeGenerarTodas(){
   Object.keys(aeRMRef.data||{}).forEach(e=>{Object.keys(aeRMRef.data[e]).forEach(c=>{const items=Object.values(aeRMRef.data[e][c]).filter(v=>(+v.qty||0)>0);if(items.length&&!yaGen.has(c))activos.push({empresa:e,cliente:c,items});});});
   if(!activos.length){toast('Todas las actas ya fueron generadas',true);return;}
   const m=String(new Date().getMonth()+1).padStart(2,'0');
+  const _noEncontrados=[];
   activos.forEach(a=>{
     const num=`ENT-${m}-${String(db.counters.ae+1).padStart(3,'0')}`;
     db.actasEntrega.push({numero:num,fecha,ciudad:'GUAYAQUIL',elaborado:elab,tipoDesp:'total',cliente:a.cliente,
@@ -5180,11 +5201,14 @@ function aeGenerarTodas(){
       verifNombre:'',verifCedula:'',recNombre:'',recCedula:'',rmId:aeRMRef.numero});
     db.counters.ae++;
     a.items.forEach(it=>{
-      const inv=db.inventario.find(i=>i.desc.toUpperCase().includes(it.prod.toUpperCase().split(' ')[0]));
+      const inv=invBuscarItem(null,it.prod);
       if(inv){inv.salidas+=Number(it.qty);inv.stock=inv.ini+inv.entradas-inv.salidas;}
+      else if(!_noEncontrados.includes(it.prod)) _noEncontrados.push(it.prod);
     });
   });
-  saveDB();aeRenderList();toast(`⚡ ${activos.length} actas generadas automáticamente`);aeCargarRM();
+  saveDB();aeRenderList();invStatsRender();invRender();
+  toast(`⚡ ${activos.length} actas generadas automáticamente`+(_noEncontrados.length?` — ⚠️ ${_noEncontrados.length} producto(s) no están en Inventario y no se descontaron: ${_noEncontrados.slice(0,5).join(', ')}${_noEncontrados.length>5?'...':''}`:''), _noEncontrados.length>0);
+  aeCargarRM();
 }
 
 function aePreview(){
@@ -5343,6 +5367,109 @@ async function aeExportDetalleExcel(){
 // ═══════════════════════════════
 // INVENTARIO
 // ═══════════════════════════════
+// ── Búsqueda robusta de ítem de inventario (evita que se crucen productos distintos) ──
+// Antes se buscaba por código O por "la descripción empieza con la misma palabra",
+// lo cual mezclaba ítems distintos que compartían la primera palabra (ej: "GUANTES...").
+// Ahora: 1) código exacto, 2) si no hay código o no se encontró, descripción EXACTA (no parcial).
+function invNorm(s){ return (s||'').toString().trim().toUpperCase().replace(/\s+/g,' '); }
+function invBuscarItem(cod,desc){
+  cod=invNorm(cod); desc=invNorm(desc);
+  if(cod){
+    const porCod=db.inventario.find(i=>invNorm(i.cod)===cod);
+    if(porCod) return porCod;
+  }
+  if(desc){
+    const porDesc=db.inventario.find(i=>invNorm(i.desc)===desc);
+    if(porDesc) return porDesc;
+  }
+  return null;
+}
+// Crea el ítem en inventario si no existe todavía (se usa al registrar un ingreso nuevo,
+// para que no se pierda el movimiento solo porque el producto aún no estaba en el catálogo de inventario).
+function invBuscarOCrear(cod,desc,unidad){
+  let inv=invBuscarItem(cod,desc);
+  if(inv) return inv;
+  if(!cod&&!desc) return null;
+  inv={cod:cod||('AUTO-'+Date.now()),desc:desc||cod||'Sin descripción',ubic:'',unidad:unidad||'UND',
+    stockMin:null,ini:0,entradas:0,salidas:0,stock:0,estado:'OK',critico:false,fechaCreacion:'',validaciones:{},
+    _autoCreado:true};
+  db.inventario.push(inv);
+  return inv;
+}
+
+function invDetectarCruces(){
+  // Réplica exacta de la lógica VIEJA (la que causaba los cruces), solo para comparar
+  const matchViejo=(cod,desc)=>db.inventario.find(i=>i.cod===cod||(desc&&i.desc&&i.desc.toUpperCase().includes(desc.toUpperCase().split(' ')[0])));
+
+  // 1) Grupos de productos que comparten la primera palabra de su descripción (ambigüedad potencial)
+  const grupos={};
+  db.inventario.forEach(i=>{
+    const w=invNorm(i.desc).split(' ')[0];
+    if(!w) return;
+    if(!grupos[w]) grupos[w]=[];
+    grupos[w].push(i);
+  });
+  const gruposAmbiguos=Object.entries(grupos).filter(([w,items])=>items.length>1);
+
+  // 2) Repasar cada movimiento histórico (ingresos y salidas) y ver si la lógica vieja
+  //    lo habría aplicado a un producto distinto del que le correspondía en realidad.
+  const revisar=(actas,tipo)=>{
+    const out=[];
+    (actas||[]).forEach(a=>{
+      (a.items||[]).forEach(it=>{
+        if(!it.cod&&!it.desc) return;
+        const correcto=invBuscarItem(it.cod,it.desc);
+        const viejo=matchViejo(it.cod,it.desc);
+        const mismoItem = correcto && viejo && correcto.cod===viejo.cod;
+        if(!mismoItem){
+          out.push({tipo,acta:a.numero,fecha:a.fecha,cant:it.cant,itemDesc:it.desc||'(sin descripción)',itemCod:it.cod||'—',
+            correcto: correcto?`${correcto.cod} — ${correcto.desc}`:'❌ ninguno (no existía exacto en Inventario)',
+            viejo: viejo?`${viejo.cod} — ${viejo.desc}`:'❌ ninguno'});
+        }
+      });
+    });
+    return out;
+  };
+  const sospIngresos=revisar(db.actasIngreso,'⬇️ Ingreso');
+  const sospSalidas=revisar(db.actasEntrega,'⬆️ Salida');
+
+  const fila=r=>`<tr>
+    <td style="font-size:11px">${r.tipo}</td>
+    <td style="font-size:11px"><code style="color:var(--teal)">${r.acta}</code><br><span style="color:var(--muted)">${r.fecha||''}</span></td>
+    <td style="font-size:11px">${r.itemDesc}<br><span style="color:var(--muted)">cod: ${r.itemCod} · cant: ${r.cant}</span></td>
+    <td style="font-size:11px;color:var(--amber)">${r.viejo}</td>
+    <td style="font-size:11px;color:var(--teal)">${r.correcto}</td>
+  </tr>`;
+
+  const body=document.getElementById('invc-body');
+  body.innerHTML=`
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:13px">📦 Productos con nombre parecido (${gruposAmbiguos.length} grupo(s))</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">Estos son los que más riesgo tenían de mezclarse — revísalos primero.</p>
+      ${gruposAmbiguos.length?gruposAmbiguos.map(([w,items])=>`
+        <div style="padding:8px 0;border-bottom:1px dashed var(--border);font-size:12px">
+          <strong style="color:var(--text)">${w}...</strong> —
+          ${items.map(i=>`<span class="tag tbl" style="font-size:10px;margin-left:4px">${i.cod}: ${i.desc} (stock ${i.stock})</span>`).join(' ')}
+        </div>`).join(''):'<p style="font-size:12px;color:var(--muted)">No se encontraron grupos ambiguos por nombre. ✅</p>'}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:13px">⬇️ Actas de Ingreso con movimientos sospechosos (${sospIngresos.length})</div>
+      ${sospIngresos.length?`<div class="tw"><table><thead><tr><th>Tipo</th><th>Acta</th><th>Ítem del acta</th><th>Antes se aplicó a</th><th>En realidad es</th></tr></thead>
+        <tbody>${sospIngresos.map(fila).join('')}</tbody></table></div>`
+        :'<p style="font-size:12px;color:var(--muted)">Sin movimientos sospechosos. ✅</p>'}
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="font-size:13px">⬆️ Actas de Entrega/Salida con movimientos sospechosos (${sospSalidas.length})</div>
+      ${sospSalidas.length?`<div class="tw"><table><thead><tr><th>Tipo</th><th>Acta</th><th>Ítem del acta</th><th>Antes se aplicó a</th><th>En realidad es</th></tr></thead>
+        <tbody>${sospSalidas.map(fila).join('')}</tbody></table></div>`
+        :'<p style="font-size:12px;color:var(--muted)">Sin movimientos sospechosos. ✅</p>'}
+    </div>
+  `;
+  modalOpen('modal-inv-cruces');
+}
+
 function invTabSwitch(tab){
   ['stock','valid','entradas','salidas'].forEach(function(t){
     document.getElementById('inv-pane-'+t).style.display=t===tab?'':'none';
