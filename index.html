@@ -4602,6 +4602,7 @@ function ocRenderList(){
   const body=document.getElementById('oc-list');if(!body)return;
   body.innerHTML=list.length?list.slice().reverse().map((o,i)=>{
     const idx=db.ordenesCompra.length-1-i;
+    const actaVinculada=(db.actasIngreso||[]).find(a=>a.ocId===o.numero);
     return `<tr>
       <td><code style="color:var(--teal)">${o.numero}</code></td>
       <td>${o.fecha}</td>
@@ -4609,7 +4610,7 @@ function ocRenderList(){
       <td>${o.proveedor}</td>
       <td style="color:var(--teal);font-weight:600">$${o.total.toFixed(2)}</td>
       <td>${o.necId?`<span class="tag tbl" style="font-size:10px">${o.necId}</span>`:'<span style="color:var(--muted);font-size:11px">Manual</span>'}</td>
-      <td>${o.aiId?`<span class="tag tok">✓ ${o.aiId}</span>`:'<span class="tag twn">⏳ Sin Acta</span>'}</td>
+      <td>${actaVinculada?`<span class="tag tok">✓ ${actaVinculada.numero}</span>`:'<span class="tag twn">⏳ Sin Acta</span>'}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-a btn-sm" onclick="ocPreviewId(${idx})" title="Vista previa / Imprimir">🖨️</button>
         <button class="btn btn-sm" style="background:#1a73e8;color:#fff" onclick="ocEnviarEmail(${idx})" title="Enviar por correo electrónico">📧</button>
@@ -4790,9 +4791,15 @@ function aiGuardar(){
       const inv=db.inventario.find(i=>i.cod===it.cod||(it.desc&&i.desc.toUpperCase().includes(it.desc.toUpperCase().split(' ')[0])));
       if(inv){inv.entradas-=Number(it.cant);inv.stock=inv.ini+inv.entradas-inv.salidas;}
     });
+    // Si el acta cambió de OC vinculada (o se quitó), limpiar la referencia en la OC anterior
+    if(prev.ocId && prev.ocId!==ocNum){
+      const ocAnterior=db.ordenesCompra.find(o=>o.numero===prev.ocId);
+      if(ocAnterior && ocAnterior.aiId===prev.numero) ocAnterior.aiId=null;
+    }
     db.actasIngreso[ai_editIdx]=acta;
     ai_editIdx=null;
     document.getElementById('ai-edit-banner').style.display='none';
+    if(ocNum){const oc=db.ordenesCompra.find(o=>o.numero===ocNum);if(oc)oc.aiId=num;}
   } else {
     db.actasIngreso.push(acta);
     db.counters.ai++;
@@ -4900,7 +4907,15 @@ function aiRenderList(){
     </tr>`;
   }).join(''):'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Sin registros</td></tr>';
 }
-function aiEliminar(idx){if(!confirm('¿Eliminar?'))return;db.actasIngreso.splice(idx,1);saveDB();aiRenderList();toast('Eliminada');}
+function aiEliminar(idx){
+  if(!confirm('¿Eliminar?'))return;
+  const acta=db.actasIngreso[idx];
+  if(acta && acta.ocId){
+    const oc=db.ordenesCompra.find(o=>o.numero===acta.ocId);
+    if(oc && oc.aiId===acta.numero) oc.aiId=null;
+  }
+  db.actasIngreso.splice(idx,1);saveDB();aiRenderList();ocRenderList();toast('Eliminada');
+}
 
 // ═══════════════════════════════
 // 5. ACTA DE ENTREGA
