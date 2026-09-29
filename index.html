@@ -8630,6 +8630,8 @@ function idetRenderCosteo(){
   document.getElementById('idet-sub').textContent=(r.operativo||'')+' · '+(r.empresa||'')+' · '+(r.lugar||'')+(r.obra?' · '+r.obra:'');
   const fila=l=>`<tr><td>${l.nombre}</td><td style="text-align:center">${l.cant}</td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${l.valorTotal.toFixed(2)}</td>${l.servicio!==undefined?`<td style="text-align:right">$${l.servicio.toFixed(2)}</td>`:''}</tr>`;
   const manualVal = c.totalManual!=null ? c.totalManual : '';
+  const _dg=(r.ajustes&&r.ajustes.desglose)||{};
+  const dg={pagoDia:_dg.pagoDia!=null?_dg.pagoDia:15,almuerzo:_dg.almuerzo!=null?_dg.almuerzo:(c.almuerzos||0),compras:_dg.compras!=null?_dg.compras:0};
   document.getElementById('idet-body').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;font-size:12px;color:var(--muted)">
       <div><strong style="color:var(--text)">Supervisor:</strong> ${r.supervisor||'—'}</div>
@@ -8687,7 +8689,73 @@ function idetRenderCosteo(){
         <button class="btn btn-s btn-sm" onclick="idetQuitarAjuste()">↩️ Quitar ajuste (usar valores generales)</button>
       </div>
     </div>
+
+    <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--teal);border-radius:10px;padding:14px 16px;font-size:13px">
+      <div style="font-weight:700;color:var(--teal);margin-bottom:4px">💰 Utilidad real (después de pagar al empleado)</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">Uso interno: al total final se le restan el pago real al empleado, los almuerzos y las compras.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end">
+        <div class="fi" style="flex:0 0 190px"><label>Pago por persona / día ($)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" step="0.01" id="idet-real-pago" value="${dg.pagoDia}" oninput="idetRecalcReal()"
+              style="width:80px;padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+            <button class="btn btn-s btn-sm" type="button" onclick="idetSetPago(15)">$15</button>
+            <button class="btn btn-s btn-sm" type="button" onclick="idetSetPago(20)">$20</button>
+          </div></div>
+        <div class="fi" style="flex:0 0 130px"><label>Almuerzos ($)</label>
+          <input type="number" step="0.01" id="idet-real-almuerzo" value="${dg.almuerzo}" oninput="idetRecalcReal()"
+            style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+        <div class="fi" style="flex:0 0 130px"><label>Compras ($)</label>
+          <input type="number" step="0.01" id="idet-real-compras" value="${dg.compras}" oninput="idetRecalcReal()"
+            style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none"></div>
+      </div>
+      <div style="padding-top:8px;border-top:1px dashed var(--border)">
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Total final cobrado</span><strong id="idet-real-total">$${c.totalFinal.toFixed(2)}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted)"><span id="idet-real-sueldos-lbl">− Sueldos</span><span id="idet-real-sueldos">$0.00</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted)"><span>− Almuerzos</span><span id="idet-real-almuerzos">$0.00</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--muted)"><span>− Compras</span><span id="idet-real-compras-val">$0.00</span></div>
+        <hr style="border-color:var(--border);margin:8px 0">
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:16px"><span>UTILIDAD REAL</span><strong id="idet-real-util" style="color:var(--teal)">$0.00</strong></div>
+        <div id="idet-real-pct" style="font-size:11px;color:var(--muted);text-align:right"></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn btn-p btn-sm" onclick="idetGuardarReal()">💾 Guardar desglose</button></div>
+    </div>
   `;
+  _idetPersonas=(mo.auxiliares_cant||1);
+  _idetDias=(mo.auxiliares_dias||1);
+  _idetTotalFinal=c.totalFinal;
+  idetRecalcReal();
+}
+
+let _idetPersonas=1,_idetDias=1,_idetTotalFinal=0;
+function idetSetPago(v){ document.getElementById('idet-real-pago').value=v; idetRecalcReal(); }
+function idetRecalcReal(){
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  const sueldos=g('idet-real-pago')*_idetPersonas*_idetDias;
+  const alm=g('idet-real-almuerzo'), comp=g('idet-real-compras');
+  const util=_idetTotalFinal-sueldos-alm-comp;
+  const set=(id,t)=>{const e=document.getElementById(id); if(e) e.textContent=t;};
+  set('idet-real-total','$'+_idetTotalFinal.toFixed(2));
+  set('idet-real-sueldos-lbl','− Sueldos ('+_idetPersonas+' persona(s) × '+_idetDias+' día(s))');
+  set('idet-real-sueldos','$'+sueldos.toFixed(2));
+  set('idet-real-almuerzos','$'+alm.toFixed(2));
+  set('idet-real-compras-val','$'+comp.toFixed(2));
+  const u=document.getElementById('idet-real-util');
+  if(u){ u.textContent=(util<0?'−$':'$')+Math.abs(util).toFixed(2); u.style.color=util<0?'var(--red,#ff5c5c)':'var(--teal)'; }
+  set('idet-real-pct', _idetTotalFinal>0 ? 'Margen real: '+(util/_idetTotalFinal*100).toFixed(1)+'% del total cobrado' : '');
+}
+async function idetGuardarReal(){
+  if(!_idetActual||!_sb)return;
+  const g=id=>parseFloat(document.getElementById(id).value)||0;
+  const desglose={pagoDia:g('idet-real-pago'),almuerzo:g('idet-real-almuerzo'),compras:g('idet-real-compras')};
+  const ajustes={...(_idetActual.ajustes||{}),desglose};
+  try{
+    const{error}=await _sb.from('inspecciones_registros').update({ajustes}).eq('id',_idetActual.id);
+    if(error) throw error;
+    _idetActual.ajustes=ajustes;
+    const idx=_inspRegistros.findIndex(x=>String(x.id)===String(_idetActual.id));
+    if(idx>=0) _inspRegistros[idx].ajustes=ajustes;
+    toast('✅ Desglose guardado');
+  }catch(e){toast('Error: '+e.message,true);}
 }
 
 function idetRecalc(){
@@ -8703,6 +8771,7 @@ function idetRecalc(){
   document.getElementById('idet-val-admin').textContent='$'+gastosAdmin.toFixed(2);
   document.getElementById('idet-val-util').textContent='$'+utilidad.toFixed(2);
   document.getElementById('idet-val-total').textContent='$'+totalFinal.toFixed(2);
+  _idetTotalFinal=totalFinal; idetRecalcReal();
   const nota=document.getElementById('idet-nota-manual');
   if(nota){
     nota.style.display=usaManual?'block':'none';
@@ -8716,7 +8785,7 @@ async function idetGuardarAjuste(){
   const pctUtil =(parseFloat(document.getElementById('idet-pct-util').value)||0)/100;
   const manualRaw=document.getElementById('idet-total-manual').value;
   const manual=manualRaw!==''?(parseFloat(manualRaw)||0):null;
-  const ajustes={pctAdministrativos:pctAdmin,pctUtilidad:pctUtil,totalManual:(manual&&manual>0)?manual:null};
+  const ajustes={...(_idetActual.ajustes||{}),pctAdministrativos:pctAdmin,pctUtilidad:pctUtil,totalManual:(manual&&manual>0)?manual:null};
   try{
     const{error}=await _sb.from('inspecciones_registros').update({ajustes}).eq('id',_idetActual.id);
     if(error) throw error;
@@ -8732,12 +8801,13 @@ async function idetGuardarAjuste(){
 async function idetQuitarAjuste(){
   if(!_idetActual||!_sb)return;
   if(!confirm('¿Quitar el ajuste manual y volver a usar los % generales de "Costeo y Precios" para esta inspección?')) return;
+  const _keepDg=(_idetActual.ajustes&&_idetActual.ajustes.desglose)?{desglose:_idetActual.ajustes.desglose}:{};
   try{
-    const{error}=await _sb.from('inspecciones_registros').update({ajustes:{}}).eq('id',_idetActual.id);
+    const{error}=await _sb.from('inspecciones_registros').update({ajustes:_keepDg}).eq('id',_idetActual.id);
     if(error) throw error;
-    _idetActual.ajustes={};
+    _idetActual.ajustes=_keepDg;
     const idx=_inspRegistros.findIndex(x=>String(x.id)===String(_idetActual.id));
-    if(idx>=0) _inspRegistros[idx].ajustes={};
+    if(idx>=0) _inspRegistros[idx].ajustes=_keepDg;
     toast('↩️ Ajuste eliminado, usando valores generales');
     idetRenderCosteo();
     inspRegRender();
