@@ -10722,18 +10722,26 @@ f2=x=>(+x||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDig
 sb=()=>typeof _sb!=='undefined'&&_sb;
 const SEED=[["NOVACLEAN","ZAZAPRINT",710.5,"ZAZACORP"],["NOVACLEAN","MOLOKAI",101.45],["NOVACLEAN","POLIGRUP",393.15],["NOVACLEAN","INPROEL",1900.83],["NOVACLEAN","BUSTAMANTE FABARA",170.88],["NOVACLEAN","MORETRAN",859.36],["NOVACLEAN","PANELEC",572.95],["NOVACLEAN","FARE",100.03],["NOVACLEAN","FRUTADELI +BELLINI",597.74,"FRUTA DELI"],["NOVACLEAN","PUENTES Y CALZADAS",119.84],["NOVACLEAN","INMOCOST",93.94],["NOVACLEAN","JARDINES PLAZA",2282.91],["NOVACLEAN","MOTRAC",1859.63],["NOVACLEAN","SISELEC",23.46],["NOVACLEAN","PARQUE BATAN",2583.92,"PARQUES DE BATAN"],["NOVACLEAN","LIVELO",30.69],["NOVACLEAN","VISTA LAGOS",1577.57,"VISTALAGOS"],["NOVACLEAN","SKY BUILDING",4881.29],["NOVACLEAN","DMG",1827.09],["NOVACLEAN","VOLTA",577.53],["NOVACLEAN","MSP",1064.38],["NOVACLEAN","ESEYCE",133.58,"ESEYSE"],["NOVACLEAN","BRINUM",24.81],["NOVACLEAN","ECUACABLE",139.88],["HOMECLEAN","INDUAUTO",6167.97],["HOMECLEAN","INDUSUR",4778.02],["HOMECLEAN","INDUWAGEN",860.84],["HOMECLEAN","TFM",117.59],["HOMECLEAN","ECUAWAGEN",348.09],["HOMECLEAN","ROBALINO",227.57],["INMOCLEAN","ACC",1882.3],["INMOCLEAN","ECUADPREMEX",683.12],["INMOCLEAN","GTC",10372.26]];
 const DEF=()=>({basico:482,hb:160,iess:.0945,com:.55,elab:'',ceds:{},clientes:SEED.map(([empresa,nombre,presupuesto,alias],i)=>({id:'c'+i,empresa,nombre,presupuesto,alias:alias||'',sup:1.5,ext:2}))});
-const S={cfg:DEF(),ceds2:{},data:null,meta:{},gen:{},go:{},cur:null,tab:'gen',saved:[],q:'',del:null,cdb:false};
+const S={cfg:DEF(),ceds2:{},data:null,meta:{},gen:{},go:{},cur:null,tab:'gen',saved:[],q:'',del:null,cdb:false,noms:[],ndb:false};
 /* ---- persistencia (Supabase; config con respaldo local) ---- */
 let tm;
 async function loadAll(){
  try{const{data,error}=await sb().from('roles_config').select('cfg').eq('id',1).maybeSingle();if(error)throw error;if(data&&data.cfg)S.cfg={...DEF(),...data.cfg};S.cdb=true}
  catch(e){S.cdb=false;try{const l=localStorage.getItem('rg_cfg');if(l)S.cfg={...DEF(),...JSON.parse(l)}}catch(_){}}
  try{const{data}=await sb().from('roles_pago').select('cedula,nombre').limit(5000);(data||[]).forEach(r=>{const k=N(r.nombre);if(k&&r.cedula)S.ceds2[k]=r.cedula})}catch(e){}
- await loadSaved();
+ await loadSaved();await loadNominas();
 }
 function saveCfg(){clearTimeout(tm);tm=setTimeout(async()=>{try{localStorage.setItem('rg_cfg',JSON.stringify(S.cfg))}catch(_){}
  if(!S.cdb||!sb())return;const{error}=await sb().from('roles_config').upsert({id:1,cfg:S.cfg,updated:new Date().toISOString()},{onConflict:'id'});if(error)toast('No se pudo guardar la configuración: '+error.message,true)},500)}
 async function loadSaved(){try{const{data,error}=await sb().from('roles_generados').select('id,cliente,empresa,periodo_key,total,presupuesto,updated').order('updated',{ascending:false});if(error)throw error;S.saved=data||[];S.sdb=true}catch(e){S.saved=[];S.sdb=false}}
+/* ---- nóminas guardadas ---- */
+function calcGo(){S.go={};(S.data||[]).forEach(r=>{if(tipo(r.nov)=='ord')S.go[r.nom]=(S.go[r.nom]||0)+r.h})}
+async function loadNominas(){try{const{data,error}=await sb().from('roles_nominas').select('id,nombre,desde,hasta,registros,updated').order('hasta',{ascending:false});if(error)throw error;S.noms=data||[];S.ndb=true}catch(e){S.noms=[];S.ndb=false}}
+async function openNomina(id){const{data,error}=await sb().from('roles_nominas').select('*').eq('id',id).single();if(error)return toast('No se pudo abrir la nómina: '+error.message,true);
+ S.data=data.data;S.meta={name:data.nombre,d:data.desde,h:data.hasta,id:data.id};S.gen={};S.cur=null;calcGo()}
+async function saveNomina(){if(!sb())return;const id=String(S.meta.h||S.meta.d||'sinfecha').slice(0,7);
+ const{error}=await sb().from('roles_nominas').upsert({id,nombre:S.meta.name,desde:S.meta.d,hasta:S.meta.h,registros:S.data.length,data:S.data,updated:new Date().toISOString()},{onConflict:'id'});
+ if(error)return toast('Nómina cargada, pero no se pudo guardar: '+error.message,true);S.meta.id=id;await loadNominas();render();toast('✅ Nómina '+id+' guardada — quedará disponible al volver a entrar')}
 /* ---- lectura de la nómina ---- */
 const hrs=v=>{if(typeof v=='number')return rd(v*24);if(v instanceof Date)return v.getUTCHours()+v.getUTCMinutes()/60;if(typeof v=='string'){const m=v.match(/^(\d+):(\d+)/);if(m)return+m[1]+ +m[2]/60}return 0};
 const tipo=n=>{const t=N(n);return t=='TIEMPOEXTRA'?'sup':(t=='SANCION'||t=='LLAMADODEATENCION')?'no':'ord'};
@@ -10747,7 +10755,7 @@ async function onFile(e){const f=e.target.files[0];if(!f)return;
  try{const d=parse(await f.arrayBuffer());if(!d.length)throw 0;S.data=d;S.gen={};S.cur=null;
  const i=d.map(r=>r.i).filter(x=>typeof x=='number'),fi=d.map(r=>r.f).filter(x=>typeof x=='number');
  S.meta={name:f.name,d:i.length?dstr(Math.min(...i)):'',h:fi.length?dstr(Math.max(...fi)):''};
- S.go={};d.forEach(r=>{if(tipo(r.nov)=='ord')S.go[r.nom]=(S.go[r.nom]||0)+r.h});render()}
+ calcGo();render();saveNomina()}
  catch(x){toast('No pude leer la nómina. Verifica que sea el reporte FOR TAL 11 (.xlsx)',true)}}
 /* ---- cálculo (misma lógica del rol FOR TAL 12) ---- */
 const match=k=>S.cfg.clientes.find(c=>N(c.nombre)==k||(c.alias||'').split(',').some(a=>N(a)==k));
@@ -10761,9 +10769,9 @@ const badge=(t,p)=>{const[l,c,pc]=stat(t,p);return`<span class="rgb ${c}">${l}${
 /* ---- vistas ---- */
 function render(){const r=g('rg-root');if(!r)return;
  const tabs=[['gen','Nómina y roles'],['pres','Presupuestos'],['sav','Roles guardados ('+S.saved.length+')']];
- r.innerHTML=`<div class="btn-row" style="margin:0 0 14px">${tabs.map(([k,t])=>`<button class="btn ${S.tab==k?'btn-p':'btn-s'}" onclick="RG.tab('${k}')">${t}</button>`).join('')}</div>`+(!S.cdb||!S.sdb?`<div class="card" style="border-color:var(--amber)"><b style="color:var(--amber)">⚠ Falta crear las tablas en Supabase.</b> <span style="font-size:12px;color:var(--muted)">Ejecuta el archivo <code>tablas_roles_generador.sql</code> en el SQL Editor de Supabase. Mientras tanto la configuración se guarda solo en este navegador y no podrás guardar roles.</span></div>`:'')+(S.tab=='pres'?vPres():S.tab=='sav'?vSav():S.cur?vRol():vRes());
+ r.innerHTML=`<div class="btn-row" style="margin:0 0 14px">${tabs.map(([k,t])=>`<button class="btn ${S.tab==k?'btn-p':'btn-s'}" onclick="RG.tab('${k}')">${t}</button>`).join('')}</div>`+(!S.cdb||!S.sdb||!S.ndb?`<div class="card" style="border-color:var(--amber)"><b style="color:var(--amber)">⚠ Falta crear las tablas en Supabase.</b> <span style="font-size:12px;color:var(--muted)">Ejecuta el archivo <code>tablas_roles_generador.sql</code> en el SQL Editor de Supabase. Mientras tanto la configuración se guarda solo en este navegador y no podrás guardar roles.</span></div>`:'')+(S.tab=='pres'?vPres():S.tab=='sav'?vSav():S.cur?vRol():vRes());
  if(S.tab=='gen'&&S.cur)upd()}
-function vRes(){let h=`<div class="card"><div class="card-title">1. Sube la nómina del mes (FOR TAL 11)</div><input type="file" accept=".xlsx,.xls" onchange="RG.file(event)">${S.data?`<div style="font-size:12px;color:var(--muted);margin-top:8px">${E(S.meta.name)} · ${S.data.length} registros · ${E(S.meta.d)} a ${E(S.meta.h)}</div>`:'<div style="font-size:12px;color:var(--muted);margin-top:8px">Hojas “NOMINA GENERAL” y “Personal externo”.</div>'}</div>`;
+function vRes(){let h=`<div class="card"><div class="card-title">1. Nómina del mes (FOR TAL 11)</div>${S.noms.length?`<div class="row"><div class="fi"><label>Nóminas guardadas</label><select onchange="RG.nom(this.value)">${S.noms.map(n=>`<option value="${E(n.id)}" ${S.meta.id==n.id?'selected':''}>${E(n.id)} · ${E(n.nombre)} (${n.registros} reg.)</option>`).join('')}</select></div><button class="btn btn-d btn-sm" onclick="RG.delNom()">${S.del=='nom'?'¿Seguro?':'Eliminar esta nómina'}</button></div>`:''}<div class="fi" style="max-width:380px"><label>${S.noms.length?'O sube una nueva (reemplaza la del mismo mes)':'Sube la nómina'}</label><input type="file" accept=".xlsx,.xls" onchange="RG.file(event)"></div>${S.data?`<div style="font-size:12px;color:var(--muted);margin-top:8px">${E(S.meta.name)} · ${S.data.length} registros · ${E(S.meta.d)} a ${E(S.meta.h)}</div>`:''}</div>`;
  if(!S.data)return h;
  const ks=[...new Map(S.data.map(r=>[N(r.cli),r])).entries()].map(([k,r])=>{const c=match(k),rows=rowsOf(k),t=total(rows,c?c.sup:1.5,c?c.ext:2);return{k,nom:c?c.nombre:r.cli,co:c?c.empresa:r.co,c,n:rows.length,t,p:c?+c.presupuesto:0}}).sort((a,b)=>String(a.co).localeCompare(b.co)||a.nom.localeCompare(b.nom));
  const T=ks.reduce((s,x)=>s+x.t,0),P=ks.reduce((s,x)=>s+x.p,0);
@@ -10815,7 +10823,8 @@ function xl(){const c=S.cur,a=[['ROLES DE PAGO'],[],[],[],['Cliente:',c.cliente,
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),String(c.cliente).slice(0,30));XLSX.writeFile(wb,`Rol ${c.cliente} ${(rolesFechaAPeriodo(c.d||c.h).periodoKey)||''}.xlsx`)}
 /* ---- acciones expuestas ---- */
 const num=v=>+String(v).replace(',','.')||0;
-window.RG={get cur(){return S.cur},init:async function(){render();await loadAll();render()},
+window.RG={get cur(){return S.cur},init:async function(){render();await loadAll();if(!S.data&&S.noms.length)await openNomina(S.noms[0].id);render()},
+ nom:async id=>{await openNomina(id);render()},delNom:async()=>{if(S.del!='nom'){S.del='nom';return render()}S.del=null;await sb().from('roles_nominas').delete().eq('id',S.meta.id);S.data=null;S.meta={};S.gen={};S.cur=null;await loadNominas();if(S.noms.length)await openNomina(S.noms[0].id);render()},
  tab:k=>{S.tab=k;render()},file:onFile,back:()=>{S.cur=null;render()},
  open:k=>{const c=match(k),r0=S.data.find(r=>N(r.cli)==k);S.cur={key:k,cliente:c?c.nombre:r0.cli,co:c?c.empresa:r0.co,d:S.meta.d,h:S.meta.h,elab:S.cfg.elab,rows:rowsOf(k),sp:c?c.sup:1.5,ex:c?c.ext:2,pres:c?+c.presupuesto:0};render();scrollTo(0,0)},
  addCli:k=>{const r=S.data.find(r=>N(r.cli)==k);S.cfg.clientes.push({id:'c'+Date.now(),empresa:r.co||'NOVACLEAN',nombre:r.cli,presupuesto:0,alias:'',sup:1.5,ext:2});saveCfg();S.tab='pres';render()},
