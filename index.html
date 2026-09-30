@@ -446,13 +446,13 @@ const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente
 
 // Módulos permitidos por rol. 'all' = acceso total.
 // Módulos con acceso solo para estos usuarios (lista blanca)
-const PANELES_RESTRINGIDOS={'roles-gen':['admin','supervisor']};
+const PANELES_RESTRINGIDOS={'roles-gen':['admin','supervisor','gerente']};
 const USER_ROLES={
   admin:'all',
   compras:'all',
   bodega:'all',
   supervisor:'all',
-  gerente:['dashboard','orden-compra','pagos-proveedores','cobranzas','inspecciones'],
+  gerente:['dashboard','orden-compra','pagos-proveedores','cobranzas','inspecciones','roles-gen'],
   gerencia:['dashboard','pagos-proveedores','inventario','cobranzas','inspecciones']
 };
 let currentUser=null;
