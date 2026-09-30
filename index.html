@@ -307,6 +307,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <button class="nav-item" onclick="nav('inspecciones')"><span class="nav-icon">🔍</span>Inspecciones</button>
       <button class="nav-item" onclick="nav('catalogo')"><span class="nav-icon">🗂️</span>Editor de Catálogo</button>
       <button class="nav-item" onclick="nav('roles-pago')"><span class="nav-icon">💰</span>Roles de Pago</button>
+      <button class="nav-item" onclick="nav('roles-gen')"><span class="nav-icon">🧮</span>Generador de Roles</button>
     </nav>
     <main class="content" id="main-content">
     <!-- panels injected by JS -->
@@ -444,6 +445,8 @@ let _sb = null;  // Supabase client — se inicializa al cargar el SDK
 const USERS={admin:'1234',compras:'1234',bodega:'1234',supervisor:'1234',gerente:'gerente2025',gerencia:'gerencia2024'};
 
 // Módulos permitidos por rol. 'all' = acceso total.
+// Módulos con acceso solo para estos usuarios (lista blanca)
+const PANELES_RESTRINGIDOS={'roles-gen':['admin','supervisor']};
 const USER_ROLES={
   admin:'all',
   compras:'all',
@@ -2381,6 +2384,15 @@ function buildPanels(){
   </div>
 </div>
 
+<!-- GENERADOR DE ROLES -->
+<div class="panel" id="panel-roles-gen">
+  <div class="ph">
+    <h2>🧮 Generador de Roles</h2>
+    <p>Sube la nómina del supervisor, revisa el costo por cliente contra su presupuesto, genera los roles y publícalos al Portal de Campo.</p>
+  </div>
+  <div id="rg-root"></div>
+</div>
+
 <!-- PANEL COBRANZAS Y FACTURACIÓN — FOR COB 01 -->
 <div class="panel" id="panel-cobranzas">
   <div class="ph">
@@ -2836,6 +2848,11 @@ function applyRoleAccess(user){
     // Mostrar si el panel está permitido o es el dashboard
     btn.style.display=(panel&&allowed.indexOf(panel)>=0)||!panel?'':'none';
   });
+  // Ocultar módulos restringidos para este usuario
+  document.querySelectorAll('.nav-item').forEach(function(btn){
+    var m=(btn.getAttribute('onclick')||'').match(/nav\('([^']+)'\)/);
+    if(m&&PANELES_RESTRINGIDOS[m[1]]&&PANELES_RESTRINGIDOS[m[1]].indexOf(user)<0) btn.style.display='none';
+  });
   // Ocultar secciones del sidebar que queden vacías
   document.querySelectorAll('.sidebar .sb-sec').forEach(function(sec){
     var next=sec.nextElementSibling;
@@ -2859,6 +2876,7 @@ function applyRoleAccess(user){
 
 function canAccess(panel){
   if(!currentUser) return false;
+  if(PANELES_RESTRINGIDOS[panel]&&PANELES_RESTRINGIDOS[panel].indexOf(currentUser)<0) return false;
   var allowed=USER_ROLES[currentUser]||'all';
   if(allowed==='all') return true;
   return allowed.indexOf(panel)>=0;
@@ -2872,7 +2890,7 @@ function nav(name){
   const p=document.getElementById('panel-'+name);
   if(p) p.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');});
-  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,inspecciones:initInspeccionesPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas,'roles-pago':initRolesPago};
+  const fns={dashboard:renderDash,'req-mensual':initRM,necesidad:initNec,'orden-compra':initOC,'acta-ingreso':initAI,'acta-entrega':initAE,inventario:function(){initInv();invStatsRender();invRender();},historial:histRender,operativos:initOperativosPanel,campo:initCampoPanel,inspecciones:initInspeccionesPanel,catalogo:initCatalogoPanel,'pagos-proveedores':initPagos,fundas:initFundasAdmin,cobranzas:initCobranzas,'roles-pago':initRolesPago,'roles-gen':function(){if(window.RG)RG.init()}};
   if(fns[name]) fns[name]();
 }
 
@@ -10685,5 +10703,134 @@ async function crevGuardar(){
   } catch(e){ toast('Error: '+e.message, true); }
 }
 </script>
+<style>
+#panel-roles-gen .rgb{display:inline-block;padding:1px 9px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid currentColor}
+#panel-roles-gen .ok{color:var(--teal)}#panel-roles-gen .wr{color:var(--amber)}#panel-roles-gen .er{color:var(--red)}
+#panel-roles-gen input.n,#panel-roles-gen input.t,#panel-roles-gen select.s{padding:5px 7px;border-radius:6px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none}
+#panel-roles-gen input.n{width:76px;text-align:right}#panel-roles-gen input.t{width:100%;min-width:90px}
+#panel-roles-gen td,#panel-roles-gen th{white-space:nowrap}#panel-roles-gen td.r,#panel-roles-gen th.r{text-align:right}
+#panel-roles-gen tr.k{cursor:pointer}#panel-roles-gen tr.k:hover td{background:var(--surface2)}
+#panel-roles-gen .bar{height:9px;background:var(--navy2);border-radius:6px;overflow:hidden;margin:8px 0}#panel-roles-gen .bar i{display:block;height:100%}
+#panel-roles-gen .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+#panel-roles-gen tfoot td{font-weight:700;background:var(--navy2)}
+</style>
+<script>
+(function(){
+const g=id=>document.getElementById(id),E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
+N=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,''),
+f2=x=>(+x||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),rd=x=>Math.round(x*100)/100,
+sb=()=>typeof _sb!=='undefined'&&_sb;
+const SEED=[["NOVACLEAN","ZAZAPRINT",710.5,"ZAZACORP"],["NOVACLEAN","MOLOKAI",101.45],["NOVACLEAN","POLIGRUP",393.15],["NOVACLEAN","INPROEL",1900.83],["NOVACLEAN","BUSTAMANTE FABARA",170.88],["NOVACLEAN","MORETRAN",859.36],["NOVACLEAN","PANELEC",572.95],["NOVACLEAN","FARE",100.03],["NOVACLEAN","FRUTADELI +BELLINI",597.74,"FRUTA DELI"],["NOVACLEAN","PUENTES Y CALZADAS",119.84],["NOVACLEAN","INMOCOST",93.94],["NOVACLEAN","JARDINES PLAZA",2282.91],["NOVACLEAN","MOTRAC",1859.63],["NOVACLEAN","SISELEC",23.46],["NOVACLEAN","PARQUE BATAN",2583.92,"PARQUES DE BATAN"],["NOVACLEAN","LIVELO",30.69],["NOVACLEAN","VISTA LAGOS",1577.57,"VISTALAGOS"],["NOVACLEAN","SKY BUILDING",4881.29],["NOVACLEAN","DMG",1827.09],["NOVACLEAN","VOLTA",577.53],["NOVACLEAN","MSP",1064.38],["NOVACLEAN","ESEYCE",133.58,"ESEYSE"],["NOVACLEAN","BRINUM",24.81],["NOVACLEAN","ECUACABLE",139.88],["HOMECLEAN","INDUAUTO",6167.97],["HOMECLEAN","INDUSUR",4778.02],["HOMECLEAN","INDUWAGEN",860.84],["HOMECLEAN","TFM",117.59],["HOMECLEAN","ECUAWAGEN",348.09],["HOMECLEAN","ROBALINO",227.57],["INMOCLEAN","ACC",1882.3],["INMOCLEAN","ECUADPREMEX",683.12],["INMOCLEAN","GTC",10372.26]];
+const DEF=()=>({basico:482,hb:160,iess:.0945,com:.55,elab:'',ceds:{},clientes:SEED.map(([empresa,nombre,presupuesto,alias],i)=>({id:'c'+i,empresa,nombre,presupuesto,alias:alias||'',sup:1.5,ext:2}))});
+const S={cfg:DEF(),ceds2:{},data:null,meta:{},gen:{},go:{},cur:null,tab:'gen',saved:[],q:'',del:null,cdb:false};
+/* ---- persistencia (Supabase; config con respaldo local) ---- */
+let tm;
+async function loadAll(){
+ try{const{data,error}=await sb().from('roles_config').select('cfg').eq('id',1).maybeSingle();if(error)throw error;if(data&&data.cfg)S.cfg={...DEF(),...data.cfg};S.cdb=true}
+ catch(e){S.cdb=false;try{const l=localStorage.getItem('rg_cfg');if(l)S.cfg={...DEF(),...JSON.parse(l)}}catch(_){}}
+ try{const{data}=await sb().from('roles_pago').select('cedula,nombre').limit(5000);(data||[]).forEach(r=>{const k=N(r.nombre);if(k&&r.cedula)S.ceds2[k]=r.cedula})}catch(e){}
+ await loadSaved();
+}
+function saveCfg(){clearTimeout(tm);tm=setTimeout(async()=>{try{localStorage.setItem('rg_cfg',JSON.stringify(S.cfg))}catch(_){}
+ if(!S.cdb||!sb())return;const{error}=await sb().from('roles_config').upsert({id:1,cfg:S.cfg,updated:new Date().toISOString()},{onConflict:'id'});if(error)toast('No se pudo guardar la configuración: '+error.message,true)},500)}
+async function loadSaved(){try{const{data,error}=await sb().from('roles_generados').select('id,cliente,empresa,periodo_key,total,presupuesto,updated').order('updated',{ascending:false});if(error)throw error;S.saved=data||[];S.sdb=true}catch(e){S.saved=[];S.sdb=false}}
+/* ---- lectura de la nómina ---- */
+const hrs=v=>{if(typeof v=='number')return rd(v*24);if(v instanceof Date)return v.getUTCHours()+v.getUTCMinutes()/60;if(typeof v=='string'){const m=v.match(/^(\d+):(\d+)/);if(m)return+m[1]+ +m[2]/60}return 0};
+const tipo=n=>{const t=N(n);return t=='TIEMPOEXTRA'?'sup':(t=='SANCION'||t=='LLAMADODEATENCION')?'no':'ord'};
+const dstr=s=>typeof s=='number'?new Date(Math.round((s-25569)*864e5)).toISOString().slice(0,10):'';
+function parse(buf){const wb=XLSX.read(buf,{type:'array'}),out=[];
+ wb.SheetNames.forEach(sn=>{const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});const hi=a.findIndex(r=>r.some(c=>String(c||'').trim()=='COMPAÑÍA'));if(hi<0)return;
+ const h=a[hi].map(c=>String(c||'').trim().toUpperCase()),ix=n=>h.indexOf(n),k={co:ix('COMPAÑÍA'),cli:ix('CLIENTE'),pto:ix('PUNTO'),nom:ix('APELLIDOS NOMBRES'),h:ix('HORAS AL MES'),nov:ix('NOVEDAD'),i:ix('FECHA/INICIO'),f:ix('FECHA/FIN')};
+ for(let r=hi+1;r<a.length;r++){const x=a[r];if(!x[k.nom]||!x[k.cli])continue;out.push({co:x[k.co],cli:String(x[k.cli]).trim(),pto:String(x[k.pto]||'').trim(),nom:String(x[k.nom]).replace(/\s+/g,' ').trim().toUpperCase(),h:hrs(x[k.h]),nov:String(x[k.nov]||'').trim(),i:x[k.i],f:x[k.f]})}});
+ return out}
+async function onFile(e){const f=e.target.files[0];if(!f)return;
+ try{const d=parse(await f.arrayBuffer());if(!d.length)throw 0;S.data=d;S.gen={};S.cur=null;
+ const i=d.map(r=>r.i).filter(x=>typeof x=='number'),fi=d.map(r=>r.f).filter(x=>typeof x=='number');
+ S.meta={name:f.name,d:i.length?dstr(Math.min(...i)):'',h:fi.length?dstr(Math.max(...fi)):''};
+ S.go={};d.forEach(r=>{if(tipo(r.nov)=='ord')S.go[r.nom]=(S.go[r.nom]||0)+r.h});render()}
+ catch(x){toast('No pude leer la nómina. Verifica que sea el reporte FOR TAL 11 (.xlsx)',true)}}
+/* ---- cálculo (misma lógica del rol FOR TAL 12) ---- */
+const match=k=>S.cfg.clientes.find(c=>N(c.nombre)==k||(c.alias||'').split(',').some(a=>N(a)==k));
+function rowsOf(k){if(S.gen[k])return S.gen[k];const m=new Map();
+ S.data.filter(r=>N(r.cli)==k).forEach(r=>{let p=m.get(r.nom);if(!p){p={nom:r.nom,p:new Set,ord:0,sup:0,n:new Set};m.set(r.nom,p)}if(r.pto)p.p.add(r.pto);const t=tipo(r.nov);if(t=='sup')p.sup+=r.h;else if(t=='ord')p.ord+=r.h;else p.n.add(r.nov)});
+ return S.gen[k]=[...m.values()].map(p=>({ced:S.cfg.ceds[N(p.nom)]||S.ceds2[N(p.nom)]||'',nom:p.nom,pto:[...p.p].join(' / '),ord:rd(p.ord),sup:rd(p.sup),otros:0,ant:0,desc:0,prest:0,fondo:false,nota:[...p.n].join(', ')}))}
+function calc(r,sp,ex){const C=S.cfg,B=C.basico,H=C.hb,base=Math.min(+r.ord||0,H),xh=Math.max(0,(+r.ord||0)-H),dias=base/H*30,sueldo=B/30*dias,iess=sueldo*C.iess,sub=sueldo-iess,ps=B/240*sp*(+r.sup||0),pe=B/240*ex*xh,fr=r.fondo?sueldo/12:0,d13=sueldo/12,d14=B/360*dias,tot=sub+(+r.otros||0)+ps+pe+fr+d13+d14,net=tot-(+r.ant||0)-(+r.desc||0)-(+r.prest||0);return{xh,dias,sueldo,iess,sub,ps,pe,fr,d13,d14,tot,net,rec:net-C.com}}
+const total=(rows,sp,ex)=>rows.reduce((s,r)=>s+calc(r,sp,ex).tot,0);
+const stat=(t,p)=>!p?['Sin presupuesto','wr',0]:t>p?['EXCEDE','er',t/p]:t>p*.9?['Al límite','wr',t/p]:['En presupuesto','ok',t/p];
+const badge=(t,p)=>{const[l,c,pc]=stat(t,p);return`<span class="rgb ${c}">${l}${p?' '+Math.round(pc*100)+'%':''}</span>`};
+/* ---- vistas ---- */
+function render(){const r=g('rg-root');if(!r)return;
+ const tabs=[['gen','Nómina y roles'],['pres','Presupuestos'],['sav','Roles guardados ('+S.saved.length+')']];
+ r.innerHTML=`<div class="btn-row" style="margin:0 0 14px">${tabs.map(([k,t])=>`<button class="btn ${S.tab==k?'btn-p':'btn-s'}" onclick="RG.tab('${k}')">${t}</button>`).join('')}</div>`+(!S.cdb||!S.sdb?`<div class="card" style="border-color:var(--amber)"><b style="color:var(--amber)">⚠ Falta crear las tablas en Supabase.</b> <span style="font-size:12px;color:var(--muted)">Ejecuta el archivo <code>tablas_roles_generador.sql</code> en el SQL Editor de Supabase. Mientras tanto la configuración se guarda solo en este navegador y no podrás guardar roles.</span></div>`:'')+(S.tab=='pres'?vPres():S.tab=='sav'?vSav():S.cur?vRol():vRes());
+ if(S.tab=='gen'&&S.cur)upd()}
+function vRes(){let h=`<div class="card"><div class="card-title">1. Sube la nómina del mes (FOR TAL 11)</div><input type="file" accept=".xlsx,.xls" onchange="RG.file(event)">${S.data?`<div style="font-size:12px;color:var(--muted);margin-top:8px">${E(S.meta.name)} · ${S.data.length} registros · ${E(S.meta.d)} a ${E(S.meta.h)}</div>`:'<div style="font-size:12px;color:var(--muted);margin-top:8px">Hojas “NOMINA GENERAL” y “Personal externo”.</div>'}</div>`;
+ if(!S.data)return h;
+ const ks=[...new Map(S.data.map(r=>[N(r.cli),r])).entries()].map(([k,r])=>{const c=match(k),rows=rowsOf(k),t=total(rows,c?c.sup:1.5,c?c.ext:2);return{k,nom:c?c.nombre:r.cli,co:c?c.empresa:r.co,c,n:rows.length,t,p:c?+c.presupuesto:0}}).sort((a,b)=>String(a.co).localeCompare(b.co)||a.nom.localeCompare(b.nom));
+ const T=ks.reduce((s,x)=>s+x.t,0),P=ks.reduce((s,x)=>s+x.p,0);
+ h+=`<div class="card"><div class="card-title">2. Clientes del mes — costo vs presupuesto</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">Costo = total de ingresos. Toca un cliente para abrir su rol.</div><div class="tw"><table><thead><tr><th>Empresa</th><th>Cliente</th><th class="r">Personas</th><th class="r">Costo</th><th class="r">Presupuesto</th><th class="r">Diferencia</th><th>Estado</th><th></th></tr></thead><tbody>`;
+ ks.forEach(x=>{h+=`<tr class="k" onclick="RG.open('${x.k}')"><td>${E(x.co)}</td><td><b>${E(x.nom)}</b></td><td class="r">${x.n}</td><td class="r">${f2(x.t)}</td><td class="r">${x.p?f2(x.p):'—'}</td><td class="r ${x.p&&x.t>x.p?'er':''}">${x.p?f2(x.p-x.t):'—'}</td><td>${badge(x.t,x.p)}</td><td>${x.c?'':`<button class="btn btn-s btn-sm" onclick="event.stopPropagation();RG.addCli('${x.k}')">+ Añadir al presupuesto</button>`}</td></tr>`});
+ return h+`</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">${f2(T)}</td><td class="r">${f2(P)}</td><td class="r">${f2(P-T)}</td><td colspan="2"></td></tr></tfoot></table></div></div>`}
+function vRol(){const c=S.cur,inp=(i,k)=>`<input class="n" value="${c.rows[i][k]||''}" onchange="RG.ed(${i},'${k}',this.value)">`,cell=(i,k)=>`<td class="r" id="rg${i}${k}"></td>`;
+ return`<div class="card"><div class="row"><button class="btn btn-s" onclick="RG.back()">← Clientes</button><div class="card-title" style="margin:0">Rol de pago · ${E(c.cliente)} <span class="badge">${E(c.co||'')}</span></div></div>
+ <div class="row"><div class="fi"><label>Desde</label><input type="date" value="${E(c.d)}" onchange="RG.cur.d=this.value"></div><div class="fi"><label>Hasta</label><input type="date" value="${E(c.h)}" onchange="RG.cur.h=this.value"></div><div class="fi"><label>Elaborado por</label><input value="${E(c.elab)}" onchange="RG.elab(this.value)"></div><div class="fi"><label>Factor h. suplem.</label><input style="width:80px" value="${c.sp}" onchange="RG.fac('sp',this.value)"></div><div class="fi"><label>Factor h. extraord.</label><input style="width:80px" value="${c.ex}" onchange="RG.fac('ex',this.value)"></div></div>
+ <div id="rg-bud"></div><div class="tw"><table><thead><tr><th>#</th><th>Cédula</th><th>Nombre</th><th>Punto</th><th class="r">H. ord</th><th class="r">H. suplem</th><th class="r">H. extraord</th><th class="r">Sueldo</th><th class="r">IESS</th><th class="r">Subtotal</th><th class="r">Otros ing.</th><th class="r">$ Suplem</th><th class="r">$ Extraord</th><th>F.Res.</th><th class="r">13º</th><th class="r">14º</th><th class="r">Total ingresos</th><th class="r">Anticipo</th><th class="r">Otros desc.</th><th class="r">Préstamo</th><th class="r">Total</th><th class="r">Recibido</th><th></th></tr></thead><tbody>${c.rows.map((r,i)=>{
+ const w=(S.go[r.nom]>S.cfg.hb+.01)?` <span class="rgb wr" title="Suma ${rd(S.go[r.nom])} h en todos los clientes">⚠ ${rd(S.go[r.nom])} h total</span>`:'',n=r.nota?` <span class="rgb er">${E(r.nota)}</span>`:'',okc=/^\d{9,13}$/.test(String(r.ced||''));
+ return`<tr><td>${i+1}</td><td><input class="t" style="min-width:100px;${okc?'':'border-color:var(--red)'}" value="${E(r.ced)}" placeholder="cédula" onchange="RG.ed(${i},'ced',this.value)"></td><td><input class="t" style="min-width:230px" value="${E(r.nom)}" onchange="RG.ed(${i},'nom',this.value)">${w}${n}</td><td>${E(r.pto)}</td><td>${inp(i,'ord')}</td><td>${inp(i,'sup')}</td>${cell(i,'xh')}${cell(i,'sueldo')}${cell(i,'iess')}${cell(i,'sub')}<td>${inp(i,'otros')}</td>${cell(i,'ps')}${cell(i,'pe')}<td><input type="checkbox" ${r.fondo?'checked':''} onchange="RG.ed(${i},'fondo',this.checked)"></td>${cell(i,'d13')}${cell(i,'d14')}${cell(i,'tot')}<td>${inp(i,'ant')}</td><td>${inp(i,'desc')}</td><td>${inp(i,'prest')}</td>${cell(i,'net')}${cell(i,'rec')}<td><button class="btn btn-d btn-sm" onclick="RG.delRow(${i})">×</button></td></tr>`}).join('')}</tbody><tfoot id="rg-ft"></tfoot></table></div>
+ <div class="btn-row"><button class="btn btn-s" onclick="RG.addRow()">+ Agregar persona</button><button class="btn btn-p" onclick="RG.save()">💾 Guardar rol</button><button class="btn btn-a" onclick="RG.pub()">📤 Publicar al Portal de Campo</button><button class="btn btn-s" onclick="RG.xl()">⬇ Excel</button></div>
+ <p style="font-size:11px;color:var(--muted);margin-top:10px">Horas ordinarias hasta ${S.cfg.hb} h (básico $${S.cfg.basico}); el excedente pasa a extraordinarias. “Tiempo extra” de la nómina = suplementarias. Publicar solo envía a quienes tienen cédula válida y reemplaza el rol del mismo cliente y mes.</p></div>`}
+function upd(){const c=S.cur;if(!c||!g('rg-ft'))return;const s={};
+ c.rows.forEach((r,i)=>{const x=calc(r,c.sp,c.ex);['xh','sueldo','iess','sub','ps','pe','d13','d14','tot','net','rec'].forEach(k=>{const e=g('rg'+i+k);if(e)e.textContent=f2(x[k])});['sueldo','sub','ps','pe','d13','d14','tot','net','rec'].forEach(k=>s[k]=(s[k]||0)+x[k])});
+ g('rg-ft').innerHTML=`<tr><td colspan="7">Totales</td><td class="r">${f2(s.sueldo)}</td><td></td><td class="r">${f2(s.sub)}</td><td></td><td class="r">${f2(s.ps)}</td><td class="r">${f2(s.pe)}</td><td></td><td class="r">${f2(s.d13)}</td><td class="r">${f2(s.d14)}</td><td class="r">${f2(s.tot)}</td><td colspan="3"></td><td class="r">${f2(s.net)}</td><td class="r">${f2(s.rec)}</td><td></td></tr>`;
+ const[l,k,p]=stat(s.tot||0,c.pres),col=k=='ok'?'teal':k=='wr'?'amber':'red';
+ g('rg-bud').innerHTML=`<div><b>Presupuesto:</b> $${f2(c.pres)} · <b>Costo del rol:</b> $${f2(s.tot)} · <b>Diferencia:</b> <span class="${k}">$${f2(c.pres-s.tot)}</span> ${badge(s.tot||0,c.pres)}${c.pres&&s.tot>c.pres?` — excede en $${f2(s.tot-c.pres)}`:''}</div><div class="bar"><i style="width:${Math.min(100,p*100)}%;background:var(--${col})"></i></div>`}
+function vSav(){const q=N(S.q),L=S.saved.filter(r=>!q||N(r.cliente+r.periodo_key).includes(q));
+ return`<div class="card"><div class="card-title">Roles guardados</div><div class="row"><input class="t" style="max-width:320px" placeholder="🔍 Cliente o mes (2026-09)" value="${E(S.q)}" oninput="RG.q(this.value)"></div><div class="tw"><table><thead><tr><th>Cliente</th><th>Empresa</th><th>Mes</th><th class="r">Total</th><th class="r">Presupuesto</th><th>Estado</th><th>Guardado</th><th></th></tr></thead><tbody>${L.map(r=>`<tr><td><b>${E(r.cliente)}</b></td><td>${E(r.empresa)}</td><td>${E(r.periodo_key)}</td><td class="r">${f2(r.total)}</td><td class="r">${r.presupuesto?f2(r.presupuesto):'—'}</td><td>${badge(+r.total,+r.presupuesto)}</td><td style="color:var(--muted)">${String(r.updated||'').slice(0,16).replace('T',' ')}</td><td><button class="btn btn-s btn-sm" onclick="RG.openSaved('${E(r.id)}')">Abrir</button> <button class="btn btn-d btn-sm" onclick="RG.delSaved('${E(r.id)}')">${S.del==r.id?'¿Seguro?':'Eliminar'}</button></td></tr>`).join('')||'<tr><td colspan="8" style="color:var(--muted)">Aún no hay roles guardados.</td></tr>'}</tbody></table></div></div>`}
+function vPres(){const C=S.cfg,T=C.clientes.reduce((s,c)=>s+(+c.presupuesto||0),0),n=(l,k)=>`<div class="fi"><label>${l}</label><input style="width:90px" value="${C[k]}" onchange="RG.par('${k}',this.value)"></div>`;
+ return`<div class="card"><div class="card-title">Parámetros</div><div class="row">${n('Sueldo básico','basico')}${n('Horas del básico','hb')}${n('IESS (fracción)','iess')}${n('Descuento recibido','com')}</div></div>
+ <div class="card"><div class="card-title">Presupuesto por cliente · total $${f2(T)}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">“Alias” = otros nombres con que aparece en la nómina (separados por coma). Factores de horas extra de ese cliente: 1.5 y 2 = ley; 1 = hora simple; 0 = no se paga.</div><div class="tw"><table><thead><tr><th>Empresa</th><th>Cliente</th><th>Alias en nómina</th><th class="r">Presupuesto $</th><th class="r">Factor suplem.</th><th class="r">Factor extraord.</th><th></th></tr></thead><tbody>${C.clientes.map((c,i)=>{const f=(k,t)=>`<input class="${t}" value="${E(c[k])}" onchange="RG.cc(${i},'${k}',this.value)">`;
+ return`<tr><td><select class="s" onchange="RG.cc(${i},'empresa',this.value)">${['NOVACLEAN','HOMECLEAN','INMOCLEAN'].map(e=>`<option ${e==c.empresa?'selected':''}>${e}</option>`).join('')}</select></td><td>${f('nombre','t')}</td><td>${f('alias','t')}</td><td class="r">${f('presupuesto','n')}</td><td class="r">${f('sup','n')}</td><td class="r">${f('ext','n')}</td><td><button class="btn btn-d btn-sm" onclick="RG.dc(${i})">${S.del=='c'+i?'¿Seguro?':'Eliminar'}</button></td></tr>`}).join('')}</tbody></table></div><div class="btn-row"><button class="btn btn-p" onclick="RG.newCli()">+ Nuevo cliente</button></div></div>`}
+/* ---- guardar / publicar / excel ---- */
+function snap(){const c=S.cur;c.rows.forEach(r=>{if(r.ced)S.cfg.ceds[N(r.nom)]=r.ced});const p=rolesFechaAPeriodo(c.d||c.h),t=rd(total(c.rows,c.sp,c.ex));
+ return{p,t,id:c.id||(c.key+'_'+(p.periodoKey||'sinmes')),doc:{key:c.key,cliente:c.cliente,co:c.co,d:c.d,h:c.h,elab:c.elab,rows:c.rows,sp:c.sp,ex:c.ex,pres:c.pres}}}
+async function save(){if(!sb())return toast('Sin conexión Supabase',true);const{p,t,id,doc}=snap();
+ const{error}=await sb().from('roles_generados').upsert({id,cliente:doc.cliente,empresa:doc.co,periodo_key:p.periodoKey,total:t,presupuesto:doc.pres||0,data:doc,updated:new Date().toISOString()},{onConflict:'id'});
+ if(error)return toast('No se pudo guardar: '+error.message,true);S.cur.id=id;saveCfg();await loadSaved();toast('✅ Rol guardado ('+p.periodoKey+')')}
+function rec(r,c,p){const x=calc(r,c.sp,c.ex),q=rd,ing=[],egr=[],I=(l,v,h)=>{if(+v){const o={label:l,valor:q(+v)};if(h)o.hrs=h;ing.push(o)}};
+ ing.push({label:'SUELDO',valor:q(x.sueldo)});I('OTROS INGRESOS',r.otros);I('HORAS SUPLEMENTARIAS',x.ps,+r.sup||0);I('HORAS EXTRAORDINARIAS',x.pe,x.xh);I('FONDO DE RESERVA',x.fr);I('DECIMO TERCERO',x.d13);I('DECIMO CUARTO',x.d14);
+ egr.push({label:'APORTE IESS 9.45%',valor:q(x.iess)});[['ANTICIPO QUINCENA',r.ant],['OTROS DESCUENTOS',r.desc],['PREST. QUIROG.',r.prest]].forEach(([l,v])=>{if(+v)egr.push({label:l,valor:q(+v)})});
+ const ced=String(r.ced).replace(/\D/g,'');
+ return{cedula:ced,nombre:r.nom,empresa:c.co,cliente:c.cliente,punto:r.pto,periodo:p.periodo,periodo_key:p.periodoKey,elaborado_por:c.elab||'',ingresos:ing,egresos:egr,
+  detalle:[{label:'CEDULA',valor:ced},{label:'NOMBRE',valor:r.nom},{label:'PUNTO',valor:r.pto}].concat(ing,egr,[{label:'TOTAL INGRESOS',valor:q(x.tot)},{label:'TOTAL',valor:q(x.net)}]),
+  total_ingresos:q(x.tot),total_egresos:q(egr.reduce((s,i)=>s+i.valor,0)),total:q(x.net)}}
+async function pub(){if(!sb())return toast('Sin conexión Supabase',true);const c=S.cur,p=rolesFechaAPeriodo(c.d||c.h);
+ if(!p.periodoKey)return toast('Falta la fecha “Desde” del período',true);
+ const ok=c.rows.filter(r=>/^\d{9,13}$/.test(String(r.ced||'').replace(/\D/g,'')));if(!ok.length)return toast('Ninguna persona tiene cédula válida',true);
+ const falta=c.rows.length-ok.length;
+ if(!confirm(`Publicar ${ok.length} rol(es) de ${c.cliente} (${p.periodo}) al Portal de Campo?`+(falta?`\n\n${falta} persona(s) sin cédula válida NO se publicarán.`:'')))return;
+ const{error}=await sb().from('roles_pago').upsert(ok.map(r=>rec(r,c,p)),{onConflict:'cedula,periodo_key,cliente'});
+ if(error)return toast('Error al publicar: '+error.message,true);toast('✅ '+ok.length+' rol(es) publicado(s)'+(falta?' · '+falta+' sin cédula':''));
+ if(typeof rpRefreshHistorial=='function')rpRefreshHistorial();await save()}
+function xl(){const c=S.cur,a=[['ROLES DE PAGO'],[],[],[],['Cliente:',c.cliente,'','','','','Elaborado por:',c.elab],['Periodo de Pago','Desde:',c.d,'','','','Hasta:',c.h],[],['CEDULA','NOMBRE','PUNTO','SUELDO','DIAS','APORTE IESS 9.45%','SUBTOTAL','OTROS INGRESOS','# HORAS SUPLEMENTARIAS','HORAS SUPLEMENTARIAS','# HORAS EXTRAORDINARIAS','HORAS EXTRAORDINARIAS','FONDO DE RESERVA','DECIMO TERCERO','DECIMO CUARTO','TOTAL INGRESOS','ANTICIPO QUINCENA','OTROS DESCUENTOS','PREST. QUIROG.','TOTAL','RECIBIDO']];
+ c.rows.forEach(r=>{const x=calc(r,c.sp,c.ex),q=rd;a.push([r.ced,r.nom,r.pto,q(x.sueldo),q(x.dias),q(x.iess),q(x.sub),+r.otros||0,+r.sup||0,q(x.ps),q(x.xh),q(x.pe),q(x.fr),q(x.d13),q(x.d14),q(x.tot),+r.ant||0,+r.desc||0,+r.prest||0,q(x.net),q(x.rec)])});
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),String(c.cliente).slice(0,30));XLSX.writeFile(wb,`Rol ${c.cliente} ${(rolesFechaAPeriodo(c.d||c.h).periodoKey)||''}.xlsx`)}
+/* ---- acciones expuestas ---- */
+const num=v=>+String(v).replace(',','.')||0;
+window.RG={get cur(){return S.cur},init:async function(){render();await loadAll();render()},
+ tab:k=>{S.tab=k;render()},file:onFile,back:()=>{S.cur=null;render()},
+ open:k=>{const c=match(k),r0=S.data.find(r=>N(r.cli)==k);S.cur={key:k,cliente:c?c.nombre:r0.cli,co:c?c.empresa:r0.co,d:S.meta.d,h:S.meta.h,elab:S.cfg.elab,rows:rowsOf(k),sp:c?c.sup:1.5,ex:c?c.ext:2,pres:c?+c.presupuesto:0};render();scrollTo(0,0)},
+ addCli:k=>{const r=S.data.find(r=>N(r.cli)==k);S.cfg.clientes.push({id:'c'+Date.now(),empresa:r.co||'NOVACLEAN',nombre:r.cli,presupuesto:0,alias:'',sup:1.5,ext:2});saveCfg();S.tab='pres';render()},
+ ed:(i,k,v)=>{const r=S.cur.rows[i];r[k]=['ord','sup','otros','ant','desc','prest'].includes(k)?num(v):k=='ced'?String(v).replace(/\D/g,''):v;if(k=='ced'){S.cfg.ceds[N(r.nom)]=r.ced;saveCfg();render()}else if(k=='fondo')upd();else upd()},
+ fac:(k,v)=>{S.cur[k]=num(v);upd()},elab:v=>{S.cur.elab=v;S.cfg.elab=v;saveCfg()},
+ addRow:()=>{S.cur.rows.push({ced:'',nom:'NUEVO',pto:'',ord:0,sup:0,otros:0,ant:0,desc:0,prest:0,fondo:false,nota:''});render()},
+ delRow:i=>{S.cur.rows.splice(i,1);render()},save,pub,xl,q:v=>{S.q=v;render();const e=document.querySelector('#rg-root input[placeholder^="🔍"]');if(e){e.focus();e.setSelectionRange(99,99)}},
+ openSaved:async id=>{const{data,error}=await sb().from('roles_generados').select('data').eq('id',id).single();if(error)return toast('No se pudo abrir: '+error.message,true);S.cur={...data.data,id};S.tab='gen';S.go={};render();scrollTo(0,0)},
+ delSaved:async id=>{if(S.del!=id){S.del=id;return render()}S.del=null;await sb().from('roles_generados').delete().eq('id',id);await loadSaved();render()},
+ par:(k,v)=>{S.cfg[k]=num(v);saveCfg()},
+ cc:(i,k,v)=>{S.cfg.clientes[i][k]=['presupuesto','sup','ext'].includes(k)?num(v):v;S.gen={};saveCfg();if(k=='presupuesto')render()},
+ dc:i=>{if(S.del!='c'+i){S.del='c'+i;return render()}S.del=null;S.cfg.clientes.splice(i,1);saveCfg();render()},
+ newCli:()=>{S.cfg.clientes.push({id:'c'+Date.now(),empresa:'NOVACLEAN',nombre:'NUEVO CLIENTE',presupuesto:0,alias:'',sup:1.5,ext:2});saveCfg();render()}};
+})();
+</script>
+
 </body>
 </html>
