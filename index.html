@@ -6513,19 +6513,16 @@ function cobRenderTabla(){
 
   body.innerHTML = lista.map(function(f){
     var idx = db.cobFacturas.indexOf(f);
-    // Calcular días desde la fecha de emisión, soportando múltiples formatos (yyyy-mm-dd, dd/mm/yy, dd/mm/yyyy)
-    var dias = '—';
-    var fechaRef = f.fechaEmision || f.fecha || '';
-    if(fechaRef){
-      var d = cobParseAnyDate(String(fechaRef));
-      if(d && !isNaN(d.getTime())){
-        d.setHours(0,0,0,0);
-        var diff = Math.round((hoy - d)/(1000*60*60*24));
-        if(diff >= 0) dias = diff;
-      }
-    }
-    var colorDias = typeof dias==='number' ? (dias>60?'var(--red)':dias>30?'var(--amber)':'var(--teal)') : 'var(--muted)';
-    var labelDias = typeof dias==='number' ? dias+'d' : '—';
+    var tf = cobTiempoFactura(f);
+    var dias = tf.dias!=null ? tf.dias : '—';
+    var gr = f.diasGracia || 60;
+    var colorDias = typeof dias==='number'
+      ? (tf.pagada ? (dias>gr?'var(--amber)':'var(--teal)') : (dias>60?'var(--red)':dias>30?'var(--amber)':'var(--teal)'))
+      : 'var(--muted)';
+    var labelDias = typeof dias==='number' ? (tf.pagada?'✓ pagó en '+dias+'d':dias+'d') : (tf.sinFechaCobro?'Pagada':'—');
+    var titleDias = tf.pagada
+      ? (typeof dias==='number' ? 'Pagada '+dias+' día(s) después de la emisión' : 'Pagada, pero falta registrar la fecha de cobro para medir el tiempo de pago')
+      : 'Días transcurridos desde la emisión (factura pendiente)';
     var saldo = +(f.saldo||0);
     var tagEstado = f.estado==='Cerrada'
       ? '<span class="tag tok" style="font-size:10px">✓ Cerrada</span>'
@@ -6556,7 +6553,9 @@ function cobRenderTabla(){
     var cancelado = +(f.cancelado||0);
 
     // Fecha de cobro
-    var fechaCobro = f.fechaCobro ? cobFmtFecha(f.fechaCobro) : '<span style="color:var(--muted)">—</span>';
+    var fechaCobro = f.fechaCobro ? cobFmtFecha(f.fechaCobro)
+      : (tf.pagada ? '<input type="date" title="Registra cuándo pagó el cliente" onchange="cobSetFechaCobro('+idx+',this.value)" style="font-size:10px;padding:2px 4px;border-radius:5px;background:var(--navy2);border:1px solid var(--amber);color:var(--text);width:108px">'
+      : '<span style="color:var(--muted)">—</span>');
 
     // Comentario (truncado) — si la factura fue anulada por el cliente, se muestra el motivo
     var comentarioTxt = f.comentario || '';
@@ -6594,7 +6593,7 @@ function cobRenderTabla(){
       +'<td style="text-align:right;font-size:12px;color:var(--amber)">$'+(+f.retenciones||0).toFixed(2)+'</td>'
       +'<td style="text-align:right;font-size:12px;color:var(--teal)">$'+cancelado.toFixed(2)+'</td>'
       +'<td style="text-align:right;font-weight:700;color:'+(saldo>0.01?'var(--red)':'var(--teal)')+'">'+(saldo>0.01?'$'+saldo.toFixed(2):'✓ 0')+'</td>'
-      +'<td style="text-align:center;color:'+colorDias+';font-family:monospace;font-weight:700">'+labelDias+'</td>'
+      +'<td title="'+titleDias+'" style="text-align:center;color:'+colorDias+';font-family:monospace;font-weight:700;white-space:nowrap">'+labelDias+'</td>'
       +'<td style="text-align:center;font-size:11px;white-space:nowrap">'+fechaCobro+'</td>'
       +'<td>'+tagGestion+'</td>'
       +'<td style="max-width:130px">'+comentario+'</td>'
@@ -7439,6 +7438,37 @@ function cobParseNum(val){
 
 function cobCiaCorta(cia){ return cia.split(' ')[0]; }
 
+// Tiempo transcurrido de una factura: si ya está pagada, cuenta de emisión a fecha de cobro;
+// si sigue pendiente, cuenta hasta hoy.
+function cobTiempoFactura(f){
+  var res={dias:null,pagada:false,sinFechaCobro:false};
+  var hoyD=new Date(); hoyD.setHours(0,0,0,0);
+  var dE=cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
+  if(!dE||isNaN(dE.getTime())) return res;
+  dE.setHours(0,0,0,0);
+  res.pagada = f.estado!=='Anulada' && (+f.saldo||0)<=0.01 && ((+f.total||0)>0 || f.estadoGestion==='Cobrado');
+  if(res.pagada){
+    var dC=f.fechaCobro?cobParseAnyDate(String(f.fechaCobro)):null;
+    if(dC&&!isNaN(dC.getTime())){
+      dC.setHours(0,0,0,0);
+      res.dias=Math.max(0,Math.round((dC-dE)/86400000));
+    }else{
+      res.sinFechaCobro=true;
+    }
+    return res;
+  }
+  var diff=Math.round((hoyD-dE)/86400000);
+  if(diff>=0) res.dias=diff;
+  return res;
+}
+function cobSetFechaCobro(idx,val){
+  if(!db.cobFacturas||!db.cobFacturas[idx]) return;
+  db.cobFacturas[idx].fechaCobro=val||'';
+  saveDB(); cobRenderTabla();
+  if(typeof cobRenderIndicadores==='function') try{cobRenderIndicadores();}catch(e){}
+  toast('✅ Fecha de cobro guardada');
+}
+
 function cobExportarExcel(){
   if(typeof XLSX==='undefined'){toast('Cargando Excel...',true);return;}
   var lista = (db.cobFacturas||[]).filter(function(f){return f.mes===cob_mesActivo;});
@@ -7457,10 +7487,8 @@ function cobExportarExcel(){
   ];
   var hoy=new Date();
   lista.forEach(function(f){
-    var hoyD = new Date(); hoyD.setHours(0,0,0,0);
-    var dObj = cobParseAnyDate(String(f.fechaEmision||f.fecha||''));
-    var dias = '';
-    if(dObj && !isNaN(dObj.getTime())){ dObj.setHours(0,0,0,0); dias = Math.round((hoyD-dObj)/(1000*60*60*24)); if(dias<0) dias=0; }
+    var tfx = cobTiempoFactura(f);
+    var dias = tfx.dias!=null ? tfx.dias : '';
     var gracia = (f.diasGracia||60)+' DÍAS';
     rows.push([
       f.fecha, f.numDoc, f.estado, f.cia, f.fechaEmision, f.razonSocial,
@@ -8633,6 +8661,7 @@ let _idetActual=null;
 function idetAbrir(id){
   _idetActual=_inspRegistros.find(r=>String(r.id)===String(id));
   if(!_idetActual){toast('No se encontró el registro',true);return;}
+  _idetCompPers=null;
   document.getElementById('idet-duracion').value=String(insp_config.duracionBase||24);
   modalOpen('modal-insp-detalle');
   idetRenderCosteo();
@@ -8706,6 +8735,7 @@ function idetRenderCosteo(){
         <button class="btn btn-p btn-sm" onclick="idetGuardarAjuste()">💾 Guardar ajuste para esta inspección</button>
         <button class="btn btn-s btn-sm" onclick="idetQuitarAjuste()">↩️ Quitar ajuste (usar valores generales)</button>
       </div>
+      <div id="idet-comp-box" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"></div>
     </div>
 
     <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--teal);border-radius:10px;padding:14px 16px;font-size:13px">
@@ -8743,9 +8773,86 @@ function idetRenderCosteo(){
   _idetDias=(mo.auxiliares_dias||1);
   _idetTotalFinal=c.totalFinal;
   idetRecalcReal();
+  idetCompCalc(); idetCompPintar();
 }
 
 let _idetPersonas=1,_idetDias=1,_idetTotalFinal=0;
+// ── Comparación por cantidad de personal (dentro de Ajuste de gerencia) ──
+let _idetCompPers=null, _idetCompLista=[];
+function idetCompCalc(){
+  const r=_idetActual; if(!r)return;
+  const horas=parseInt(document.getElementById('idet-duracion').value)||24;
+  const persActual=(r.mano_obra||{}).auxiliares_cant||0;
+  if(_idetCompPers==null) _idetCompPers=persActual;
+  const A=idetItemsMap(r); const ka=Object.keys(A);
+  _idetCompLista=_inspRegistros
+    .filter(x=>String(x.id)!==String(r.id) && ((x.mano_obra||{}).auxiliares_cant||0)===_idetCompPers)
+    .map(x=>{
+      let cx; try{cx=inspCalcularCosteo(x,horas);}catch(e){return null;}
+      const B=idetItemsMap(x); const kb=Object.keys(B);
+      const inter=ka.filter(k=>k in B).length;
+      const union=new Set([...ka,...kb]).size||1;
+      return {reg:x,cx,sim:inter/union,dias:(x.mano_obra||{}).auxiliares_dias||0};
+    }).filter(Boolean).sort((a,b)=>b.sim-a.sim);
+}
+function idetCompCambiar(v){ _idetCompPers=parseInt(v)||0; idetCompCalc(); idetCompPintar(); }
+function idetUsarValor(v){
+  const e=document.getElementById('idet-total-manual'); if(!e)return;
+  e.value=Number(v).toFixed(2); idetRecalc();
+  toast('Valor copiado al total manual. Pulsa "Guardar ajuste" para confirmarlo.');
+}
+function idetCompPintar(){
+  const box=document.getElementById('idet-comp-box'); if(!box||!_idetActual)return;
+  const r=_idetActual;
+  const persActual=(r.mano_obra||{}).auxiliares_cant||0;
+  const diasActual=(r.mano_obra||{}).auxiliares_dias||0;
+  const counts=[...new Set(_inspRegistros.map(x=>(x.mano_obra||{}).auxiliares_cant||0).filter(n=>n>0).concat(persActual>0?[persActual]:[]))].sort((a,b)=>a-b);
+  const opts=counts.map(n=>`<option value="${n}"${n===_idetCompPers?' selected':''}>${n} persona(s)${n===persActual?' (la actual)':''}</option>`).join('');
+  const actual=_idetTotalFinal||0;
+  const lista=_idetCompLista;
+  let resumen='', tabla='';
+  if(!lista.length){
+    tabla='<div style="color:var(--muted);font-size:12px;margin-top:8px">No hay otras cotizaciones con '+_idetCompPers+' persona(s) para comparar.</div>';
+  }else{
+    const vals=lista.map(o=>o.cx.totalFinal);
+    const mn=Math.min(...vals), mx=Math.max(...vals), avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const dAvg=actual-avg, pAvg=avg>0?dAvg/avg*100:0;
+    const colAvg=Math.abs(pAvg)<0.5?'var(--muted)':(dAvg>0?'var(--amber)':'var(--teal)');
+    const pp=(v,n)=>n>0?'$'+(v/n).toFixed(2)+' por persona':'';
+    const box1=(t,v,c,sub)=>`<div style="flex:1 1 110px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">${t}</div><div style="font-size:15px;font-weight:700;color:${c||'var(--text)'}">${v}</div>${sub?`<div style="font-size:11px;color:var(--teal)">${sub}</div>`:''}</div>`;
+    resumen=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+      ${box1('Cotizaciones',lista.length)}
+      ${box1('Mínimo','$'+mn.toFixed(2),null,pp(mn,_idetCompPers))}
+      ${box1('Promedio','$'+avg.toFixed(2),null,pp(avg,_idetCompPers))}
+      ${box1('Máximo','$'+mx.toFixed(2),null,pp(mx,_idetCompPers))}
+      ${box1('Esta inspección','$'+actual.toFixed(2),'var(--amber)',pp(actual,persActual))}
+    </div>
+    <div style="font-size:12px;margin-bottom:8px;color:${colAvg}">La inspección actual está ${Math.abs(pAvg)<0.5?'en el promedio':(dAvg>0?'por encima':'por debajo')} del promedio${Math.abs(pAvg)<0.5?'':' en $'+Math.abs(dAvg).toFixed(2)+' ('+(dAvg>0?'+':'−')+Math.abs(pAvg).toFixed(1)+'%)'}.</div>`;
+    const filas=lista.map(o=>{
+      const x=o.reg, t=o.cx.totalFinal, d=actual-t, p=t>0?d/t*100:0;
+      const col=Math.abs(p)<0.5?'var(--muted)':(d>0?'var(--amber)':'var(--teal)');
+      const aj=!!(x.ajustes&&(x.ajustes.pctAdministrativos!=null||x.ajustes.pctUtilidad!=null||x.ajustes.totalManual!=null));
+      return `<tr>
+        <td><strong>${x.cliente||'—'}</strong><div style="font-size:10px;color:var(--muted)">${x.periodo||''} · ${x.operativo||''}</div></td>
+        <td style="text-align:center">${o.dias}${o.dias===diasActual?'':' <span title="Distinto a los días de la inspección actual" style="color:var(--amber)">≠</span>'}</td>
+        <td style="text-align:center">${Math.round(o.sim*100)}%</td>
+        <td style="text-align:right">$${o.cx.totalGastosOperativos.toFixed(2)}</td>
+        <td style="text-align:right"><strong>$${t.toFixed(2)}</strong>${aj?' <span title="Tiene ajuste de gerencia" style="color:var(--amber)">🔧</span>':''}</td>
+        <td style="text-align:right;color:var(--teal)">$${(_idetCompPers>0?t/_idetCompPers:t).toFixed(2)}</td>
+        <td style="text-align:right;color:${col}">${d>=0?'+':'−'}$${Math.abs(d).toFixed(2)}<div style="font-size:10px">${p>=0?'+':'−'}${Math.abs(p).toFixed(1)}%</div></td>
+        <td style="white-space:nowrap"><button class="btn btn-s btn-sm" type="button" onclick="idetAbrir('${x.id}')">🔍</button>
+          <button class="btn btn-s btn-sm" type="button" title="Copiar este valor al total manual" onclick="idetUsarValor(${t.toFixed(2)})">Usar valor</button></td>
+      </tr>`;
+    }).join('');
+    tabla=`<div class="tw"><table><thead><tr><th>Cotización</th><th>Días</th><th>Materiales iguales</th><th>Gastos operativos</th><th>Total final</th><th>Por persona</th><th>Actual vs esta</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">"Actual vs esta": positivo = la inspección actual cuesta más que esa cotización. Los totales usan la misma duración de servicio (${parseInt(document.getElementById('idet-duracion').value)||24}h) e incluyen el ajuste de cada una.</div>`;
+  }
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="font-weight:700">📊 Comparar con otras cotizaciones del mismo personal</div>
+      <select onchange="idetCompCambiar(this.value)" style="padding:6px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px">${opts}</select>
+    </div>${resumen}${tabla}`;
+}
+
 // ── Referencia: inspecciones parecidas (mismas personas y materiales) ──
 function idetItemsMap(r){
   const m={};
@@ -8848,7 +8955,7 @@ function idetRecalc(){
   document.getElementById('idet-val-admin').textContent='$'+gastosAdmin.toFixed(2);
   document.getElementById('idet-val-util').textContent='$'+utilidad.toFixed(2);
   document.getElementById('idet-val-total').textContent='$'+totalFinal.toFixed(2);
-  _idetTotalFinal=totalFinal; idetRecalcReal();
+  _idetTotalFinal=totalFinal; idetRecalcReal(); idetCompPintar();
   const nota=document.getElementById('idet-nota-manual');
   if(nota){
     nota.style.display=usaManual?'block':'none';
