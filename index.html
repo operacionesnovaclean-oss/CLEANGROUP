@@ -9244,16 +9244,35 @@ function rpRenderPreview(){
     </div>`;
 }
 
+// Une filas repetidas (misma cédula + período + cliente) para que el upsert no falle
+function rolesAgruparDuplicados(recs){
+  const m=new Map(), dups=new Set();
+  recs.forEach(r=>{
+    const k=[r.cedula,r.periodo_key,r.cliente].join('|');
+    if(!m.has(k)){ m.set(k,Object.assign({},r)); return; }
+    const a=m.get(k); dups.add(r.nombre||r.cedula);
+    a.punto=[a.punto,r.punto].concat([]).filter(Boolean).join(' / ').split(' / ').filter((v,i,arr)=>arr.indexOf(v)===i).join(' / ');
+    a.ingresos=(a.ingresos||[]).concat(r.ingresos||[]);
+    a.egresos=(a.egresos||[]).concat(r.egresos||[]);
+    a.detalle=(a.detalle||[]).concat(r.detalle||[]);
+    ['total_ingresos','total_egresos','total'].forEach(f=>{ a[f]=Math.round(((+a[f]||0)+(+r[f]||0))*100)/100; });
+  });
+  return {records:Array.from(m.values()), dups:Array.from(dups)};
+}
+const _ROLES_DUP_MSG=(d)=>'Estas personas aparecen más de una vez con el mismo cliente y período:\n\n• '+d.join('\n• ')+'\n\nACEPTAR = sumar sus valores en un solo rol (trabajó en varios puntos).\nCANCELAR = no publicar, para que revises si es una fila repetida por error.';
+
 async function rpPublicar(){
   if(!_sb){toast('Sin conexión Supabase',true);return;}
   const validos=_rpParsed.filter(r=>r.cedula&&CEDULA_RE_UI.test(r.cedula)&&r.periodoKey);
   if(!validos.length){toast('No hay roles válidos para publicar (falta cédula o período)',true);return;}
-  const records=validos.map(r=>({
+  let records=validos.map(r=>({
     cedula:r.cedula, nombre:r.nombre, empresa:r.empresa, cliente:r.cliente, punto:r.punto,
     periodo:r.periodo, periodo_key:r.periodoKey, elaborado_por:r.elaboradoPor,
     ingresos:r.ingresos, egresos:r.egresos, detalle:r.detalle,
     total_ingresos:r.totalIngresos, total_egresos:r.totalEgresos, total:r.total
   }));
+  const _g=rolesAgruparDuplicados(records);
+  if(_g.dups.length){ if(!confirm(_ROLES_DUP_MSG(_g.dups))) return; records=_g.records; }
   try{
     const {error}=await _sb.from('roles_pago').upsert(records,{onConflict:'cedula,periodo_key,cliente'});
     if(error) throw error;
@@ -10976,7 +10995,9 @@ async function pub(){if(!sb())return toast('Sin conexión Supabase',true);const 
  const ok=c.rows.filter(r=>/^\d{9,13}$/.test(String(r.ced||'').replace(/\D/g,'')));if(!ok.length)return toast('Ninguna persona tiene cédula válida',true);
  const falta=c.rows.length-ok.length;
  if(!confirm(`Publicar ${ok.length} rol(es) de ${c.cliente} (${p.periodo}) al Portal de Campo?`+(falta?`\n\n${falta} persona(s) sin cédula válida NO se publicarán.`:'')))return;
- const{error}=await sb().from('roles_pago').upsert(ok.map(r=>rec(r,c,p)),{onConflict:'cedula,periodo_key,cliente'});
+ let _recs=ok.map(r=>rec(r,c,p));const _g=rolesAgruparDuplicados(_recs);
+ if(_g.dups.length){if(!confirm(_ROLES_DUP_MSG(_g.dups)))return;_recs=_g.records}
+ const{error}=await sb().from('roles_pago').upsert(_recs,{onConflict:'cedula,periodo_key,cliente'});
  if(error)return toast('Error al publicar: '+error.message,true);toast('✅ '+ok.length+' rol(es) publicado(s)'+(falta?' · '+falta+' sin cédula':''));
  if(typeof rpRefreshHistorial=='function')rpRefreshHistorial();await save()}
 function xl(){const c=S.cur,a=[['ROLES DE PAGO'],[],[],[],['Cliente:',c.cliente,'','','','','Elaborado por:',c.elab],['Periodo de Pago','Desde:',c.d,'','','','Hasta:',c.h],[],['CEDULA','NOMBRE','PUNTO','SUELDO','DIAS','APORTE IESS 9.45%','SUBTOTAL','OTROS INGRESOS','# HORAS SUPLEMENTARIAS','HORAS SUPLEMENTARIAS','# HORAS EXTRAORDINARIAS','HORAS EXTRAORDINARIAS','FONDO DE RESERVA','DECIMO TERCERO','DECIMO CUARTO','TOTAL INGRESOS','ANTICIPO QUINCENA','OTROS DESCUENTOS','PREST. QUIROG.','TOTAL','RECIBIDO']];
