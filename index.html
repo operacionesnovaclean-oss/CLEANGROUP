@@ -280,7 +280,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div id="app">
   <div class="topbar">
     <div class="topbar-brand">🧹 CLEAN GROUP CONSORCIO</div>
-    <div class="topbar-r"><span id="cloud-indicator" style="font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(0,201,167,.12);color:var(--teal);margin-right:6px">☁️ conectando...</span>Sesión: <span id="udisp">—</span><button class="btn-out" onclick="resetAll()" style="border-color:var(--amber);color:var(--amber);margin-right:6px">🗑️ Borrar datos</button><button class="btn-out" onclick="doLogout()">Salir</button></div>
+    <div class="topbar-r"><span id="cloud-indicator" style="font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(0,201,167,.12);color:var(--teal);margin-right:6px">☁️ conectando...</span><button class="btn-out" onclick="respaldoDescargar()" title="Descargar una copia de todos los datos para guardarla en Drive" style="margin-right:6px">💾 Respaldo</button>Sesión: <span id="udisp">—</span><button class="btn-out" onclick="resetAll()" style="border-color:var(--amber);color:var(--amber);margin-right:6px">🗑️ Borrar datos</button><button class="btn-out" onclick="doLogout()">Salir</button></div>
   </div>
   <div class="main-wrap">
     <nav class="sidebar">
@@ -562,6 +562,7 @@ function loadDB(){
         setCloudStatus('⚠️ Sin conexión ('+( error.message||error.code||'err')+ ')','var(--amber)');
         return;
       }
+      if(data && data.db) data.db=await _gzDecode(data.db);
       if(data && data.db && data.db !== window._lastSavedJson){
         const wasBuilt=!!document.getElementById('panel-dashboard');
         applyDBData(data.db);
@@ -604,6 +605,7 @@ function loadDB(){
           // Hay cambios nuevos en la nube: ahora sí descargar los datos completos
           const {data:pd}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
           if(pd && pd.updated) window._lastUpdated=pd.updated;
+          if(pd && pd.db) pd.db=await _gzDecode(pd.db);
           if(pd && pd.db && pd.db!==window._lastSavedJson){
             applyDBData(pd.db);
             if(typeof renderDash==='function') renderDash();
@@ -635,6 +637,39 @@ function loadDB(){
 // ── Guardado optimizado con debounce ──
 window._saveTimer=null; window._saveQueue=false; window._saving=false; window._savePending=false; window._saveFailCount=0;
 
+// ── Compresión de los datos que viajan a/desde la nube (reduce el consumo ~5-10x) ──
+const COMPRIMIR_NUBE=true;
+async function _gzEncode(str){
+  try{
+    if(!COMPRIMIR_NUBE||typeof CompressionStream==='undefined') return str;
+    const cs=new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+    const buf=new Uint8Array(await new Response(cs).arrayBuffer());
+    let bin=''; for(let i=0;i<buf.length;i+=0x8000) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
+    return 'GZ1:'+btoa(bin);
+  }catch(e){ return str; }
+}
+async function _gzDecode(txt){
+  if(typeof txt!=='string'||txt.indexOf('GZ1:')!==0) return txt;
+  const bin=atob(txt.slice(4)); const u=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+  const ds=new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(ds).text();
+}
+
+// ── Respaldo manual: descarga todos los datos en un archivo .json (para subir a Drive) ──
+function respaldoDescargar(){
+  try{
+    const json=localStorage.getItem('cg_iso_v3')||JSON.stringify(db);
+    const d=new Date(); const f=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const blob=new Blob([json],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='respaldo_consorcio_'+f+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    if(typeof toast==='function') toast('✅ Respaldo descargado. Súbelo a tu Drive.');
+  }catch(e){ alert('No se pudo crear el respaldo: '+(e&&e.message||e)); }
+}
+
 function saveDB(){
   const json=JSON.stringify(db);
   localStorage.setItem('cg_iso_v3',json);
@@ -642,18 +677,20 @@ function saveDB(){
   setCloudStatus('💾 Local ✓  ☁️ pendiente...','var(--muted)');
   if(!_sb){ setCloudStatus('⚠️ Sin conexión — guardado local','var(--amber)'); return; }
   clearTimeout(window._saveTimer);
-  window._saveTimer=setTimeout(()=>_flushToSupabase(),800);
+  window._saveTimer=setTimeout(()=>_flushToSupabase(),2000);
 }
 
 async function _flushToSupabase(){
   if(window._saving){ window._saveQueue=true; return; }
   const json=localStorage.getItem('cg_iso_v3');
   if(!json) return;
+  if(json===window._lastSavedJson){ if(!window._saveQueue) window._savePending=false; setCloudStatus('☁️ En línea','var(--teal)'); return; }
   window._saving=true; window._saveQueue=false;
   setCloudStatus('☁️ Sincronizando...','var(--muted)');
   try{
     const _updNow=new Date().toISOString();
-    const {error}=await _sb.from('maindb').upsert({id:1,db:json,updated:_updNow},{onConflict:'id'});
+    const _payload=await _gzEncode(json);
+    const {error}=await _sb.from('maindb').upsert({id:1,db:_payload,updated:_updNow},{onConflict:'id'});
     window._saving=false;
     if(!error) window._lastUpdated=_updNow;
     if(error){
