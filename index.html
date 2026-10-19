@@ -548,6 +548,7 @@ function loadDB(){
     if(!_sb){ setTimeout(syncFromSupabase,300); return; }
     try{
       const {data,error}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
+      if(data&&data.updated) window._lastUpdated=data.updated;
       if(error){
         if(error.code==='PGRST116'){
           // Fila no existe → arrancar con datos locales
@@ -596,7 +597,13 @@ function loadDB(){
           // Si hay cambios locales que aún no se confirmaron guardados en la nube,
           // NO traer datos de la nube ahora — se perderían esos cambios.
           if(window._savePending || window._saving) return;
+          if(document.hidden) return; // pestaña en segundo plano: no consultar
+          // Consulta liviana: solo la fecha de última modificación (unos pocos bytes)
+          const {data:chk}=await _sb.from('maindb').select('updated').eq('id',1).single();
+          if(!chk || !chk.updated || chk.updated===window._lastUpdated) return;
+          // Hay cambios nuevos en la nube: ahora sí descargar los datos completos
           const {data:pd}=await _sb.from('maindb').select('db,updated').eq('id',1).single();
+          if(pd && pd.updated) window._lastUpdated=pd.updated;
           if(pd && pd.db && pd.db!==window._lastSavedJson){
             applyDBData(pd.db);
             if(typeof renderDash==='function') renderDash();
@@ -614,7 +621,7 @@ function loadDB(){
             setCloudStatus('☁️ En línea','var(--teal)');
           }
         }catch(e){ /* silencioso — no spamear consola */ }
-      }, 30000);
+      }, 60000);
     }catch(err){
       const msg=err?.message||err?.error_description||JSON.stringify(err)||'Error desconocido';
       console.warn('Supabase sync error:',msg, err);
@@ -645,8 +652,10 @@ async function _flushToSupabase(){
   window._saving=true; window._saveQueue=false;
   setCloudStatus('☁️ Sincronizando...','var(--muted)');
   try{
-    const {error}=await _sb.from('maindb').upsert({id:1,db:json,updated:new Date().toISOString()},{onConflict:'id'});
+    const _updNow=new Date().toISOString();
+    const {error}=await _sb.from('maindb').upsert({id:1,db:json,updated:_updNow},{onConflict:'id'});
     window._saving=false;
+    if(!error) window._lastUpdated=_updNow;
     if(error){
       const msg=error.message||error.code||JSON.stringify(error);
       console.warn('Supabase save error:',msg);
