@@ -457,16 +457,44 @@ const USER_ROLES={
 };
 let currentUser=null;
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+const SESION_HORAS=12;
+function _entrar(u){
+  currentUser=u;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('udisp').textContent=u.toUpperCase();
+  applyRoleAccess(u);
+  loadDB();
+}
+function _sesionGuardar(u){ try{localStorage.setItem('cg_sesion',JSON.stringify({u:u,exp:Date.now()+SESION_HORAS*3600*1000}));}catch(e){} }
+function _sesionRestaurar(){
+  try{
+    const sv=JSON.parse(localStorage.getItem('cg_sesion')||'null');
+    if(sv&&sv.u&&USERS[sv.u]&&sv.exp>Date.now()){
+      _sesionGuardar(sv.u);          // renueva el plazo mientras sigas usando el sistema
+      _entrar(sv.u);
+      _panelRestaurar();
+      return true;
+    }
+    localStorage.removeItem('cg_sesion');
+  }catch(e){}
+  return false;
+}
+function _panelRestaurar(){
+  let n=null; try{n=localStorage.getItem('cg_panel');}catch(e){}
+  if(!n||n==='dashboard') return;
+  let t=0; const iv=setInterval(()=>{
+    t++;
+    if(document.getElementById('panel-'+n)){ clearInterval(iv); try{nav(n);}catch(e){} }
+    else if(t>20) clearInterval(iv);
+  },500);
+}
 function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value;
   if(USERS[u]&&USERS[u]===p){
-    currentUser=u;
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app').style.display='flex';
-    document.getElementById('udisp').textContent=u.toUpperCase();
-    applyRoleAccess(u);
-    loadDB();
+    _sesionGuardar(u);
+    _entrar(u);
   } else {
     document.getElementById('lerr').textContent='Usuario o contraseña incorrectos.';
     setTimeout(()=>document.getElementById('lerr').textContent='',3000);
@@ -474,12 +502,15 @@ function doLogin(){
 }
 function doLogout(){
   currentUser=null;
+  try{localStorage.removeItem('cg_sesion');localStorage.removeItem('cg_panel');}catch(e){}
   // Restaurar visibilidad de todos los nav items al salir
   document.querySelectorAll('.nav-item,.sb-sec').forEach(function(el){el.style.display='';});
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('lu').value='';document.getElementById('lp').value='';
 }
+// Al recargar la página, volver a entrar solo si la sesión sigue vigente
+window.addEventListener('load',function(){ _sesionRestaurar(); });
 
 // ═══════════════════════════════
 // DB (estructura local igual que antes)
@@ -506,6 +537,7 @@ function applyDBData(json){
     if(p.cobClientes)   db.cobClientes   = p.cobClientes;
     if(p.cobContadores) db.cobContadores = p.cobContadores;
     if(p.pagos) db.pagos = p.pagos;
+    if(p.cotRefs) db.cotRefs = p.cotRefs;
 
     window._lastSavedJson = json;
     return true;
@@ -2266,6 +2298,21 @@ function buildPanels(){
   <!-- TAB: VALORES REFERENCIALES -->
   <div id="insp-pane-ref" style="display:none">
     <div class="card">
+      <div class="card-title">👥 Base de referencias de clientes</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Registra aquí cotizaciones de tus clientes (personas × días y valor) para que tu gerente las compare dentro de cada inspección. Las inspecciones que ya hiciste aparecen solas; con 📌 puedes guardarlas como tuyas para editarlas.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+        <input id="cot-refs-buscar" type="text" placeholder="🔍 Buscar cliente…" oninput="cotRefsTabRender()" style="flex:1 1 200px;padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <select id="cot-refs-filtro" onchange="cotRefsTabRender()" style="padding:8px 11px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px">
+          <option value="">Todas</option><option value="manual">Solo mis referencias</option><option value="insp">Solo inspecciones hechas</option>
+        </select>
+        <button class="btn btn-p btn-sm" onclick="cotRefAgregar()">➕ Agregar referencia</button>
+        <span id="cot-refs-count" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="cot-refs-lista"></div>
+    </div>
+    <div class="card">
       <div class="card-title">📐 Valores referenciales</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
         Precios sugeridos de referencia rápida, según cantidad de personas del punto o rango de valor del contrato. No se calculan de la inspección: los defines tú manualmente para cotizar rápido.
@@ -2974,6 +3021,7 @@ function canAccess(panel){
 // ═══════════════════════════════
 function nav(name){
   if(!canAccess(name)){toast('No tienes acceso a este módulo',true);return;}
+  try{localStorage.setItem('cg_panel',name);}catch(e){}
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const p=document.getElementById('panel-'+name);
@@ -8514,6 +8562,7 @@ function inspTab(name){
     if(btn) btn.className='cat-tab'+(t===name?' active':'');
     if(pane) pane.style.display=(t===name?'block':'none');
   });
+  if(name==='ref'){ try{cotRefsTabRender();}catch(e){} }
 }
 
 async function inspCargarCatalogo(){
@@ -8726,6 +8775,7 @@ async function inspCargarRegistros(){
     opSel.innerHTML='<option value="">Todos los operativos</option>'+nombres.map(n=>`<option${n===cur?' selected':''}>${n}</option>`).join('');
   }
   inspRegRender();
+  try{cotRefsTabRender();}catch(e){}
 }
 
 function inspRegRender(){
@@ -8757,6 +8807,7 @@ function inspRegRender(){
 let _idetActual=null;
 function idetAbrir(id){
   _idetActual=_inspRegistros.find(r=>String(r.id)===String(id));
+  _idetEdit=null;
   if(!_idetActual){toast('No se encontró el registro',true);return;}
   _idetCompPers=null;
   document.getElementById('idet-duracion').value=String(insp_config.duracionBase||24);
@@ -8768,7 +8819,7 @@ function idetAbrir(id){
 function _cqEsc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function cotizPdfAbrir(){
   const r=_idetActual; if(!r){toast('Abre primero una inspección',true);return;}
-  const mo=r.mano_obra||{};
+  const mo=_idetMO();
   let emp={}; try{emp=JSON.parse(localStorage.getItem('cg_cotiz_empresa')||'{}');}catch(e){}
   const v=(id,val)=>{const el=document.getElementById(id); if(el) el.value=(val==null?'':val);};
   v('cq-nombre',r.cliente||'');
@@ -8860,29 +8911,26 @@ let _idetTotalOperativos=0;
 function idetRenderCosteo(){
   const r=_idetActual; if(!r)return;
   const horas=parseInt(document.getElementById('idet-duracion').value)||24;
-  const c=inspCalcularCosteo(r,horas);
+  const rr=_idetVista();
+  const c=inspCalcularCosteo(rr,horas);
   _idetTotalOperativos=c.totalGastosOperativos;
   const mo=c.mo||{};
   document.getElementById('idet-titulo').textContent='🔍 '+(r.cliente||'')+' — '+(r.periodo||'');
   document.getElementById('idet-sub').textContent=(r.operativo||'')+' · '+(r.empresa||'')+' · '+(r.lugar||'')+(r.obra?' · '+r.obra:'');
-  const fila=l=>`<tr><td>${l.nombre}</td><td style="text-align:center">${l.cant}</td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${l.valorTotal.toFixed(2)}</td>${l.servicio!==undefined?`<td style="text-align:right">$${l.servicio.toFixed(2)}</td>`:''}</tr>`;
+  _idetQi=0;
   const manualVal = c.totalManual!=null ? c.totalManual : '';
   const _dg=(r.ajustes&&r.ajustes.desglose)||{};
   const dg={pagoDia:_dg.pagoDia!=null?_dg.pagoDia:15,almuerzo:_dg.almuerzo!=null?_dg.almuerzo:(c.almuerzos||0),compras:_dg.compras!=null?_dg.compras:0};
   document.getElementById('idet-body').innerHTML=`
+    ${idetEdBarra()}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;font-size:12px;color:var(--muted)">
       <div><strong style="color:var(--text)">Supervisor:</strong> ${r.supervisor||'—'}</div>
       <div><strong style="color:var(--text)">Tipo de limpieza:</strong> ${r.tipo_limpieza||'—'}</div>
     </div>
-    ${c.materialesLines.length?`<div class="card-title" style="font-size:13px">🧰 Materiales</div>
-    <div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th><th>Servicio ${horas}h</th></tr></thead>
-    <tbody>${c.materialesLines.map(fila).join('')}</tbody></table></div>`:''}
-    ${c.suministrosLines.length?`<div class="card-title" style="font-size:13px;margin-top:14px">🧴 Suministros</div>
-    <div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th></tr></thead>
-    <tbody>${c.suministrosLines.map(fila).join('')}</tbody></table></div>`:''}
-    ${c.maquinariaLines.length?`<div class="card-title" style="font-size:13px;margin-top:14px">🛠️ Maquinaria y equipos</div>
-    <div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th><th>Servicio ${horas}h</th></tr></thead>
-    <tbody>${c.maquinariaLines.map(fila).join('')}</tbody></table></div>`:''}
+    ${idetEdSeccion('materiales','🧰 Materiales',c.materialesLines,horas,true)}
+    ${idetEdSeccion('suministros','🧴 Suministros',c.suministrosLines,horas,false)}
+    ${idetEdSeccion('maquinaria','🛠️ Maquinaria y equipos',c.maquinariaLines,horas,true)}
+    ${idetEdPersonal(mo)}
     ${(r.correcciones||r.observaciones||r.propuesta_limpieza)?`<div class="card-title" style="font-size:13px;margin-top:14px">📝 Notas</div>
     <div style="font-size:12px;color:var(--muted);line-height:1.6">
       ${r.correcciones?`<div><strong style="color:var(--text)">Correcciones:</strong> ${r.correcciones}</div>`:''}
@@ -8957,7 +9005,7 @@ function idetRenderCosteo(){
       </div>
       <div style="margin-top:12px"><button class="btn btn-p btn-sm" onclick="idetGuardarReal()">💾 Guardar desglose</button></div>
     </div>
-    ${idetSimilaresHTML(r,horas)}
+    ${idetSimilaresHTML(rr,horas)}
   `;
   _idetPersonas=(mo.auxiliares_cant||1);
   _idetDias=(mo.auxiliares_dias||1);
@@ -8966,82 +9014,217 @@ function idetRenderCosteo(){
   idetCompCalc(); idetCompPintar();
 }
 
+let _idetEdit=null, _idetQi=0;
+function _idetClone(r){ const j=x=>JSON.parse(JSON.stringify(x)); return {materiales:j(r.materiales||[]),suministros:j(r.suministros||[]),maquinaria:j(r.maquinaria||[]),mano_obra:j(r.mano_obra||{})}; }
+function _idetVista(){ const r=_idetActual; if(!_idetEdit) _idetEdit=_idetClone(r); return Object.assign({},r,_idetEdit); }
+function _idetMO(){ return (_idetEdit&&_idetEdit.mano_obra)||((_idetActual||{}).mano_obra)||{}; }
+function _idetDirty(){ if(!_idetEdit||!_idetActual) return false; return JSON.stringify(_idetClone(_idetActual))!==JSON.stringify(_idetEdit); }
+const _IDET_INPQ='width:64px;padding:4px 6px;border-radius:6px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;text-align:center;outline:none;box-sizing:border-box';
+function idetEdBarra(){
+  const r=_idetActual, dirty=_idetDirty(), hayOrig=!!(r.ajustes&&r.ajustes.original);
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:8px 12px;border-radius:9px;background:${dirty?'rgba(245,166,35,.14)':'rgba(255,255,255,.04)'};border:1px solid ${dirty?'var(--amber)':'var(--border)'};font-size:12px">
+    <span style="flex:1 1 240px;color:${dirty?'var(--amber)':'var(--muted)'}">${dirty?'⚠️ Cambios sin guardar en las cantidades.':'✏️ Puedes cambiar las cantidades, quitar ítems con ✕ o agregar nuevos.'}${hayOrig&&!dirty?' <span style="color:var(--amber)">· Cantidades modificadas por gerencia</span>':''}</span>
+    ${dirty?'<button type="button" class="btn btn-p btn-sm" onclick="idetEdGuardar()">💾 Guardar cantidades</button><button type="button" class="btn btn-s btn-sm" onclick="idetEdDescartar()">Descartar</button>':''}
+    ${hayOrig&&!dirty?'<button type="button" class="btn btn-s btn-sm" onclick="idetEdRestaurar()">↩️ Restaurar originales</button>':''}
+  </div>`;
+}
+function idetEdSeccion(tipo,titulo,lines,horas,servicio){
+  const E=_cqEsc;
+  const filas=lines.map((l,i)=>`<tr><td>${E(l.nombre)}</td><td style="text-align:center"><input data-qi="${_idetQi++}" type="number" min="0" step="1" value="${l.cant}" onchange="idetEdCant('${tipo}',${i},this.value)" style="${_IDET_INPQ}"></td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${l.valorTotal.toFixed(2)}</td>${servicio?`<td style="text-align:right">$${(l.servicio||0).toFixed(2)}</td>`:''}<td style="text-align:center"><button type="button" onclick="idetEdQuitar('${tipo}',${i})" title="Quitar este ítem" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button></td></tr>`).join('');
+  const opts=(insp_catalog[tipo]||[]).map(x=>`<option value="${E(x.nombre)}"></option>`).join('');
+  return `<div class="card-title" style="font-size:13px;margin-top:14px">${titulo}</div>
+    ${lines.length?`<div class="tw"><table><thead><tr><th>Ítem</th><th>Cant</th><th>PVP</th><th>Valor total</th>${servicio?`<th>Servicio ${horas}h</th>`:''}<th></th></tr></thead><tbody>${filas}</tbody></table></div>`:'<div style="font-size:12px;color:var(--muted);padding:4px 2px">Sin ítems.</div>'}
+    <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+      <input id="idet-add-${tipo}" list="idet-dl-${tipo}" placeholder="➕ Agregar ítem del catálogo…" style="flex:1 1 200px;padding:6px 9px;border-radius:6px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;box-sizing:border-box">
+      <datalist id="idet-dl-${tipo}">${opts}</datalist>
+      <input id="idet-addq-${tipo}" type="number" min="1" value="1" style="${_IDET_INPQ}" title="Cantidad">
+      <button type="button" class="btn btn-s btn-sm" onclick="idetEdAgregar('${tipo}')">Agregar</button>
+    </div>`;
+}
+function idetEdPersonal(mo){
+  const f=(label,campo)=>`<div class="fi" style="flex:0 0 110px"><label>${label}</label><input data-qi="${_idetQi++}" type="number" min="0" step="1" value="${mo[campo]||0}" onchange="idetEdMO('${campo}',this.value)" style="${_IDET_INPQ};width:100%"></div>`;
+  return `<div class="card-title" style="font-size:13px;margin-top:14px">👷 Personal y consumos</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">${f('Personas','auxiliares_cant')}${f('Días','auxiliares_dias')}${f('Almuerzos','almuerzos_cant')}${f('Botellones','botellon_cant')}</div>`;
+}
+function idetEdRefrescar(){
+  const ids=['idet-pct-admin','idet-pct-util','idet-total-manual','idet-real-pago','idet-real-almuerzo','idet-real-compras'];
+  const keep={}; ids.forEach(id=>{const e=document.getElementById(id); if(e) keep[id]=e.value;});
+  const ae=document.activeElement; const qi=(ae&&ae.dataset&&ae.dataset.qi!=null)?ae.dataset.qi:null;
+  idetRenderCosteo();
+  ids.forEach(id=>{const e=document.getElementById(id); if(e&&keep[id]!==undefined) e.value=keep[id];});
+  idetRecalc();
+  if(qi!=null){ const n=document.querySelector('[data-qi="'+qi+'"]'); if(n){ n.focus(); if(n.select) n.select(); } }
+}
+function _idetEdDiferir(){ setTimeout(idetEdRefrescar,0); }
+function idetEdCant(tipo,i,val){
+  const it=_idetEdit&&_idetEdit[tipo]&&_idetEdit[tipo][i]; if(!it) return;
+  const n=parseFloat(String(val).replace(',','.')); it.cant=(isNaN(n)||n<0)?0:n; _idetEdDiferir();
+}
+function idetEdMO(campo,val){
+  if(!_idetEdit) return;
+  const n=parseFloat(String(val).replace(',','.')); _idetEdit.mano_obra[campo]=(isNaN(n)||n<0)?0:n; _idetEdDiferir();
+}
+function idetEdQuitar(tipo,i){ if(!_idetEdit||!_idetEdit[tipo]) return; _idetEdit[tipo].splice(i,1); idetEdRefrescar(); }
+function idetEdAgregar(tipo){
+  const nIn=document.getElementById('idet-add-'+tipo), qIn=document.getElementById('idet-addq-'+tipo);
+  const nombre=((nIn&&nIn.value)||'').trim(); const cant=parseFloat(qIn&&qIn.value)||1;
+  if(!nombre){ toast('Escribe o elige un ítem de la lista',true); return; }
+  const cat=(insp_catalog[tipo]||[]).find(x=>(x.nombre||'').trim().toLowerCase()===nombre.toLowerCase());
+  if(!cat){ toast('«'+nombre+'» no está en el catálogo (Costeo y Precios). Elige uno de la lista.',true); return; }
+  const ex=_idetEdit[tipo].find(x=>(x.nombre||'').trim().toLowerCase()===cat.nombre.trim().toLowerCase());
+  if(ex) ex.cant=(+ex.cant||0)+cant; else _idetEdit[tipo].push({nombre:cat.nombre,cant:cant});
+  idetEdRefrescar();
+}
+function idetEdDescartar(){ _idetEdit=null; idetEdRefrescar(); }
+async function idetEdGuardar(){
+  const r=_idetActual; if(!r||!_idetEdit) return;
+  if(!_sb){ toast('Sin conexión con la nube',true); return; }
+  const aj={...(r.ajustes||{})};
+  if(!aj.original) aj.original=_idetClone(r);
+  const upd={materiales:_idetEdit.materiales,suministros:_idetEdit.suministros,maquinaria:_idetEdit.maquinaria,mano_obra:_idetEdit.mano_obra,ajustes:aj};
+  try{
+    const{error}=await _sb.from('inspecciones_registros').update(upd).eq('id',r.id);
+    if(error) throw error;
+    Object.assign(r,upd); _idetEdit=null;
+    toast('✅ Cantidades guardadas'); idetEdRefrescar(); inspRegRender();
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+async function idetEdRestaurar(){
+  const r=_idetActual, o=r&&r.ajustes&&r.ajustes.original; if(!o) return;
+  if(!confirm('¿Volver a las cantidades originales de esta inspección?')) return;
+  if(!_sb){ toast('Sin conexión con la nube',true); return; }
+  const aj={...r.ajustes}; delete aj.original;
+  const upd={materiales:o.materiales,suministros:o.suministros,maquinaria:o.maquinaria,mano_obra:o.mano_obra,ajustes:aj};
+  try{
+    const{error}=await _sb.from('inspecciones_registros').update(upd).eq('id',r.id);
+    if(error) throw error;
+    Object.assign(r,upd); _idetEdit=null;
+    toast('↩️ Cantidades originales restauradas'); idetEdRefrescar(); inspRegRender();
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+
 let _idetPersonas=1,_idetDias=1,_idetTotalFinal=0;
 // ── Comparación por cantidad de personal (dentro de Ajuste de gerencia) ──
 let _idetCompPers=null, _idetCompLista=[];
-function idetCompCalc(){
-  const r=_idetActual; if(!r)return;
-  const horas=parseInt(document.getElementById('idet-duracion').value)||24;
-  const persActual=(r.mano_obra||{}).auxiliares_cant||0;
-  if(_idetCompPers==null) _idetCompPers=persActual;
-  const A=idetItemsMap(r); const ka=Object.keys(A);
-  _idetCompLista=_inspRegistros
-    .filter(x=>String(x.id)!==String(r.id) && ((x.mano_obra||{}).auxiliares_cant||0)===_idetCompPers)
-    .map(x=>{
-      let cx; try{cx=inspCalcularCosteo(x,horas);}catch(e){return null;}
-      const B=idetItemsMap(x); const kb=Object.keys(B);
-      const inter=ka.filter(k=>k in B).length;
-      const union=new Set([...ka,...kb]).size||1;
-      return {reg:x,cx,sim:inter/union,dias:(x.mano_obra||{}).auxiliares_dias||0};
-    }).filter(Boolean).sort((a,b)=>b.sim-a.sim);
-}
+function idetCompCalc(){ /* ya no se calcula automáticamente: las referencias son manuales */ }
 function idetCompCambiar(v){ _idetCompPers=parseInt(v)||0; idetCompCalc(); idetCompPintar(); }
 function idetUsarValor(v){
   const e=document.getElementById('idet-total-manual'); if(!e)return;
   e.value=Number(v).toFixed(2); idetRecalc();
   toast('Valor copiado al total manual. Pulsa "Guardar ajuste" para confirmarlo.');
 }
-function idetCompPintar(){
-  const box=document.getElementById('idet-comp-box'); if(!box||!_idetActual)return;
-  const r=_idetActual;
-  const persActual=(r.mano_obra||{}).auxiliares_cant||0;
-  const diasActual=(r.mano_obra||{}).auxiliares_dias||0;
-  const counts=[...new Set(_inspRegistros.map(x=>(x.mano_obra||{}).auxiliares_cant||0).filter(n=>n>0).concat(persActual>0?[persActual]:[]))].sort((a,b)=>a-b);
-  const opts=counts.map(n=>`<option value="${n}"${n===_idetCompPers?' selected':''}>${n} persona(s)${n===persActual?' (la actual)':''}</option>`).join('');
-  const actual=_idetTotalFinal||0;
-  const lista=_idetCompLista;
-  let resumen='', tabla='';
-  if(!lista.length){
-    tabla='<div style="color:var(--muted);font-size:12px;margin-top:8px">No hay otras cotizaciones con '+_idetCompPers+' persona(s) para comparar.</div>';
-  }else{
-    const vals=lista.map(o=>o.cx.totalFinal);
-    const mn=Math.min(...vals), mx=Math.max(...vals), avg=vals.reduce((a,b)=>a+b,0)/vals.length;
-    const dAvg=actual-avg, pAvg=avg>0?dAvg/avg*100:0;
-    const colAvg=Math.abs(pAvg)<0.5?'var(--muted)':(dAvg>0?'var(--amber)':'var(--teal)');
-    const pp=(v,n)=>n>0?'$'+(v/n).toFixed(2)+' por persona':'';
-    const box1=(t,v,c,sub)=>`<div style="flex:1 1 110px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">${t}</div><div style="font-size:15px;font-weight:700;color:${c||'var(--text)'}">${v}</div>${sub?`<div style="font-size:11px;color:var(--teal)">${sub}</div>`:''}</div>`;
-    resumen=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
-      ${box1('Cotizaciones',lista.length)}
-      ${box1('Mínimo','$'+mn.toFixed(2),null,pp(mn,_idetCompPers))}
-      ${box1('Promedio','$'+avg.toFixed(2),null,pp(avg,_idetCompPers))}
-      ${box1('Máximo','$'+mx.toFixed(2),null,pp(mx,_idetCompPers))}
-      ${box1('Esta inspección','$'+actual.toFixed(2),'var(--amber)',pp(actual,persActual))}
-    </div>
-    <div style="font-size:12px;margin-bottom:8px;color:${colAvg}">La inspección actual está ${Math.abs(pAvg)<0.5?'en el promedio':(dAvg>0?'por encima':'por debajo')} del promedio${Math.abs(pAvg)<0.5?'':' en $'+Math.abs(dAvg).toFixed(2)+' ('+(dAvg>0?'+':'−')+Math.abs(pAvg).toFixed(1)+'%)'}.</div>`;
-    const filas=lista.map(o=>{
-      const x=o.reg, t=o.cx.totalFinal, d=actual-t, p=t>0?d/t*100:0;
-      const col=Math.abs(p)<0.5?'var(--muted)':(d>0?'var(--amber)':'var(--teal)');
-      const aj=!!(x.ajustes&&(x.ajustes.pctAdministrativos!=null||x.ajustes.pctUtilidad!=null||x.ajustes.totalManual!=null));
-      return `<tr>
-        <td><strong>${x.cliente||'—'}</strong><div style="font-size:10px;color:var(--muted)">${x.periodo||''} · ${x.operativo||''}</div></td>
-        <td style="text-align:center">${o.dias}${o.dias===diasActual?'':' <span title="Distinto a los días de la inspección actual" style="color:var(--amber)">≠</span>'}</td>
-        <td style="text-align:center">${Math.round(o.sim*100)}%</td>
-        <td style="text-align:right">$${o.cx.totalGastosOperativos.toFixed(2)}</td>
-        <td style="text-align:right"><strong>$${t.toFixed(2)}</strong>${aj?' <span title="Tiene ajuste de gerencia" style="color:var(--amber)">🔧</span>':''}</td>
-        <td style="text-align:right;color:var(--teal)">$${(_idetCompPers>0?t/_idetCompPers:t).toFixed(2)}</td>
-        <td style="text-align:right;color:${col}">${d>=0?'+':'−'}$${Math.abs(d).toFixed(2)}<div style="font-size:10px">${p>=0?'+':'−'}${Math.abs(p).toFixed(1)}%</div></td>
-        <td style="white-space:nowrap"><button class="btn btn-s btn-sm" type="button" onclick="idetAbrir('${x.id}')">🔍</button>
-          <button class="btn btn-s btn-sm" type="button" title="Copiar este valor al total manual" onclick="idetUsarValor(${t.toFixed(2)})">Usar valor</button></td>
-      </tr>`;
-    }).join('');
-    tabla=`<div class="tw"><table><thead><tr><th>Cotización</th><th>Días</th><th>Materiales iguales</th><th>Gastos operativos</th><th>Total final</th><th>Por persona</th><th>Actual vs esta</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>
-    <div style="font-size:10px;color:var(--muted);margin-top:4px">"Actual vs esta": positivo = la inspección actual cuesta más que esa cotización. Los totales usan la misma duración de servicio (${parseInt(document.getElementById('idet-duracion').value)||24}h) e incluyen el ajuste de cada una.</div>`;
-  }
-  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="font-weight:700">📊 Comparar con otras cotizaciones del mismo personal</div>
-      <select onchange="idetCompCambiar(this.value)" style="padding:6px 10px;border-radius:7px;background:var(--navy2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px">${opts}</select>
-    </div>${resumen}${tabla}`;
+const _CQ_COLORS=[['rgba(0,200,230,.16)','#00c8e6'],['rgba(255,214,0,.14)','#ffd600'],['rgba(80,200,80,.15)','#50c850'],['rgba(255,140,160,.16)','#ff8ca0']];
+function _cotRefs(){ if(!Array.isArray(db.cotRefs)) db.cotRefs=[]; return db.cotRefs; }
+function _cotPpd(x){ const p=+x.pers||0,d=+x.dias||0,t=+x.total||0; return (p>0&&d>0&&t>0)?t/(p*d):null; }
+function _cotInspFilas(excluirId){
+  const usados=new Set(_cotRefs().map(x=>x.insp).filter(Boolean));
+  return (_inspRegistros||[]).filter(r=>String(r.id)!==String(excluirId)&&!usados.has(String(r.id))).map(r=>{
+    const mo=r.mano_obra||{}; let t=0; try{t=inspCalcularCosteo(r,insp_config.duracionBase).totalFinal;}catch(e){}
+    return {id:String(r.id),cliente:r.cliente||'',periodo:r.periodo||'',pers:+mo.auxiliares_cant||0,dias:+mo.auxiliares_dias||0,total:t};
+  });
 }
+function _cotRefsRefrescarTodo(){ try{cotRefsTabRender();}catch(e){} try{idetCompPintar();}catch(e){} }
+function cotRefAgregar(){
+  const id='cr'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  _cotRefs().push({id:id,cliente:'',pers:'',dias:'',total:'',ppd:null});
+  saveDB();
+  const b=document.getElementById('cot-refs-buscar'), f=document.getElementById('cot-refs-filtro');
+  if(b) b.value=''; if(f&&f.value==='insp') f.value='';
+  _cotRefsRefrescarTodo();
+  const el=document.getElementById('cqt-cli-'+id); if(el) el.focus();
+}
+function cotRefSet(id,campo,val){
+  const x=_cotRefs().find(r=>r.id===id); if(!x) return;
+  if(campo==='cliente') x.cliente=String(val).trim();
+  else{ const n=parseFloat(String(val).replace(',','.')); x[campo]=isNaN(n)?(campo==='ppd'?null:''):n; }
+  saveDB();
+  const el=document.getElementById('cqt-ppd-'+id);
+  if(el && campo!=='ppd' && x.ppd==null){ const a=_cotPpd(x); el.value=a==null?'':a.toFixed(2); }
+  try{idetCompPintar();}catch(e){}
+}
+function cotRefEliminar(id){
+  if(!confirm('¿Quitar esta referencia?')) return;
+  db.cotRefs=_cotRefs().filter(r=>r.id!==id); saveDB(); _cotRefsRefrescarTodo();
+}
+function cotRefDesdeInsp(rid){
+  const f=_cotInspFilas(null).find(x=>x.id===String(rid)); if(!f) return;
+  _cotRefs().push({id:'cr'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),cliente:f.cliente,pers:f.pers||'',dias:f.dias||'',total:Math.round(f.total*100)/100,ppd:null,insp:f.id});
+  saveDB(); _cotRefsRefrescarTodo(); toast('📌 Guardada en tus referencias');
+}
+function cotRefIrATab(){ try{modalClose('modal-insp-detalle');}catch(e){} try{inspTab('ref');}catch(e){} }
+const _COT_GRID='display:grid;grid-template-columns:minmax(130px,1.8fr) 56px 12px 56px minmax(84px,1fr) minmax(84px,1fr) 34px;gap:6px;align-items:center';
+const _COT_LBL='font-size:10px;color:var(--muted);text-transform:uppercase';
+function cotRefsTabRender(){
+  const box=document.getElementById('cot-refs-lista'); if(!box) return;
+  const E=_cqEsc;
+  const term=((document.getElementById('cot-refs-buscar')||{}).value||'').trim().toLowerCase();
+  const filtro=(document.getElementById('cot-refs-filtro')||{}).value||'';
+  const inp='width:100%;padding:5px 7px;border-radius:6px;background:rgba(0,0,0,.25);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;outline:none;min-width:0;box-sizing:border-box';
+  const v=n=>(n===''||n==null)?'':n;
+  const f2=n=>(n==null||isNaN(n)||n===0)?'—':'$'+(+n).toFixed(2);
+  let manual=filtro==='insp'?[]:_cotRefs().filter(x=>!term||(x.cliente||'').toLowerCase().includes(term));
+  let insp=filtro==='manual'?[]:_cotInspFilas(null).filter(x=>!term||x.cliente.toLowerCase().includes(term));
+  const totInsp=insp.length; insp=insp.slice(0,150);
+  const filasM=manual.map((x,i)=>{
+    const c=_CQ_COLORS[i%_CQ_COLORS.length], auto=_cotPpd(x), ppd=x.ppd!=null?x.ppd:auto;
+    return `<div style="${_COT_GRID};background:${c[0]};border-left:4px solid ${c[1]};border-radius:8px;padding:7px 8px;margin-bottom:6px">
+      <input id="cqt-cli-${x.id}" style="${inp}" value="${E(x.cliente)}" placeholder="Cliente" onchange="cotRefSet('${x.id}','cliente',this.value)">
+      <input style="${inp};text-align:center" type="number" min="1" value="${v(x.pers)}" onchange="cotRefSet('${x.id}','pers',this.value)">
+      <span style="text-align:center;color:var(--muted)">×</span>
+      <input style="${inp};text-align:center" type="number" min="1" value="${v(x.dias)}" onchange="cotRefSet('${x.id}','dias',this.value)">
+      <input style="${inp};text-align:right" type="text" inputmode="decimal" placeholder="Total $" value="${v(x.total)}" onchange="cotRefSet('${x.id}','total',this.value)">
+      <input id="cqt-ppd-${x.id}" style="${inp};text-align:right;color:var(--teal);font-weight:700" type="text" inputmode="decimal" title="Se calcula solo (total ÷ personas ÷ días). Puedes escribirlo a mano; si lo borras vuelve a calcularse." value="${ppd==null?'':ppd.toFixed(2)}" onchange="cotRefSet('${x.id}','ppd',this.value);cotRefsTabRender()">
+      <button type="button" onclick="cotRefEliminar('${x.id}')" title="Quitar" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
+    </div>`;
+  }).join('');
+  const filasI=insp.map(x=>{
+    const ppd=(x.pers>0&&x.dias>0&&x.total>0)?x.total/(x.pers*x.dias):null;
+    return `<div style="${_COT_GRID};background:rgba(255,255,255,.04);border-left:4px solid var(--border);border-radius:8px;padding:7px 8px;margin-bottom:6px;font-size:12px">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${E(x.cliente)} · ${E(x.periodo)}">📋 ${E(x.cliente||'—')} <span style="color:var(--muted);font-size:10px">${E(x.periodo)}</span></span>
+      <span style="text-align:center">${x.pers||'—'}</span><span style="text-align:center;color:var(--muted)">×</span><span style="text-align:center">${x.dias||'—'}</span>
+      <span style="text-align:right">${f2(x.total)}</span><span style="text-align:right;color:var(--teal);font-weight:700">${f2(ppd)}</span>
+      <button type="button" onclick="cotRefDesdeInsp('${x.id}')" title="Guardar como mi referencia (para poder editarla)" style="background:transparent;border:none;cursor:pointer;font-size:14px">📌</button>
+    </div>`;
+  }).join('');
+  const head=`<div style="${_COT_GRID};padding:0 8px 4px"><span style="${_COT_LBL}">Cliente</span><span style="${_COT_LBL};text-align:center">Pers.</span><span></span><span style="${_COT_LBL};text-align:center">Días</span><span style="${_COT_LBL};text-align:right">Total</span><span style="${_COT_LBL};text-align:right" title="Total ÷ personas ÷ días">$ pers./día</span><span></span></div>`;
+  let html=head;
+  if(manual.length||filtro!=='insp') html+=`<div style="font-size:11px;font-weight:700;color:var(--amber);margin:6px 2px">⭐ Mis referencias (${manual.length})</div>`+(filasM||'<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Aún no hay. Pulsa «Agregar referencia» o 📌 en una inspección.</div>');
+  if(filtro!=='manual') html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);margin:10px 2px 6px">📋 Inspecciones ya hechas (${totInsp})${totInsp>150?' — se muestran las 150 más recientes, usa el buscador':''}</div>`+(filasI||'<div style="color:var(--muted);font-size:12px;padding:4px 2px">Sin inspecciones para este filtro.</div>');
+  box.innerHTML=html;
+  const cnt=document.getElementById('cot-refs-count'); if(cnt) cnt.textContent=manual.length+' mías · '+totInsp+' inspecciones';
+}
+function idetCompPintar(){
+  const box=document.getElementById('idet-comp-box'); if(!box||!_idetActual) return;
+  const r=_idetActual, mo=_idetMO(), E=_cqEsc;
+  const pA=+mo.auxiliares_cant||0, dA=+mo.auxiliares_dias||0, tA=_idetTotalFinal||0;
+  const f2=n=>(n==null||isNaN(n))?'—':'$'+(+n).toFixed(2);
+  const ppdA=(pA>0&&dA>0)?tA/(pA*dA):null;
+  const manual=_cotRefs().filter(x=>(x.cliente||'').trim()||x.total!=='');
+  const insp=_cotInspFilas(r.id).filter(x=>pA>0&&x.pers===pA&&x.dias===dA).slice(0,6);
+  const fila=(c,nombre,sub,pers,dias,total,ppd,igual,tag)=>`<div style="${_COT_GRID};background:${c[0]};border-left:4px solid ${c[1]};border-radius:8px;padding:7px 8px;margin-bottom:6px;font-size:12px${igual?';box-shadow:0 0 0 1px '+c[1]:''}">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700" title="${E(nombre)}">${tag||''}${E(nombre||'—')}${sub?` <span style="color:var(--muted);font-weight:400;font-size:10px">${E(sub)}</span>`:''}</span>
+      <span style="text-align:center">${pers||'—'}</span><span style="text-align:center;color:var(--muted)">×</span><span style="text-align:center">${dias||'—'}</span>
+      <span style="text-align:right">${f2(total)}</span><span style="text-align:right;color:var(--teal);font-weight:700">${ppd==null?'—':'$'+ppd.toFixed(2)}</span><span></span></div>`;
+  const filasM=manual.map((x,i)=>fila(_CQ_COLORS[i%_CQ_COLORS.length],x.cliente,'',x.pers,x.dias,+x.total||null,x.ppd!=null?x.ppd:_cotPpd(x),pA>0&&(+x.pers===pA)&&(+x.dias===dA),'')).join('');
+  const gris=['rgba(255,255,255,.05)','var(--border)'];
+  const filasI=insp.map(x=>fila(gris,x.cliente,x.periodo,x.pers,x.dias,x.total,(x.pers>0&&x.dias>0&&x.total>0)?x.total/(x.pers*x.dias):null,true,'📋 ')).join('');
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-weight:700">📊 Referencias de clientes</div>
+      <button type="button" class="btn btn-s btn-sm" onclick="cotRefIrATab()" title="Agregar o editar referencias en Valores Referenciales">⚙️ Administrar referencias</button>
+    </div>
+    <div style="${_COT_GRID};padding:0 8px 4px"><span style="${_COT_LBL}">Cliente</span><span style="${_COT_LBL};text-align:center">Pers.</span><span></span><span style="${_COT_LBL};text-align:center">Días</span><span style="${_COT_LBL};text-align:right">Total</span><span style="${_COT_LBL};text-align:right" title="Total ÷ personas ÷ días">$ pers./día</span><span></span></div>
+    <div style="${_COT_GRID};background:rgba(245,166,35,.14);border-left:4px solid var(--amber);border-radius:8px;padding:8px;margin-bottom:8px">
+      <span style="font-weight:700;color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Esta inspección">★ ${E(r.cliente||'Esta inspección')}</span>
+      <span style="text-align:center;font-weight:700">${pA||'—'}</span><span style="text-align:center;color:var(--muted)">×</span><span style="text-align:center;font-weight:700">${dA||'—'}</span>
+      <span style="text-align:right;font-weight:700;color:var(--amber)">${f2(tA)}</span>
+      <span style="text-align:right;font-weight:700;color:var(--teal)">${f2(ppdA)}</span><span></span>
+    </div>
+    ${(filasM+filasI)||'<div style="color:var(--muted);font-size:12px;padding:6px 2px">Aún no hay referencias. Agrégalas en «Valores Referenciales».</div>'}
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">Se muestran tus referencias${insp.length?' y las inspecciones ya hechas con el mismo equipo (📋)':''}. Las de borde resaltado usan el mismo equipo (${pA||'?'}×${dA||'?'}) que esta inspección.</div>`;
+}
+
+
+
 
 // ── Referencia: inspecciones parecidas (mismas personas y materiales) ──
 function idetItemsMap(r){
@@ -9175,7 +9358,7 @@ async function idetGuardarAjuste(){
 async function idetQuitarAjuste(){
   if(!_idetActual||!_sb)return;
   if(!confirm('¿Quitar el ajuste manual y volver a usar los % generales de "Costeo y Precios" para esta inspección?')) return;
-  const _keepDg=(_idetActual.ajustes&&_idetActual.ajustes.desglose)?{desglose:_idetActual.ajustes.desglose}:{};
+  const _aj0=_idetActual.ajustes||{}; const _keepDg={}; if(_aj0.desglose)_keepDg.desglose=_aj0.desglose; if(_aj0.original)_keepDg.original=_aj0.original;
   try{
     const{error}=await _sb.from('inspecciones_registros').update({ajustes:_keepDg}).eq('id',_idetActual.id);
     if(error) throw error;
