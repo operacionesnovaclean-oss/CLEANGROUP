@@ -9199,15 +9199,20 @@ function idetCompPintar(){
   const pA=+mo.auxiliares_cant||0, dA=+mo.auxiliares_dias||0, tA=_idetTotalFinal||0;
   const f2=n=>(n==null||isNaN(n))?'—':'$'+(+n).toFixed(2);
   const ppdA=(pA>0&&dA>0)?tA/(pA*dA):null;
-  const manual=_cotRefs().filter(x=>(x.cliente||'').trim()||x.total!=='');
-  const insp=_cotInspFilas(r.id).filter(x=>pA>0&&x.pers===pA&&x.dias===dA).slice(0,6);
+  // Solo se muestran referencias del MISMO EQUIPO (mismos operarios y días) o del MISMO CLIENTE
+  const _nn=t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  const _cA=_nn(r.cliente);
+  const mismoCli=n=>{const b=_nn(n); return _cA.length>=4&&b.length>=4&&(_cA===b||_cA.includes(b)||b.includes(_cA));};
+  const mismoEq=x=>pA>0&&dA>0&&(+x.pers===pA)&&(+x.dias===dA);
+  const manual=_cotRefs().filter(x=>((x.cliente||'').trim()||x.total!=='')&&(mismoEq(x)||mismoCli(x.cliente)));
+  const insp=_cotInspFilas(r.id).filter(x=>mismoEq(x)||mismoCli(x.cliente)).slice(0,8);
   const fila=(c,nombre,sub,pers,dias,total,ppd,igual,tag)=>`<div style="${_COT_GRID};background:${c[0]};border-left:4px solid ${c[1]};border-radius:8px;padding:7px 8px;margin-bottom:6px;font-size:12px${igual?';box-shadow:0 0 0 1px '+c[1]:''}">
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700" title="${E(nombre)}">${tag||''}${E(nombre||'—')}${sub?` <span style="color:var(--muted);font-weight:400;font-size:10px">${E(sub)}</span>`:''}</span>
       <span style="text-align:center">${pers||'—'}</span><span style="text-align:center;color:var(--muted)">×</span><span style="text-align:center">${dias||'—'}</span>
       <span style="text-align:right">${f2(total)}</span><span style="text-align:right;color:var(--teal);font-weight:700">${ppd==null?'—':'$'+ppd.toFixed(2)}</span><span></span></div>`;
-  const filasM=manual.map((x,i)=>fila(_CQ_COLORS[i%_CQ_COLORS.length],x.cliente,'',x.pers,x.dias,+x.total||null,x.ppd!=null?x.ppd:_cotPpd(x),pA>0&&(+x.pers===pA)&&(+x.dias===dA),'')).join('');
+  const filasM=manual.map((x,i)=>fila(_CQ_COLORS[i%_CQ_COLORS.length],x.cliente,'',x.pers,x.dias,+x.total||null,x.ppd!=null?x.ppd:_cotPpd(x),mismoEq(x),(!mismoEq(x)&&mismoCli(x.cliente))?'👤 ':'')).join('');
   const gris=['rgba(255,255,255,.05)','var(--border)'];
-  const filasI=insp.map(x=>fila(gris,x.cliente,x.periodo,x.pers,x.dias,x.total,(x.pers>0&&x.dias>0&&x.total>0)?x.total/(x.pers*x.dias):null,true,'📋 ')).join('');
+  const filasI=insp.map(x=>fila(gris,x.cliente,x.periodo,x.pers,x.dias,x.total,(x.pers>0&&x.dias>0&&x.total>0)?x.total/(x.pers*x.dias):null,mismoEq(x),(!mismoEq(x)&&mismoCli(x.cliente))?'👤 ':'📋 ')).join('');
   box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div style="font-weight:700">📊 Referencias de clientes</div>
       <button type="button" class="btn btn-s btn-sm" onclick="cotRefIrATab()" title="Agregar o editar referencias en Valores Referenciales">⚙️ Administrar referencias</button>
@@ -9219,8 +9224,8 @@ function idetCompPintar(){
       <span style="text-align:right;font-weight:700;color:var(--amber)">${f2(tA)}</span>
       <span style="text-align:right;font-weight:700;color:var(--teal)">${f2(ppdA)}</span><span></span>
     </div>
-    ${(filasM+filasI)||'<div style="color:var(--muted);font-size:12px;padding:6px 2px">Aún no hay referencias. Agrégalas en «Valores Referenciales».</div>'}
-    <div style="font-size:10px;color:var(--muted);margin-top:4px">Se muestran tus referencias${insp.length?' y las inspecciones ya hechas con el mismo equipo (📋)':''}. Las de borde resaltado usan el mismo equipo (${pA||'?'}×${dA||'?'}) que esta inspección.</div>`;
+    ${(filasM+filasI)||`<div style="color:var(--muted);font-size:12px;padding:6px 2px">No hay referencias con ${pA||'?'} operario(s) × ${dA||'?'} día(s) ni de este cliente. Puedes agregarlas en «Valores Referenciales».</div>`}
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">Solo se muestran referencias con el mismo equipo (${pA||'?'} operarios × ${dA||'?'} días; borde resaltado) o del mismo cliente (👤). 📋 = inspección ya hecha.</div>`;
 }
 
 
