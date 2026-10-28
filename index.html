@@ -207,7 +207,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .toast.show{opacity:1;transform:none}
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;display:flex;align-items:center;justify-content:center;animation:fadeUp .2s ease}
-.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:720px;max-width:96vw;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:860px;max-width:96vw;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.5)}
 .modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .modal-head h3{font-size:15px;font-weight:700;color:#fff;margin:0}
 .modal-body{padding:18px 20px;overflow-y:auto;flex:1}
@@ -282,7 +282,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div id="app">
   <div class="topbar">
     <div class="topbar-brand">🧹 CLEAN GROUP CONSORCIO</div>
-    <div class="topbar-r"><span id="cloud-indicator" style="font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(0,201,167,.12);color:var(--teal);margin-right:6px">☁️ conectando...</span><button class="btn-out" onclick="respaldoDescargar()" title="Descargar una copia de todos los datos para guardarla en Drive" style="margin-right:6px">💾 Respaldo</button>Sesión: <span id="udisp">—</span><button class="btn-out" onclick="resetAll()" style="border-color:var(--amber);color:var(--amber);margin-right:6px">🗑️ Borrar datos</button><button class="btn-out" onclick="doLogout()">Salir</button></div>
+    <div class="topbar-r"><span id="cloud-indicator" style="font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(0,201,167,.12);color:var(--teal);margin-right:6px">☁️ conectando...</span><button class="btn-out" onclick="respaldoDescargar()" title="Descargar una copia de todos los datos para guardarla en Drive" style="margin-right:6px">💾 Respaldo</button><span id="app-ver" title="Versión del archivo que estás usando" style="font-size:10px;color:var(--muted);margin-right:8px">v31-oct · ventanas XL</span>Sesión: <span id="udisp">—</span><button class="btn-out" onclick="resetAll()" style="border-color:var(--amber);color:var(--amber);margin-right:6px">🗑️ Borrar datos</button><button class="btn-out" onclick="doLogout()">Salir</button></div>
   </div>
   <div class="main-wrap">
     <nav class="sidebar">
@@ -370,7 +370,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <!-- ══ MODAL REVISIÓN DE REQUISICIÓN ══════════════════════════════ -->
 <div id="modal-revision" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1300px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1700px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
     <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
       <div>
         <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="rev-titulo">🔍 Revisión de Requisición</h3>
@@ -401,7 +401,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <!-- ══ MODAL REVISIÓN REQUISICIÓN DE CAMPO ════════════════════════ -->
 <div id="modal-campo-rev" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1200px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1500px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
     <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
       <div>
         <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="crev-titulo">🔍 Revisión de pedido</h3>
@@ -2330,7 +2330,7 @@ function buildPanels(){
 
 <!-- MODAL: DETALLE DE INSPECCIÓN CON COSTEO -->
 <div id="modal-cotiz-pdf" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4100;align-items:flex-start;justify-content:center;padding:10px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(96vw,1000px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(96vw,1200px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
     <div style="padding:14px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
       <div><h3 style="font-size:15px;font-weight:700;color:#fff;margin:0">📄 Cotización para el cliente</h3>
       <p style="font-size:11px;color:var(--muted);margin-top:3px">Revisa o cambia los datos antes de generar el PDF. Lo que edites aquí solo afecta a este documento.</p></div>
@@ -2372,7 +2372,7 @@ function buildPanels(){
 </div>
 
 <div id="modal-insp-detalle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:10px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1400px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:calc(100vw - 20px);max-width:none;box-shadow:0 24px 80px rgba(0,0,0,.5)">
     <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
       <div>
         <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0" id="idet-titulo">🔍 Detalle de inspección</h3>
@@ -2392,7 +2392,7 @@ function buildPanels(){
 
 <!-- MODAL: DETECTOR DE POSIBLES CRUCES EN INVENTARIO -->
 <div id="modal-inv-cruces" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1400px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(98vw,1800px);max-width:98vw;box-shadow:0 24px 80px rgba(0,0,0,.5)">
     <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-radius:14px 14px 0 0;z-index:1">
       <div>
         <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0">🔍 Posibles cruces en Inventario</h3>
@@ -2782,7 +2782,7 @@ function buildPanels(){
 
 <!-- MODAL IMPORTADOR EXCEL CONTIFICO -->
 <div id="modal-importador" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;align-items:center;justify-content:center">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(96vw,1100px);max-width:96vw;max-height:95vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(96vw,1500px);max-width:96vw;max-height:95vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.5)">
     <!-- HEAD -->
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
       <div>
