@@ -2230,7 +2230,7 @@ function buildPanels(){
     </div>
     <div class="card">
       <div class="card-title">📋 Inspecciones cargadas <span class="badge" id="insp-reg-count">0</span></div>
-      <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha</th><th>Ítems</th><th>Total estimado</th><th></th></tr></thead><tbody id="insp-reg-list"></tbody></table></div>
+      <div class="tw"><table><thead><tr><th>Operativo</th><th>Empresa</th><th>Cliente</th><th>Período</th><th>Fecha</th><th>Ítems</th><th>Total estimado</th><th>Estado de revisión</th><th></th></tr></thead><tbody id="insp-reg-list"></tbody></table></div>
     </div>
   </div>
 
@@ -8790,20 +8790,40 @@ function inspRegRender(){
   if(emp) data=data.filter(r=>r.empresa===emp);
   if(op) data=data.filter(r=>r.operativo===op);
   document.getElementById('insp-reg-count').textContent=data.length;
-  if(!data.length){el.innerHTML='<tr><td colspan="8" style="color:var(--muted);font-size:13px">Sin inspecciones para este filtro.</td></tr>';return;}
+  if(!data.length){el.innerHTML='<tr><td colspan="9" style="color:var(--muted);font-size:13px">Sin inspecciones para este filtro.</td></tr>';return;}
   el.innerHTML=data.map(r=>{
     const cnt=(r.materiales||[]).length+(r.suministros||[]).length+(r.maquinaria||[]).length;
     const fecha=(r.fecha_iso||'').substring(0,16).replace('T',' ');
     let totalEst=0;
     try{ totalEst=inspCalcularCosteo(r,insp_config.duracionBase).totalFinal; }catch(e){}
     const tieneAjuste = !!(r.ajustes && (r.ajustes.pctAdministrativos!=null || r.ajustes.pctUtilidad!=null || r.ajustes.totalManual!=null));
+    const estadoRevision=(r.ajustes&&r.ajustes.estadoRevision)||'pendiente';
+    const opcionesRevision=[['pendiente','⏳ Pendiente de revisión'],['revisado_sin_cambios','🔎 Revisado sin cambios · falta aprobar'],['revisado_con_ajustes','🔧 Revisado con ajustes · falta aprobar'],['aprobado_sin_cambios','✅ Aprobado sin cambios'],['aprobado_con_ajustes','✅ Aprobado con ajustes']];
+    const estiloEstado=estadoRevision.startsWith('aprobado')?'color:var(--teal);border-color:rgba(0,201,167,.4)':estadoRevision.startsWith('revisado')?'color:var(--amber);border-color:rgba(245,166,35,.4)':'color:var(--muted);border-color:var(--border)';
     return`<tr>
       <td>${r.operativo||''}</td><td>${r.empresa||''}</td><td>${r.cliente||''}</td><td>${r.periodo||''}</td>
       <td style="font-size:11px;color:var(--muted)">${fecha}</td><td>${cnt}</td>
       <td>$${totalEst.toFixed(2)}${tieneAjuste?' <span title="Tiene ajuste manual de gerencia" style="color:var(--amber)">🔧</span>':''}</td>
+      <td><select aria-label="Estado de revisión" onchange="inspCambiarEstadoRevision('${String(r.id).replace(/'/g,"\\'")}',this.value)" style="max-width:245px;padding:7px 9px;border-radius:7px;background:var(--surface2);border:1px solid;font-family:inherit;font-size:11px;${estiloEstado}">${opcionesRevision.map(([v,t])=>`<option value="${v}"${estadoRevision===v?' selected':''}>${t}</option>`).join('')}</select></td>
       <td><button class="btn btn-s btn-sm" onclick="idetAbrir('${r.id}')">🔍 Ver costeo</button></td>
     </tr>`;
   }).join('');
+}
+
+async function inspCambiarEstadoRevision(id, estado){
+  const r=_inspRegistros.find(x=>String(x.id)===String(id));
+  if(!r||!_sb)return;
+  const ajustes={...(r.ajustes||{}),estadoRevision:estado};
+  try{
+    const{error}=await _sb.from('inspecciones_registros').update({ajustes}).eq('id',r.id);
+    if(error)throw error;
+    r.ajustes=ajustes;
+    inspRegRender();
+    toast('✅ Estado de revisión guardado');
+  }catch(e){
+    toast('No se pudo guardar el estado: '+e.message,true);
+    inspRegRender();
+  }
 }
 
 let _idetActual=null;
@@ -9367,7 +9387,7 @@ async function idetGuardarAjuste(){
 async function idetQuitarAjuste(){
   if(!_idetActual||!_sb)return;
   if(!confirm('¿Quitar el ajuste manual y volver a usar los % generales de "Costeo y Precios" para esta inspección?')) return;
-  const _aj0=_idetActual.ajustes||{}; const _keepDg={}; if(_aj0.desglose)_keepDg.desglose=_aj0.desglose; if(_aj0.original)_keepDg.original=_aj0.original;
+  const _aj0=_idetActual.ajustes||{}; const _keepDg={}; if(_aj0.desglose)_keepDg.desglose=_aj0.desglose; if(_aj0.original)_keepDg.original=_aj0.original; if(_aj0.estadoRevision)_keepDg.estadoRevision=_aj0.estadoRevision;
   try{
     const{error}=await _sb.from('inspecciones_registros').update({ajustes:_keepDg}).eq('id',_idetActual.id);
     if(error) throw error;
